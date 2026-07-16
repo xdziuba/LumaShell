@@ -124,14 +124,37 @@ Podział ról:
 **Obszar terminala pozostaje nieprzezroczysty** — dla czytelności tekstu i dlatego, że
 `backdrop-filter` nad canvasem WebGL wymusza kosztowne kompozytowanie.
 
-### Degradacja na starszych systemach
+### Degradacja na Windows 10
 
-`backgroundMaterial` wymaga **Windows 11 22H2 lub nowszego**. Na starszych systemach
-wywołanie jest bezpieczne, ale nie daje efektu — okno będzie nieprzezroczyste.
+`backgroundMaterial` wymaga **Windows 11 22H2+** (build 22621). Na starszych systemach
+wywołanie jest bezpieczne, ale nie daje efektu.
 
-Aplikacja musi wykryć wersję systemu i zdegradować się do jednolitego tła
-(`backgroundColor: '#07110D'`), zachowując pełną funkcjonalność. Efekt szkła jest
-ozdobą, nie wymaganiem działania — patrz [10 — Decyzje](10-decyzje.md#d1--własna-rama-okna-i-acrylic).
+**Windows 10 pozostaje platformą wspieraną** — aplikacja działa tam w pełni, tylko bez
+rozmycia, degradując się do jednolitego tła. Szkło jest warstwą wizualną: **brak acrylicu
+nie może blokować żadnej funkcji ani zmieniać układu interfejsu**
+([10 — Decyzje](10-decyzje.md#d1--własna-rama-okna-i-acrylic)).
+
+```ts
+const build = parseInt(os.release().split('.')[2], 10);   // "10.0.26200" → 26200
+const acrylic = process.platform === 'win32' && build >= 22621;
+
+const win = new BrowserWindow({
+  frame: false,
+  backgroundColor: acrylic ? '#00000000' : '#07110D',
+  ...(acrylic && { backgroundMaterial: 'acrylic' })
+});
+```
+
+`backgroundColor` musi być **jednolity, gdy acrylic jest wyłączony** — zerowa alfa bez
+rozmycia dałaby okno przezroczyste na ostry pulpit, czyli efekt gorszy niż jego brak.
+
+Renderer potrzebuje tej informacji, żeby wyłączyć alfę na panelach (przy nieprzezroczystym
+oknie półprzezroczyste panele odsłoniłyby czarne tło zamiast rozmycia). Flagę należy podać
+z procesu głównego przez preload — **nie wykrywać wersji systemu w rendererze**.
+
+Zweryfikowane na Windows 11 build 26200: `os.release()` i `process.getSystemVersion()`
+zwracają prawdziwy numer builda. Electron ma poprawny manifest zgodności, więc nie dotyczy
+go raportowanie zaniżonej wersji systemu.
 
 ### Koszt własnej ramy
 

@@ -56,10 +56,15 @@ Koszty:
 * `backgroundMaterial` wymaga **Windows 11 22H2+**; na starszych systemach efekt nie
   zadziała i konieczna jest degradacja do jednolitego tła `#07110D`.
 
-> Plan deklaruje wsparcie Windows 10 i 11. Windows 10 zakończył wsparcie 14 października
-> 2025. Efekt szkła jest ozdobą, nie wymaganiem — na Windows 10 aplikacja ma działać
-> w pełni, tylko bez rozmycia. Do rozstrzygnięcia osobno, czy Windows 10 pozostaje
-> wspieraną platformą.
+> **Windows 10 — rozstrzygnięte: pozostaje platformą wspieraną.** Mimo że Windows 10
+> zakończył wsparcie 14 października 2025, nie wypada z zakresu. Aplikacja działa tam
+> **w pełni funkcjonalnie, tylko bez rozmycia** — okno degraduje się do jednolitego
+> `#07110D`.
+>
+> Wniosek wiążący dla implementacji: **brak acrylicu nie może blokować żadnej funkcji ani
+> zmieniać układu interfejsu**. Szkło jest wyłącznie warstwą wizualną. Jeśli kiedykolwiek
+> pojawi się funkcja działająca tylko przy włączonym acrylicu, będzie to naruszenie tej
+> decyzji.
 
 ### Odrzucone warianty
 
