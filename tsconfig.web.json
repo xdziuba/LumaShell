@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": [],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    // TypeScript 7 usunął "baseUrl" — ścieżki muszą być względne.
+    "paths": {
+      "@renderer/*": ["./src/renderer/*"],
+      "@core/*": ["./src/core/*"],
+      "@shared/*": ["./src/shared/*"]
+    }
+  },
+  // Celowo BEZ src/services i BEZ "types": ["node"].
+  // Renderer nie może sięgać do implementacji transportów ani do API Node.js
+  // (docs/security/01-model-procesow.md). Gdyby ktoś zaimportował node-pty w core,
+  // ten projekt przestanie się kompilować — granica core/services jest tu egzekwowana
+  // przez typy (docs/architecture/06-struktura-projektu.md).
+  "include": ["src/renderer/**/*", "src/core/**/*", "src/shared/**/*"]
+}

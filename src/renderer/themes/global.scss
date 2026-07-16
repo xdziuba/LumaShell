@@ -1,0 +1,174 @@
+@use './tokens';
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  color: var(--text);
+  // Przy acrylicu tło musi zostać przezroczyste, żeby system dorysował rozmycie.
+  background: transparent;
+}
+
+// Degradacja: bez acrylicu okno jest nieprzezroczyste, więc tło maluje aplikacja.
+// Półprzezroczyste panele odsłoniłyby wtedy czerń zamiast rozmycia.
+// docs/architecture/03-interfejs-i-motywy.md#degradacja-na-windows-10
+:root[data-acrylic='false'] body {
+  background: var(--bg-base);
+}
+
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+// Powierzchnia "glass": przy acrylicu wyłącznie alfa — rozmycie robi DWM,
+// nie backdrop-filter. Bez acrylicu ta sama powierzchnia staje się jednolita.
+@mixin glass($from, $to, $opaque) {
+  background: linear-gradient(135deg, $from, $to);
+
+  :root[data-acrylic='false'] & {
+    background: $opaque;
+  }
+}
+
+.titlebar {
+  height: var(--titlebar-height);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 12px;
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  user-select: none;
+
+  @include glass(rgba(20, 55, 40, 0.55), rgba(5, 18, 13, 0.35), var(--bg-panel));
+
+  &__dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
+    flex: 0 0 auto;
+  }
+
+  &__title {
+    font-size: 12.5px;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  &__controls {
+    margin-left: auto;
+    display: flex;
+    height: 100%;
+    // Przyciski muszą być wyjęte z obszaru przeciągania, inaczej nie da się kliknąć.
+    -webkit-app-region: no-drag;
+  }
+
+  &__button {
+    width: 46px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: default;
+    transition: background 120ms ease, color 120ms ease;
+
+    &:hover {
+      background: rgba(90, 255, 170, 0.1);
+      color: var(--text);
+    }
+
+    &--close:hover {
+      background: #c42b1c;
+      color: #fff;
+    }
+  }
+
+  // Ikony okna to glify z systemowego fontu Windows — bez niego renderują się
+  // jako puste prostokąty.
+  &__button--glyph {
+    font-family: 'Segoe Fluent Icons', 'Segoe MDL2 Assets', sans-serif;
+    font-size: 10px;
+  }
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.sidebar {
+  width: 190px;
+  flex: 0 0 auto;
+  padding: 14px;
+  border-right: 1px solid var(--border);
+  font-size: 12px;
+
+  @include glass(rgba(20, 55, 40, 0.42), rgba(5, 18, 13, 0.3), var(--bg-panel));
+
+  &__heading {
+    color: var(--accent-neon);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    margin-bottom: 9px;
+  }
+
+  &__item {
+    color: var(--text-muted);
+    padding: 5px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+// Obszar terminala: pełne krycie, zero efektów.
+// docs/architecture/03-interfejs-i-motywy.md
+.terminal {
+  flex: 1;
+  min-width: 0;
+  background: var(--term-bg);
+  padding: 8px 4px 8px 10px;
+
+  .xterm {
+    height: 100%;
+  }
+}
+
+.statusbar {
+  flex: 0 0 auto;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+
+  @include glass(rgba(20, 55, 40, 0.5), rgba(5, 18, 13, 0.32), var(--bg-panel));
+
+  &__accent {
+    color: var(--accent);
+  }
+}

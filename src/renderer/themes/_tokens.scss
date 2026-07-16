@@ -1,0 +1,23 @@
+// Paleta motywu "Dark Green Glass".
+// Źródło: docs/architecture/03-interfejs-i-motywy.md
+
+:root {
+  --bg-base: #07110d;
+  --bg-panel: #0b1913;
+
+  --accent: #21e68a;
+  --accent-dark: #0b8f58;
+  --accent-neon: #66ffb3;
+
+  --text: #e7fff3;
+  --text-muted: #8cb8a3;
+  --border: rgba(90, 255, 170, 0.18);
+
+  --term-bg: #06100c;
+  --term-fg: #dffff0;
+  --term-cursor: #21e68a;
+  --term-selection: rgba(33, 230, 138, 0.25);
+
+  --radius: 12px;
+  --titlebar-height: 38px;
+}
