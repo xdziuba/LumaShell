@@ -92,6 +92,48 @@ export function TerminalView({
     let disposed = false;
     const cleanups: Array<() => void> = [];
 
+    const wklej = async (): Promise<void> => {
+      const tekst = await navigator.clipboard.readText();
+      if (sessionId && tekst) await window.luma.terminal.write(sessionId, tekst);
+    };
+
+    // Ctrl+C w terminalu musi zostać przerwaniem procesu, a nie kopiowaniem — dlatego
+    // kopiuje dopiero Ctrl+Shift+C. Wyjątek: gdy coś jest zaznaczone, samo Ctrl+C
+    // kopiuje, bo tego oczekuje każdy użytkownik Windows.
+    // Zwraca void, nie disposable — handler znika razem z `term.dispose()`.
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown' || !event.ctrlKey) return true;
+
+      if (event.shiftKey && event.code === 'KeyC') {
+        const zaznaczenie = term.getSelection();
+        if (zaznaczenie) void navigator.clipboard.writeText(zaznaczenie);
+        return false;
+      }
+      if (event.shiftKey && event.code === 'KeyV') {
+        void wklej();
+        return false;
+      }
+      if (!event.shiftKey && event.code === 'KeyC' && term.hasSelection()) {
+        void navigator.clipboard.writeText(term.getSelection());
+        term.clearSelection();
+        return false;
+      }
+      return true;
+    });
+
+    // Prawy przycisk: kopiuje zaznaczenie albo wkleja — zachowanie znane z konsoli Windows.
+    const menuKontekstowe = (event: MouseEvent): void => {
+      event.preventDefault();
+      if (term.hasSelection()) {
+        void navigator.clipboard.writeText(term.getSelection());
+        term.clearSelection();
+      } else {
+        void wklej();
+      }
+    };
+    host.addEventListener('contextmenu', menuKontekstowe);
+    cleanups.push(() => host.removeEventListener('contextmenu', menuKontekstowe));
+
     void window.luma.terminal
       .create(spec, term.cols, term.rows)
       .catch((error: unknown) => {

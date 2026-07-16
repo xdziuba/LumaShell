@@ -13,6 +13,7 @@ import {
   IpcEvent,
   type AppCapabilities,
   type SessionSpec,
+  type ShellInfo,
   type TerminalCreateResult,
   type TerminalDataEvent,
   type TerminalExitEvent
@@ -29,6 +30,8 @@ function subscribe<T>(channel: string, callback: (payload: T) => void): Unsubscr
 
 export const api: LumaApi = {
   getCapabilities: (): Promise<AppCapabilities> => ipcRenderer.invoke(IpcChannel.AppCapabilities),
+
+  listShells: (): Promise<ShellInfo[]> => ipcRenderer.invoke(IpcChannel.ShellList),
 
   serial: {
     listPorts: (): Promise<SerialPortInfo[]> => ipcRenderer.invoke(IpcChannel.SerialListPorts)

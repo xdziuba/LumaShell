@@ -65,7 +65,13 @@ function parseSessionSpec(value: unknown): SessionSpec {
   const source = asRecord(value);
   const kind = source['kind'];
 
-  if (kind === 'pty') return { kind: 'pty' };
+  if (kind === 'pty') {
+    const shellId = source['shellId'];
+    if (shellId === undefined) return { kind: 'pty' };
+    // Identyfikator jest odsyłany do listy wykrytych powłok, więc renderer nie może
+    // podać dowolnej ścieżki do uruchomienia — to zwykły klucz, nie polecenie.
+    return { kind: 'pty', shellId: requireString(source, 'shellId', 64) };
+  }
 
   if (kind === 'serial') {
     const path = requireString(source, 'path', 16);

@@ -8,6 +8,7 @@
 import type {
   AppCapabilities,
   SessionSpec,
+  ShellInfo,
   TerminalCreateResult,
   TerminalDataEvent,
   TerminalExitEvent
@@ -19,6 +20,9 @@ export type Unsubscribe = () => void;
 
 export interface LumaApi {
   getCapabilities(): Promise<AppCapabilities>;
+
+  /** Powłoki wykryte w systemie. */
+  listShells(): Promise<ShellInfo[]>;
 
   serial: {
     /** Wyłącznie odczyt listy — nie otwiera żadnego portu. */

@@ -13,6 +13,7 @@
  */
 export const IpcChannel = {
   AppCapabilities: 'app:capabilities',
+  ShellList: 'shell:list',
   SerialListPorts: 'serial:listPorts',
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
@@ -66,8 +67,15 @@ export interface AppCapabilities {
  * stoi odpowiedni `TerminalTransport` (docs/architecture/02-warstwy-i-transporty.md).
  */
 export type SessionSpec =
-  | { kind: 'pty' }
+  /** `shellId` pochodzi z listy wykrytych powłok; brak = powłoka domyślna. */
+  | { kind: 'pty'; shellId?: string }
   | { kind: 'serial'; path: string; baudRate: number };
+
+/** Powłoka wykryta w systemie, w postaci widocznej dla renderera. */
+export interface ShellInfo {
+  id: string;
+  label: string;
+}
 
 export interface TerminalCreateRequest {
   spec: SessionSpec;

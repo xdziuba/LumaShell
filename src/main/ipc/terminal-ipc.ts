@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { ipcMain, type BrowserWindow } from 'electron';
 import type { TerminalTransport } from '@core/transports/transport';
 import { LocalPtyTransport } from '@services/pty/local-pty-transport';
-import { detectDefaultShell } from '@services/pty/shell-detection';
+import { discoverShells, type ShellDefinition } from '@services/pty/shell-detection';
 import { SerialTransport, listSerialPorts } from '@services/serial/serial-transport';
 import {
   parseTerminalCreate,
@@ -71,13 +71,26 @@ function disposeSession(sessionId: string): void {
   sessions.delete(sessionId);
 }
 
+/**
+ * Wykryte powłoki są zapamiętywane po pierwszym użyciu.
+ *
+ * Wykrywanie odpala `wsl.exe`, więc powtarzanie go przy każdej nowej sesji byłoby
+ * marnotrawstwem (docs/architecture/05-wydajnosc.md).
+ */
+let shellCache: ShellDefinition[] | undefined;
+
+async function getShells(): Promise<ShellDefinition[]> {
+  shellCache ??= await discoverShells();
+  return shellCache;
+}
+
 /** Zbudowanie transportu odpowiedniego dla żądanego rodzaju sesji. */
-function createTransport(
+async function createTransport(
   sessionId: string,
   spec: SessionSpec,
   columns: number,
   rows: number
-): { transport: TerminalTransport; label: string } {
+): Promise<{ transport: TerminalTransport; label: string }> {
   if (spec.kind === 'serial') {
     return {
       transport: new SerialTransport(sessionId, { path: spec.path, baudRate: spec.baudRate }),
@@ -85,20 +98,34 @@ function createTransport(
     };
   }
 
-  const shell = detectDefaultShell();
+  const shells = await getShells();
+  // Identyfikator z renderera jest kluczem do listy wykrytych powłok, nigdy ścieżką.
+  // Nieznany identyfikator schodzi na powłokę domyślną zamiast wywracać sesję.
+  const shell = shells.find((candidate) => candidate.id === spec.shellId) ?? shells[0];
+  if (!shell) throw new Error('Nie wykryto żadnej powłoki');
+
   return {
-    transport: new LocalPtyTransport(sessionId, { shell: shell.path, columns, rows }),
+    transport: new LocalPtyTransport(sessionId, {
+      shell: shell.path,
+      args: shell.args,
+      columns,
+      rows
+    }),
     label: shell.label
   };
 }
 
 export function registerTerminalIpc(window: BrowserWindow): void {
+  ipcMain.handle(IpcChannel.ShellList, async () =>
+    (await getShells()).map(({ id, label }) => ({ id, label }))
+  );
+
   ipcMain.handle(IpcChannel.SerialListPorts, () => listSerialPorts());
 
   ipcMain.handle(IpcChannel.TerminalCreate, async (_event, payload): Promise<TerminalCreateResult> => {
     const { spec, columns, rows } = parseTerminalCreate(payload);
     const sessionId = randomUUID();
-    const { transport, label } = createTransport(sessionId, spec, columns, rows);
+    const { transport, label } = await createTransport(sessionId, spec, columns, rows);
 
     sessions.set(sessionId, { transport, pending: [], timer: undefined });
 

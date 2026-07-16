@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { TitleBar } from './components/TitleBar';
 import { TerminalView, type RendererKind } from './terminal/TerminalView';
 import type { SerialPortInfo } from '@core/transports/transport';
-import type { AppCapabilities, SessionSpec } from '@shared/types/ipc';
+import type { AppCapabilities, SessionSpec, ShellInfo } from '@shared/types/ipc';
 
-/** Etap 0 nie ma jeszcze ustawień portu — prędkość na sztywno. */
+/** Etap 1 nie ma jeszcze ustawień portu — prędkość na sztywno. */
 const PROTOTYPE_BAUD_RATE = 115200;
 
 export function App(): React.JSX.Element {
   const [capabilities, setCapabilities] = useState<AppCapabilities | null>(null);
+  const [shells, setShells] = useState<ShellInfo[]>([]);
   const [ports, setPorts] = useState<SerialPortInfo[]>([]);
   const [label, setLabel] = useState('uruchamianie…');
   const [renderer, setRenderer] = useState<RendererKind | null>(null);
@@ -22,17 +23,19 @@ export function App(): React.JSX.Element {
       // (docs/architecture/03-interfejs-i-motywy.md#degradacja-na-windows-10).
       document.documentElement.dataset.acrylic = String(value.acrylic);
     });
+    void window.luma.listShells().then(setShells);
     // Listowanie portów niczego nie otwiera, więc jest bezpieczne przy starcie.
     void window.luma.serial.listPorts().then(setPorts);
   }, []);
 
   const isSerial = spec.kind === 'serial';
   const activePath = isSerial ? spec.path : null;
+  const activeShell = spec.kind === 'pty' ? spec.shellId : undefined;
 
-  const openPty = (): void => {
+  const openShell = (shellId: string): void => {
     setStatus(null);
     setLabel('uruchamianie…');
-    setSpec({ kind: 'pty' });
+    setSpec({ kind: 'pty', shellId });
   };
 
   const openSerial = (path: string): void => {
@@ -44,7 +47,7 @@ export function App(): React.JSX.Element {
   // Nowy obiekt spec przy każdym renderze restartowałby sesję w kółko.
   const stableSpec = useMemo(
     () => spec,
-    [spec.kind, isSerial ? spec.path : '', isSerial ? spec.baudRate : 0]
+    [spec.kind, activeShell ?? '', isSerial ? spec.path : '', isSerial ? spec.baudRate : 0]
   );
 
   return (
@@ -53,13 +56,22 @@ export function App(): React.JSX.Element {
 
       <div className="body">
         <aside className="sidebar">
-          <div className="sidebar__heading">SESJE</div>
-          <button
-            className={`sidebar__item sidebar__item--action${spec.kind === 'pty' ? ' is-active' : ''}`}
-            onClick={openPty}
-          >
-            {spec.kind === 'pty' ? '●' : '○'} Powłoka lokalna
-          </button>
+          <div className="sidebar__heading">POWŁOKI</div>
+          {shells.length === 0 && <div className="sidebar__item">wykrywanie…</div>}
+          {shells.map((shell, index) => {
+            // Sesja startowa idzie bez shellId, więc pierwsza powłoka jest wtedy aktywna.
+            const active =
+              spec.kind === 'pty' && (activeShell === shell.id || (!activeShell && index === 0));
+            return (
+              <button
+                key={shell.id}
+                className={`sidebar__item sidebar__item--action${active ? ' is-active' : ''}`}
+                onClick={() => openShell(shell.id)}
+              >
+                {active ? '●' : '○'} {shell.label}
+              </button>
+            );
+          })}
 
           <div className="sidebar__heading sidebar__heading--spaced">PORTY COM</div>
           {ports.length === 0 && <div className="sidebar__item">brak portów</div>}

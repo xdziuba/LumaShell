@@ -20,14 +20,23 @@ Celem jest sprawdzenie, czy aplikacja zachowuje płynność przy dużej ilości 
 
 ### Etap 1 — podstawowy terminal
 
-* Electron, TypeScript, React,
-* xterm.js,
-* node-pty,
-* PowerShell, CMD, WSL,
-* kopiowanie i wklejanie,
-* zmiana rozmiaru,
-* podstawowe ustawienia,
-* pierwszy motyw ciemno-zielony.
+* ✔ Electron, TypeScript, React,
+* ✔ `@xterm/xterm` z rendererem WebGL,
+* ✔ node-pty,
+* ✔ PowerShell, CMD, WSL — dodatkowo Git Bash; wykrywane, nie zaszyte na sztywno,
+* ✔ kopiowanie i wklejanie,
+* ✔ zmiana rozmiaru,
+* ✔ pierwszy motyw ciemno-zielony,
+* podstawowe ustawienia.
+
+> **Pułapki wykrywania powłok**, wszystkie potwierdzone na żywym systemie:
+>
+> * `wsl.exe -l -q` wypisuje wynik w **UTF-16LE**, nie w UTF-8,
+> * rejestr **nie odróżnia** dystrybucji systemowych (`docker-desktop`) od użytkownika —
+>   mają identyczne `Flags`, więc jedynym sitem jest nazwa,
+> * Git Bash **nie leży w stałym miejscu względem `git.exe`** — PATH potrafi zawierać
+>   `Git\cmd\git.exe` i `Git\mingw64\bin\git.exe` naraz, więc sztywne „dwa poziomy w górę"
+>   trafia w próżnię.
 
 ### Etap 2 — workspace
 

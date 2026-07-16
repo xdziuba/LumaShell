@@ -28,7 +28,19 @@ Nieaktywne zakładki powinny:
 * aktualizować bufor bez przerysowywania całego terminala,
 * być renderowane dopiero po ponownym aktywowaniu.
 
-## 3. Czas startu
+## 3. Wykrywanie powłok
+
+Wykrywanie jest **leniwe i zapamiętywane**: uruchamia się na pierwsze żądanie, nie przy
+starcie aplikacji, a wynik jest cache'owany. Powód jest konkretny — lista dystrybucji WSL
+wymaga odpalenia `wsl.exe`, więc powtarzanie tego przy każdej nowej sesji byłoby
+marnotrawstwem.
+
+> **Zimny start WSL trwa kilkanaście sekund.** Zmierzone: prompt Ubuntu pojawia się
+> długo po tym, jak sesja została utworzona. Sesja wstaje od razu, ale terminal jest przez
+> ten czas pusty — to zachowanie WSL, nie aplikacji. Warto to kiedyś obsłużyć w interfejsie
+> (wskaźnik rozruchu), bo pusty czarny prostokąt wygląda jak awaria.
+
+## 4. Czas startu
 
 Podczas uruchamiania należy najpierw załadować:
 
@@ -45,7 +57,7 @@ Dopiero później:
 * aktualizacje,
 * integracje zewnętrzne.
 
-## 4. Cele wydajnościowe
+## 5. Cele wydajnościowe
 
 Realistyczne cele dla aplikacji Electron:
 
