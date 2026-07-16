@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { TitleBar } from './components/TitleBar';
 import { TerminalView, type RendererKind } from './terminal/TerminalView';
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { AppCapabilities, SessionSpec, ShellInfo } from '@shared/types/ipc';
+import { DEFAULT_SETTINGS, type TerminalSettings } from '@shared/types/settings';
+
+// Panel ustawień ładowany dopiero przy otwarciu — nie wchodzi do bundle'a startowego
+// (docs/architecture/05-wydajnosc.md).
+const SettingsPanel = lazy(() => import('./settings/SettingsPanel'));
 
 /** Etap 1 nie ma jeszcze ustawień portu — prędkość na sztywno. */
 const PROTOTYPE_BAUD_RATE = 115200;
@@ -15,6 +20,8 @@ export function App(): React.JSX.Element {
   const [renderer, setRenderer] = useState<RendererKind | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [spec, setSpec] = useState<SessionSpec>({ kind: 'pty' });
+  const [settings, setSettings] = useState<TerminalSettings>(DEFAULT_SETTINGS);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     void window.luma.getCapabilities().then((value) => {
@@ -23,10 +30,18 @@ export function App(): React.JSX.Element {
       // (docs/architecture/03-interfejs-i-motywy.md#degradacja-na-windows-10).
       document.documentElement.dataset.acrylic = String(value.acrylic);
     });
+    void window.luma.settings.get().then(setSettings);
     void window.luma.listShells().then(setShells);
     // Listowanie portów niczego nie otwiera, więc jest bezpieczne przy starcie.
     void window.luma.serial.listPorts().then(setPorts);
   }, []);
+
+  const zmienUstawienia = (next: TerminalSettings): void => {
+    // Podgląd natychmiast, zapis w tle. Proces główny zwraca wartości po walidacji,
+    // więc to one są ostatecznie prawdą.
+    setSettings(next);
+    void window.luma.settings.save(next).then(setSettings);
+  };
 
   const isSerial = spec.kind === 'serial';
   const activePath = isSerial ? spec.path : null;
@@ -89,6 +104,7 @@ export function App(): React.JSX.Element {
 
         <TerminalView
           spec={stableSpec}
+          settings={settings}
           onReady={(info) => setLabel(info.label)}
           onExit={(code) => setStatus(code === undefined ? 'Sesja zamknięta' : `Powłoka zakończona (kod ${code})`)}
           onRenderer={setRenderer}
@@ -97,6 +113,16 @@ export function App(): React.JSX.Element {
             setStatus(message);
           }}
         />
+
+        {settingsOpen && (
+          <Suspense fallback={<aside className="settings settings--loading">ładowanie…</aside>}>
+            <SettingsPanel
+              settings={settings}
+              onChange={zmienUstawienia}
+              onClose={() => setSettingsOpen(false)}
+            />
+          </Suspense>
+        )}
       </div>
 
       <footer className="statusbar">
@@ -107,6 +133,12 @@ export function App(): React.JSX.Element {
           Renderer: <span className="statusbar__accent">{renderer ?? '—'}</span>
         </span>
         <span>Build systemu: {capabilities?.osBuild || '—'}</span>
+        <button
+          className={`statusbar__button${settingsOpen ? ' is-active' : ''}`}
+          onClick={() => setSettingsOpen((open) => !open)}
+        >
+          Ustawienia
+        </button>
         {status && <span className="statusbar__status">{status}</span>}
       </footer>
     </div>

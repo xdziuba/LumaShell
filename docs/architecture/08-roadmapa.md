@@ -27,7 +27,10 @@ Celem jest sprawdzenie, czy aplikacja zachowuje płynność przy dużej ilości 
 * ✔ kopiowanie i wklejanie,
 * ✔ zmiana rozmiaru,
 * ✔ pierwszy motyw ciemno-zielony,
-* podstawowe ustawienia.
+* ✔ podstawowe ustawienia — czcionka, rozmiar, odstępy, kursor, historia; trwałe
+  i stosowane na żywo bez restartu sesji.
+
+**Etap 1 zamknięty.**
 
 > **Pułapki wykrywania powłok**, wszystkie potwierdzone na żywym systemie:
 >

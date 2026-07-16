@@ -13,6 +13,8 @@
  */
 export const IpcChannel = {
   AppCapabilities: 'app:capabilities',
+  SettingsGet: 'settings:get',
+  SettingsSave: 'settings:save',
   ShellList: 'shell:list',
   SerialListPorts: 'serial:listPorts',
   TerminalCreate: 'terminal:create',

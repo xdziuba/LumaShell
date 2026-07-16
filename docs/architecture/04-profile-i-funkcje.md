@@ -34,6 +34,17 @@ Profile obsługują:
 * wersjonowanie,
 * synchronizację jako opcjonalną funkcję.
 
+### Gdzie mieszka konfiguracja
+
+Ustawienia terminala trafiają do `settings.json` w katalogu danych aplikacji
+(`app.getPath('userData')`). Zasady:
+
+* **zapis atomowy** — najpierw plik tymczasowy, potem podmiana nazwy; przerwanie w trakcie
+  zapisu zostawiłoby inaczej obcięty plik konfiguracyjny,
+* **walidacja przy odczycie** — plik mógł zostać ręcznie popsuty, więc błędne wartości
+  schodzą do domyślnych zamiast blokować uruchomienie,
+* **żadnych sekretów** — patrz niżej.
+
 ### Dane uwierzytelniające
 
 > **Hasła i dane uwierzytelniające nie mogą być zapisywane bezpośrednio w pliku

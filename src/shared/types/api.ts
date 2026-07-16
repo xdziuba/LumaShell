@@ -14,6 +14,7 @@ import type {
   TerminalExitEvent
 } from './ipc';
 import type { SerialPortInfo } from '@core/transports/transport';
+import type { TerminalSettings } from './settings';
 
 /** Każdy nasłuch zwraca funkcję wypisującą. */
 export type Unsubscribe = () => void;
@@ -23,6 +24,12 @@ export interface LumaApi {
 
   /** Powłoki wykryte w systemie. */
   listShells(): Promise<ShellInfo[]>;
+
+  settings: {
+    get(): Promise<TerminalSettings>;
+    /** Zwraca ustawienia po walidacji — mogą różnić się od wysłanych, jeśli były poza zakresem. */
+    save(settings: TerminalSettings): Promise<TerminalSettings>;
+  };
 
   serial: {
     /** Wyłącznie odczyt listy — nie otwiera żadnego portu. */
