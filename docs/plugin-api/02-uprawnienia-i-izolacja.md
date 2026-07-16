@@ -2,26 +2,59 @@
 
 ## 1. Izolacja wtyczek
 
-> **Wtyczki nie działają bezpośrednio w głównym rendererze.**
+> **Decyzja:** wtyczki działają w procesie **bez integracji Node.js**, a jedynym kanałem
+> komunikacji jest **RPC**. Uzasadnienie i odrzucone warianty:
+> [architecture/10 — Decyzje](../architecture/10-decyzje.md#d2--izolacja-wtyczek-rpc-bez-node).
 
-Zalecany model:
+### Izolacja awarii to nie izolacja bezpieczeństwa
+
+Rozróżnienie, od którego zależy sens całego systemu uprawnień:
+
+| Model | Chroni przed awarią | Egzekwuje uprawnienia |
+| --- | --- | --- |
+| Worker Threads / `UtilityProcess` **z Node** | tak | **nie** |
+| Proces **bez Node** + wyłącznie RPC | tak | **tak** |
+
+Kod uruchomiony w `UtilityProcess` lub Worker Thread z dostępem do Node ma `require('fs')`,
+`require('net')` i `require('child_process')`. W takim modelu manifest deklarujący
+`filesystem.read` jest **wyłącznie deklaracją** — wtyczka może zignorować API aplikacji
+i sięgnąć do dysku bezpośrednio, a nic jej nie zatrzyma.
+
+Ponieważ uprawnienia są pokazywane użytkownikowi przy instalacji, byłaby to obietnica
+bezpieczeństwa, której architektura nie dotrzymuje. Dlatego wybrano model bez Node.
+
+### Model docelowy
 
 ```text
 Electron Main Process
-    │
-    ├── Plugin Host Worker
-    ├── Plugin Host Worker
-    └── Plugin Host Worker
+    │  (jedyne przejście: RPC + walidacja + sprawdzenie uprawnień)
+    ├── Plugin Host — bez Node, bez fs/net/child_process
+    ├── Plugin Host — bez Node, bez fs/net/child_process
+    └── Plugin Host — bez Node, bez fs/net/child_process
 ```
 
-Do uruchamiania wtyczek można wykorzystać:
+Zasady:
 
-* Worker Threads,
-* UtilityProcess,
-* osobne procesy Node.js.
+* wtyczka **nie ma** dostępu do modułów Node.js ani do zasobów systemowych,
+* każdy dostęp do zasobu przechodzi przez RPC do procesu głównego,
+* proces główny **waliduje każde wywołanie** i sprawdza uprawnienia z manifestu,
+* punktem egzekucji jest granica RPC — nie dobra wola wtyczki,
+* wtyczka nie może rozszerzyć swoich uprawnień w czasie działania.
 
-Każda wtyczka działa w odizolowanym środowisku i komunikuje się z aplikacją przez
-ograniczone API.
+### Konsekwencja: brak wtyczek jako paczek npm
+
+Wtyczka bez dostępu do modułów Node **nie może korzystać z zależności npm**, które tych
+modułów wymagają. To zaakceptowany koszt tej decyzji:
+
+* wtyczki muszą być **zbundlowane do samodzielnego pliku** (`dist/index.js`),
+* zależności czysto obliczeniowe (bez I/O) mogą być wbudowane w bundle,
+* biblioteka wymagająca `fs`, `net` czy `child_process` **nie zadziała** — jej
+  funkcjonalność musi zostać wystawiona jako API aplikacji przez RPC,
+* dostarczanie wtyczki jako paczki npm zostało **usunięte** z obsługiwanych formatów —
+  patrz [01 — Przegląd i manifest](01-przeglad-i-manifest.md).
+
+Jeżeli wtyczka potrzebuje możliwości, której nie ma w API, właściwą drogą jest
+**rozszerzenie API aplikacji**, a nie obejście izolacji.
 
 ## 2. Uprawnienia
 

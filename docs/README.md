@@ -20,6 +20,7 @@ repozytorium zawiera strukturę katalogów i plan, bez kodu.
 | [07 — Testy](architecture/07-testy.md) | Testy jednostkowe, integracyjne, E2E, wydajnościowe |
 | [08 — Roadmapa](architecture/08-roadmapa.md) | Etapy realizacji, zakres MVP, zakres 1.0 |
 | [09 — Agent AI](architecture/09-agent-ai.md) | Tryby integracji z AI, architektura agenta, panel, kontekst, pamięć |
+| [10 — Rejestr decyzji](architecture/10-decyzje.md) | Decyzje odbiegające od pierwotnego planu wraz z uzasadnieniem |
 
 ## Plugin API
 

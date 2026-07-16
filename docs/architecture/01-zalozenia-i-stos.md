@@ -44,6 +44,14 @@ rozszerzeń. Zustand zapewni prostsze i lżejsze zarządzanie stanem niż pełny
 
 Do wyświetlania terminala wykorzystana zostanie biblioteka **xterm.js**.
 
+> **Nazwy paczek.** Paczka `xterm` jest **wycofana** (ostatnia wersja 5.3.0, oznaczona jako
+> deprecated). Aktualne, utrzymywane paczki mają przestrzeń nazw `@xterm/`:
+>
+> ```text
+> @xterm/xterm            → rdzeń terminala
+> @xterm/addon-webgl      → renderer WebGL
+> ```
+
 Biblioteka powinna zostać rozszerzona o:
 
 * własny system buforowania,
@@ -61,6 +69,28 @@ Do lokalnych terminali:
 
 Dzięki temu aplikacja będzie mogła uruchamiać PowerShell, PowerShell 7, CMD, Git Bash,
 WSL, własne powłoki oraz dowolne programy konsolowe.
+
+### Moduły natywne — stan faktyczny
+
+`node-pty` (1.1.0) i `serialport` (13.x) są zbudowane na **N-API** (`node-addon-api`)
+i dostarczają gotowe prebuildy dla `win32-x64`. Konsekwencje:
+
+* instalacja **nie uruchamia kompilacji** — node-gyp, Python ani Visual Studio nie są
+  potrzebne na ścieżce standardowej,
+* N-API jest **stabilne między ABI**, więc ta sama binarka działa w Node i w Electronie
+  **bez `electron-rebuild`**.
+
+Zweryfikowane empirycznie: Node 24 (ABI 137) i Electron 43 (ABI 148) ładują ten sam moduł;
+`node-pty` uruchomił PowerShell przez ConPTY, `serialport` wylistował porty COM.
+
+> **Pakowanie (Etap 8).** Binaria natywne muszą zostać wyłączone z archiwum asar przez
+> `asarUnpack` w electron-builderze — inaczej nie załadują się w zainstalowanej aplikacji,
+> mimo że działają w trybie deweloperskim. Dotyczy to `pty.node`, `conpty.dll`,
+> `OpenConsole.exe` i `winpty-agent.exe`.
+
+Kompilacja pozostaje **ścieżką awaryjną** (np. wersja bez prebuildów). Wymaga wtedy Visual
+Studio Build Tools z narzędziami C++ oraz Node w wersji zgodnej z bieżącym node-gyp
+(linia 24.x: `>= 24.15`).
 
 ### Komunikacja
 
@@ -83,8 +113,9 @@ WSL, własne powłoki oraz dowolne programy konsolowe.
 
 ## Rekomendacja końcowa
 
-> Electron, TypeScript, React, Vite, xterm.js, node-pty, ssh2, serialport oraz izolowany
-> system wtyczek JavaScript oparty na osobnych procesach lub UtilityProcess.
+> Electron, TypeScript, React, Vite, `@xterm/xterm`, node-pty, ssh2, serialport oraz
+> izolowany system wtyczek JavaScript działający **bez integracji Node.js**, komunikujący
+> się wyłącznie przez RPC ([10 — Decyzje](10-decyzje.md#d2--izolacja-wtyczek-rpc-bez-node)).
 
 Aplikacja powinna być webowa technologicznie, ale zachowywać się jak klasyczny program
 desktopowy.

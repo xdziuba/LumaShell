@@ -87,3 +87,22 @@ są docelowymi punktami wejścia poszczególnych warstw — nie zostały jeszcze
 | `src/services` | Implementacje transportów: PTY, SSH, serial, TCP, SFTP |
 | `src/plugins` | System wtyczek: API, host, manager, uprawnienia, rejestr |
 | `src/shared` | Typy, schematy walidacji, stałe i narzędzia współdzielone między warstwami |
+
+## Granica `core` / `services`
+
+Podział bywa myląco podobny, więc obowiązuje jedna reguła:
+
+> **`core` definiuje kontrakty. `services` je implementuje. Zależność idzie wyłącznie
+> w stronę `services` → `core`.**
+
+| | `core/transports` | `services/pty`, `services/ssh`, … |
+| --- | --- | --- |
+| Zawiera | interfejs `TerminalTransport`, `ConnectionState`, typy zdarzeń | `LocalPtyTransport`, `SshTransport`, `SerialTransport` |
+| Zna Node / system? | **nie** | tak — `node-pty`, `ssh2`, `serialport` |
+| Importuje drugą stronę? | **nigdy** | tak, po interfejs |
+
+Przykład: interfejs `TerminalTransport` mieszka w `core/transports`, a `LocalPtyTransport`
+implementujący go przez `node-pty` — w `services/pty`.
+
+`core` musi dać się zaimportować bez wciągania zależności natywnych. Dzięki temu logika
+sesji i profili jest testowalna jednostkowo bez PTY i portów COM.

@@ -7,21 +7,28 @@ Mogą być dostarczane jako:
 * katalog,
 * paczka ZIP,
 * paczka `.terminal-plugin`,
-* paczka npm,
 * repozytorium Git.
+
+> **Paczki npm nie są obsługiwane.** Wtyczki działają w procesie bez integracji Node.js,
+> więc nie mają dostępu do modułów npm wymagających `fs`, `net` czy `child_process`.
+> Każda wtyczka musi być **zbundlowana do samodzielnego pliku**. Uzasadnienie:
+> [02 — Uprawnienia i izolacja](02-uprawnienia-i-izolacja.md#konsekwencja-brak-wtyczek-jako-paczek-npm).
 
 ## Struktura wtyczki
 
 ```text
 my-plugin/
-  package.json
-  plugin.json
+  package.json      → tylko metadane i skrypt budowania (nie jest środowiskiem uruchomienia)
+  plugin.json       → manifest czytany przez aplikację
   dist/
-    index.js
+    index.js        → JEDEN zbundlowany plik, bez zależności rozwiązywanych w czasie działania
   assets/
     icon.svg
   README.md
 ```
+
+`dist/index.js` musi być samowystarczalny — aplikacja nie rozwiązuje `node_modules`
+wtyczki w czasie działania.
 
 ## Manifest
 

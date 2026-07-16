@@ -52,18 +52,53 @@ Tekst drugorzędny:   #8CB8A3
 Obramowania:         rgba(90, 255, 170, 0.18)
 ```
 
-### Efekt szkła
+### Rama okna i efekt szkła — decyzja
+
+> **Decyzja:** własna rama okna (`frame: false`) + systemowe rozmycie pulpitu przez
+> `backgroundMaterial: 'acrylic'`. Uzasadnienie i alternatywy:
+> [10 — Decyzje](10-decyzje.md#d1--własna-rama-okna-i-acrylic).
+
+Kluczowe rozróżnienie, od którego zależy cała warstwa wizualna:
+
+| Technika | Co rozmywa | Kto liczy | Koszt |
+| --- | --- | --- | --- |
+| `backgroundMaterial: 'acrylic'` | **pulpit i okna pod aplikacją** | DWM (system) | znikomy dla aplikacji |
+| `backdrop-filter: blur()` | **wyłącznie treść strony pod elementem** | kompozytor Chromium | wysoki, rośnie z powierzchnią |
+
+**`backdrop-filter` nigdy nie rozmywa pulpitu.** To najczęstsze nieporozumienie przy tego
+typu interfejsach. Rozmycie pulpitu daje wyłącznie warstwa systemowa.
+
+### Konfiguracja okna
+
+```ts
+const win = new BrowserWindow({
+  frame: false,                    // własna rama — warunek wymagany przez projekt
+  backgroundColor: '#00000000',    // alpha 00 — warunek konieczny, żeby acrylic był widoczny
+  backgroundMaterial: 'acrylic'    // systemowe rozmycie tła (@platform win32)
+});
+```
+
+`transparent: true` **nie jest potrzebne** i nie należy go łączyć z `backgroundMaterial`.
+Wystarczy `backgroundColor` z zerową alfą.
+
+Zweryfikowane empirycznie na Electron 43.1.1 / Windows 11 build 26200: `frame: false`
+i `backgroundMaterial: 'acrylic'` działają razem, a rozmycie pulpitu jest widoczne pod
+półprzezroczystymi obszarami okna **bez użycia `backdrop-filter`**.
+
+### Panel glass
+
+Przy włączonym acrylicu panele potrzebują **wyłącznie alfy** — rozmycie dokłada system:
 
 ```css
 .glass-panel {
   background:
     linear-gradient(
       135deg,
-      rgba(20, 55, 40, 0.72),
-      rgba(5, 18, 13, 0.58)
+      rgba(20, 55, 40, 0.42),
+      rgba(5, 18, 13, 0.30)
     );
 
-  backdrop-filter: blur(20px) saturate(140%);
+  /* Brak backdrop-filter — rozmycie pulpitu robi backgroundMaterial: 'acrylic'. */
   border: 1px solid rgba(110, 255, 180, 0.15);
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.35),
@@ -71,16 +106,46 @@ Obramowania:         rgba(90, 255, 170, 0.18)
 }
 ```
 
-Efekty przezroczystości powinny znajdować się przede wszystkim na:
+### Kiedy mimo wszystko użyć `backdrop-filter`
 
-* panelach bocznych,
-* menu,
-* pasku zakładek,
-* command palette,
-* oknach dialogowych,
-* kartach ustawień.
+Acrylic działa **per okno** i rozmywa to, co jest *za oknem*. Nie rozmyje treści samej
+aplikacji. Dlatego do nakładek nad nieprzezroczystym terminalem — command palette, menu
+kontekstowe, okna dialogowe — nadal potrzebny jest `backdrop-filter`, bo tam rozmywana jest
+treść strony, a nie pulpit.
 
-**Sam obszar terminala powinien mieć bardziej jednolite tło, aby tekst pozostał czytelny.**
+Podział ról:
+
+| Element | Technika |
+| --- | --- |
+| Pasek zakładek, pasek boczny, pasek statusu | alfa + acrylic (rozmyty pulpit) |
+| Command palette, menu, dialogi nad terminalem | `backdrop-filter` (rozmyta treść aplikacji) |
+| **Obszar terminala** | **pełne krycie `#06100C`, bez efektów** |
+
+**Obszar terminala pozostaje nieprzezroczysty** — dla czytelności tekstu i dlatego, że
+`backdrop-filter` nad canvasem WebGL wymusza kosztowne kompozytowanie.
+
+### Degradacja na starszych systemach
+
+`backgroundMaterial` wymaga **Windows 11 22H2 lub nowszego**. Na starszych systemach
+wywołanie jest bezpieczne, ale nie daje efektu — okno będzie nieprzezroczyste.
+
+Aplikacja musi wykryć wersję systemu i zdegradować się do jednolitego tła
+(`backgroundColor: '#07110D'`), zachowując pełną funkcjonalność. Efekt szkła jest
+ozdobą, nie wymaganiem działania — patrz [10 — Decyzje](10-decyzje.md#d1--własna-rama-okna-i-acrylic).
+
+### Koszt własnej ramy
+
+`frame: false` oznacza, że aplikacja przejmuje odpowiedzialność za elementy, które
+normalnie daje system:
+
+* pasek tytułu i przyciski minimalizuj / maksymalizuj / zamknij,
+* obszary przeciągania (`-webkit-app-region: drag`, z `no-drag` na przyciskach),
+* zmianę rozmiaru przy krawędziach,
+* Snap Layouts systemu Windows 11,
+* podwójne kliknięcie w pasek = maksymalizacja,
+* menu systemowe pod prawym przyciskiem.
+
+To świadomie zaakceptowany koszt Etapu 0.
 
 ### Personalizacja wyglądu
 
