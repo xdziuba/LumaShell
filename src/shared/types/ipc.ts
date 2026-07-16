@@ -13,6 +13,7 @@
  */
 export const IpcChannel = {
   AppCapabilities: 'app:capabilities',
+  SerialListPorts: 'serial:listPorts',
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
   TerminalResize: 'terminal:resize',
@@ -58,18 +59,31 @@ export interface AppCapabilities {
   osBuild: number;
 }
 
+/**
+ * Czego dotyczy sesja.
+ *
+ * Renderer prosi o rodzaj połączenia, nie o konkretną bibliotekę — po drugiej stronie
+ * stoi odpowiedni `TerminalTransport` (docs/architecture/02-warstwy-i-transporty.md).
+ */
+export type SessionSpec =
+  | { kind: 'pty' }
+  | { kind: 'serial'; path: string; baudRate: number };
+
 export interface TerminalCreateRequest {
+  spec: SessionSpec;
   columns: number;
   rows: number;
 }
 
 export interface TerminalCreateResult {
   sessionId: string;
-  shell: string;
+  /** Etykieta do pokazania użytkownikowi, np. „Windows PowerShell" albo „COM9 @ 115200". */
+  label: string;
 }
 
 export interface TerminalWriteRequest {
   sessionId: string;
+  /** Wejście z klawiatury jest tekstem; wysyłka binarna i hex wchodzą w Etapie 4. */
   data: string;
 }
 
@@ -85,10 +99,12 @@ export interface TerminalDisposeRequest {
 
 export interface TerminalDataEvent {
   sessionId: string;
-  data: string;
+  /** Surowe bajty — dekoduje dopiero xterm (patrz core/transports/transport.ts). */
+  data: Uint8Array;
 }
 
 export interface TerminalExitEvent {
   sessionId: string;
-  exitCode: number;
+  /** Tylko dla sesji, które mają pojęcie kodu wyjścia (PTY). Port szeregowy go nie ma. */
+  exitCode?: number;
 }

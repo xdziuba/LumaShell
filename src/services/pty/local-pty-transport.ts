@@ -17,7 +17,7 @@ export class LocalPtyTransport implements TerminalTransport {
 
   #pty: IPty | undefined;
   #state: ConnectionState = 'idle';
-  #dataHandlers: Array<(data: string) => void> = [];
+  #dataHandlers: Array<(data: Uint8Array) => void> = [];
   #stateHandlers: Array<(state: ConnectionState) => void> = [];
   #errorHandlers: Array<(error: Error) => void> = [];
   #exitHandlers: Array<(exitCode: number) => void> = [];
@@ -47,6 +47,9 @@ export class LocalPtyTransport implements TerminalTransport {
         cwd: this.options.cwd ?? process.env.USERPROFILE ?? process.cwd(),
         env: this.options.env ?? (process.env as Record<string, string>),
         useConpty: true
+        // Opcji `encoding` celowo tu nie ma. Na Windows node-pty ją ignoruje i wypisuje
+        // „Setting encoding on Windows is not supported" — ścieżka ConPTY zawsze oddaje
+        // string, nigdy Buffer. Sprawdzone dla null, undefined i 'utf8'.
       });
     } catch (error) {
       this.#setState('error');
@@ -54,14 +57,24 @@ export class LocalPtyTransport implements TerminalTransport {
       throw error;
     }
 
+    // Kontrakt transportu mówi bajtami, a ConPTY oddaje wyłącznie string, więc tekst
+    // wraca tu do UTF-8.
+    //
+    // To nie jest strata: node-pty zdekodował już wyjście na swoim poziomie, więc
+    // ewentualne bajty spoza UTF-8 przepadły zanim tu dotarły — ponowne kodowanie
+    // niczego do tego nie dokłada. Jednolity kontrakt jest wart tego kosztu, bo dzięki
+    // niemu port szeregowy i SSH zostają naprawdę binarne.
     this.#pty.onData((data) => {
-      for (const handler of this.#dataHandlers) handler(data);
+      const bytes = Buffer.from(data, 'utf8');
+      for (const handler of this.#dataHandlers) handler(bytes);
     });
 
     this.#pty.onExit(({ exitCode }) => {
       this.#pty = undefined;
-      this.#setState('closed');
+      // Kod wyjścia najpierw, dopiero potem zmiana stanu: obserwator stanu 'closed'
+      // musi już znać kod, bo to on rozgłasza koniec sesji.
       for (const handler of this.#exitHandlers) handler(exitCode);
+      this.#setState('closed');
     });
 
     this.#setState('connected');
@@ -78,8 +91,10 @@ export class LocalPtyTransport implements TerminalTransport {
     this.#setState('closed');
   }
 
-  async write(data: string): Promise<void> {
-    this.#pty?.write(data);
+  async write(data: string | Uint8Array): Promise<void> {
+    if (!this.#pty) return;
+    // W drugą stronę tak samo: ConPTY przyjmuje tekst, więc bajty trzeba zdekodować.
+    this.#pty.write(typeof data === 'string' ? data : Buffer.from(data).toString('utf8'));
   }
 
   async resize(columns: number, rows: number): Promise<void> {
@@ -91,7 +106,7 @@ export class LocalPtyTransport implements TerminalTransport {
     }
   }
 
-  onData(callback: (data: string) => void): void {
+  onData(callback: (data: Uint8Array) => void): void {
     this.#dataHandlers.push(callback);
   }
 

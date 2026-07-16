@@ -7,8 +7,10 @@
 
 import { randomUUID } from 'node:crypto';
 import { ipcMain, type BrowserWindow } from 'electron';
+import type { TerminalTransport } from '@core/transports/transport';
 import { LocalPtyTransport } from '@services/pty/local-pty-transport';
 import { detectDefaultShell } from '@services/pty/shell-detection';
+import { SerialTransport, listSerialPorts } from '@services/serial/serial-transport';
 import {
   parseTerminalCreate,
   parseTerminalDispose,
@@ -18,6 +20,7 @@ import {
 import {
   IpcChannel,
   IpcEvent,
+  type SessionSpec,
   type TerminalCreateResult
 } from '@shared/types/ipc';
 
@@ -31,8 +34,8 @@ import {
 const FLUSH_INTERVAL_MS = 16;
 
 interface Session {
-  transport: LocalPtyTransport;
-  pending: string[];
+  transport: TerminalTransport;
+  pending: Uint8Array[];
   timer: NodeJS.Timeout | undefined;
 }
 
@@ -45,7 +48,8 @@ function flush(sessionId: string, window: BrowserWindow): void {
   session.timer = undefined;
   if (session.pending.length === 0) return;
 
-  const data = session.pending.join('');
+  // Sklejenie porcji w jeden bufor: jeden komunikat IPC zamiast setek.
+  const data = Buffer.concat(session.pending);
   session.pending.length = 0;
 
   if (!window.isDestroyed()) {
@@ -67,17 +71,34 @@ function disposeSession(sessionId: string): void {
   sessions.delete(sessionId);
 }
 
-export function registerTerminalIpc(window: BrowserWindow): void {
-  ipcMain.handle(IpcChannel.TerminalCreate, async (_event, payload): Promise<TerminalCreateResult> => {
-    const { columns, rows } = parseTerminalCreate(payload);
-    const shell = detectDefaultShell();
-    const sessionId = randomUUID();
+/** Zbudowanie transportu odpowiedniego dla żądanego rodzaju sesji. */
+function createTransport(
+  sessionId: string,
+  spec: SessionSpec,
+  columns: number,
+  rows: number
+): { transport: TerminalTransport; label: string } {
+  if (spec.kind === 'serial') {
+    return {
+      transport: new SerialTransport(sessionId, { path: spec.path, baudRate: spec.baudRate }),
+      label: `${spec.path} @ ${spec.baudRate}`
+    };
+  }
 
-    const transport = new LocalPtyTransport(sessionId, {
-      shell: shell.path,
-      columns,
-      rows
-    });
+  const shell = detectDefaultShell();
+  return {
+    transport: new LocalPtyTransport(sessionId, { shell: shell.path, columns, rows }),
+    label: shell.label
+  };
+}
+
+export function registerTerminalIpc(window: BrowserWindow): void {
+  ipcMain.handle(IpcChannel.SerialListPorts, () => listSerialPorts());
+
+  ipcMain.handle(IpcChannel.TerminalCreate, async (_event, payload): Promise<TerminalCreateResult> => {
+    const { spec, columns, rows } = parseTerminalCreate(payload);
+    const sessionId = randomUUID();
+    const { transport, label } = createTransport(sessionId, spec, columns, rows);
 
     sessions.set(sessionId, { transport, pending: [], timer: undefined });
 
@@ -86,7 +107,18 @@ export function registerTerminalIpc(window: BrowserWindow): void {
       schedule(sessionId, window);
     });
 
-    transport.onExit((exitCode) => {
+    // Kod wyjścia jest pojęciem wyłącznie PTY — port szeregowy się zamyka, ale niczego
+    // nie „kończy". Dlatego koniec sesji rozgłasza wspólny stan 'closed', a kod
+    // dokłada tylko ten transport, który go ma.
+    let exitCode: number | undefined;
+    if (transport instanceof LocalPtyTransport) {
+      transport.onExit((code) => {
+        exitCode = code;
+      });
+    }
+
+    transport.onStateChange((state) => {
+      if (state !== 'closed') return;
       flush(sessionId, window);
       if (!window.isDestroyed()) {
         window.webContents.send(IpcEvent.TerminalExit, { sessionId, exitCode });
@@ -95,7 +127,7 @@ export function registerTerminalIpc(window: BrowserWindow): void {
     });
 
     await transport.connect();
-    return { sessionId, shell: shell.label };
+    return { sessionId, label };
   });
 
   ipcMain.handle(IpcChannel.TerminalWrite, async (_event, payload) => {
@@ -105,7 +137,8 @@ export function registerTerminalIpc(window: BrowserWindow): void {
 
   ipcMain.handle(IpcChannel.TerminalResize, async (_event, payload) => {
     const { sessionId, columns, rows } = parseTerminalResize(payload);
-    await sessions.get(sessionId)?.transport.resize(columns, rows);
+    // `resize` jest w kontrakcie opcjonalne — port szeregowy nie ma rozmiaru okna.
+    await sessions.get(sessionId)?.transport.resize?.(columns, rows);
   });
 
   ipcMain.handle(IpcChannel.TerminalDispose, async (_event, payload) => {

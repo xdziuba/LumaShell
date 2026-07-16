@@ -8,6 +8,14 @@
 
 export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'closed' | 'error';
 
+/**
+ * Transport oddaje **bajty**, nie tekst.
+ *
+ * Port szeregowy bywa z natury binarny (widok hex, protokoły ramkowe), więc dekodowanie
+ * na poziomie transportu zamykałoby drogę do Etapu 4. Dekodowanie należy do warstwy
+ * prezentacji — xterm przyjmuje `Uint8Array` i sam składa sekwencje UTF-8 rozjechane
+ * między porcjami.
+ */
 export interface TerminalTransport {
   readonly id: string;
   readonly type: string;
@@ -15,10 +23,10 @@ export interface TerminalTransport {
 
   connect(): Promise<void>;
   disconnect(): Promise<void>;
-  write(data: string): Promise<void>;
+  write(data: string | Uint8Array): Promise<void>;
   resize?(columns: number, rows: number): Promise<void>;
 
-  onData(callback: (data: string) => void): void;
+  onData(callback: (data: Uint8Array) => void): void;
   onStateChange(callback: (state: ConnectionState) => void): void;
   onError(callback: (error: Error) => void): void;
 }
@@ -31,4 +39,41 @@ export interface LocalPtyOptions {
   env?: Record<string, string>;
   columns?: number;
   rows?: number;
+}
+
+/** Opcje otwarcia portu szeregowego. Nazwy zgodne z terminologią z dokumentacji. */
+export interface SerialOptions {
+  path: string;
+  baudRate: number;
+  dataBits?: 5 | 6 | 7 | 8;
+  stopBits?: 1 | 1.5 | 2;
+  parity?: 'none' | 'even' | 'odd' | 'mark' | 'space';
+  /** Sprzętowa kontrola przepływu RTS/CTS. */
+  rtscts?: boolean;
+}
+
+/**
+ * Opcje połączenia SSH.
+ *
+ * Dane uwierzytelniające przychodzą tu z magazynu poświadczeń i nigdy nie są
+ * zapisywane w konfiguracji (docs/security/02-sekrety.md).
+ */
+export interface SshOptions {
+  host: string;
+  port?: number;
+  username: string;
+  password?: string;
+  privateKey?: string;
+  passphrase?: string;
+  columns?: number;
+  rows?: number;
+  /** Odstęp keep-alive w ms; 0 wyłącza. */
+  keepAliveInterval?: number;
+}
+
+/** Port szeregowy wykryty w systemie. */
+export interface SerialPortInfo {
+  path: string;
+  friendlyName?: string;
+  manufacturer?: string;
 }

@@ -82,9 +82,9 @@ export interface TerminalTransport {
 Implementacje:
 
 ```text
-LocalPtyTransport
-SshTransport
-SerialTransport
+LocalPtyTransport   ✔ zaimplementowany
+SshTransport        ✔ zaimplementowany
+SerialTransport     ✔ zaimplementowany
 TcpTransport
 UdpTransport
 TelnetTransport
@@ -92,6 +92,27 @@ WebSocketTransport
 ```
 
 Dzięki temu interfejs terminala nie zależy od konkretnego rodzaju połączenia.
+
+### Dlaczego bajty, a nie tekst
+
+`onData` oddaje **`Uint8Array`**. Port szeregowy bywa z natury binarny, a widok
+szesnastkowy z Etapu 4 wymaga dostępu do bajtów — dekodowanie w transporcie zamknęłoby tę
+drogę. Dekoduje dopiero warstwa prezentacji: xterm przyjmuje `Uint8Array` i sam składa
+sekwencje UTF-8 rozjechane między porcjami. Uzasadnienie i pułapki:
+[10 — Decyzje](10-decyzje.md#d4--transport-oddaje-bajty-nie-tekst).
+
+### Czego kontrakt nie zakłada
+
+Nie każdy transport ma wszystkie zdolności — i dobrze, że interfejs to przyznaje:
+
+| Zdolność | PTY | SSH | Serial |
+| --- | --- | --- | --- |
+| `resize` (rozmiar okna) | tak | tak | **nie** — stąd opcjonalność w kontrakcie |
+| Kod wyjścia | tak | tak | **nie** — port się zamyka, ale niczego nie „kończy" |
+| Dane binarne u źródła | **nie** — ConPTY oddaje tylko tekst | tak | tak |
+
+Koniec sesji rozgłasza więc wspólny stan `closed`, a kod wyjścia dokłada tylko ten
+transport, który to pojęcie ma.
 
 ## 3. Obsługiwane rodzaje komunikacji
 

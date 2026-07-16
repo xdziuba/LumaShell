@@ -186,3 +186,55 @@ w zainstalowanej aplikacji.
 `core` definiuje kontrakty, `services` je implementuje, zależność idzie wyłącznie
 `services` → `core`. `core` musi importować się bez zależności natywnych — patrz
 [06 — Struktura projektu](06-struktura-projektu.md#granica-core--services).
+
+---
+
+## D4 — Transport oddaje bajty, nie tekst
+
+**Data:** 2026-07-16 · **Status:** przyjęta
+
+### Kontekst
+
+Pierwsza implementacja `TerminalTransport` deklarowała `onData(data: string)`, mimo że
+plan od początku mówił o `Uint8Array`. Przy jednym transporcie (PTY) różnica była
+niewidoczna. Przy dokładaniu portu szeregowego okazała się blokująca:
+
+* UART bywa **z natury binarny** — protokoły ramkowe, dane spoza ASCII,
+* widok szesnastkowy z Etapu 4 wymaga dostępu do bajtów,
+* dekodowanie w transporcie nieodwracalnie niszczyłoby dane binarne.
+
+### Decyzja
+
+Kontrakt oddaje `Uint8Array`. Dekodowanie należy do warstwy prezentacji — xterm przyjmuje
+`Uint8Array` i sam składa sekwencje UTF-8 rozjechane między porcjami.
+
+### Ograniczenie ConPTY
+
+**node-pty na Windows nie ma trybu binarnego.** Opcja `encoding` jest ignorowana, a
+biblioteka wypisuje ostrzeżenie *„Setting encoding on Windows is not supported"*.
+Sprawdzone dla `null`, `undefined` i `'utf8'` — `onData` **zawsze** oddaje `string`.
+
+Dlatego `LocalPtyTransport` koduje tekst z powrotem do UTF-8. To nie jest strata: node-pty
+zdekodował wyjście na swoim poziomie, więc bajty spoza UTF-8 przepadły, zanim dotarły do
+nas. Ponowne kodowanie niczego do tego nie dokłada, a jednolity kontrakt zostaje
+zachowany i port szeregowy oraz SSH są naprawdę binarne.
+
+> Pułapka do zapamiętania: typings node-pty deklarują `onData: IEvent<string>` **także**
+> wtedy, gdy dokumentacja obiecuje `Buffer`. Rzutowanie na `Buffer` przechodzi typecheck
+> i wywala aplikację dopiero w czasie działania, na `Buffer.concat`.
+
+### Konsekwencje
+
+* jeden kanał danych dla wszystkich transportów, bez rozgałęzień w IPC i rendererze,
+* grupowanie porcji to `Buffer.concat` zamiast sklejania tekstu,
+* `resize` pozostaje **opcjonalne** w kontrakcie — port szeregowy nie ma rozmiaru okna,
+* kod wyjścia to pojęcie wyłącznie PTY; koniec sesji rozgłasza wspólny stan `closed`,
+  a kod dokłada tylko ten transport, który go ma.
+
+### Weryfikacja
+
+| Sprawdzone | Jak |
+| --- | --- |
+| SSH: handshake, powitanie, echo, resize, rozłączenie, ścieżka błędu | serwer ssh2 w pamięci procesu — `npm run test:integration`, 11/11 |
+| Kontrakt oddaje `Uint8Array`, nie string | jawna asercja w obu testach transportów |
+| Port szeregowy: listowanie, otwarcie, zamknięcie, brak `resize` | `npm run test:serial COM9 115200` na realnym CP210x, 5/5 |

@@ -8,6 +8,7 @@
  */
 
 import type {
+  SessionSpec,
   TerminalCreateRequest,
   TerminalDisposeRequest,
   TerminalResizeRequest,
@@ -52,9 +53,39 @@ const MAX_SESSION_ID = 64;
 /** Limit pojedynczego zapisu — zabezpieczenie przed zalaniem PTY jednym komunikatem. */
 const MAX_WRITE_LENGTH = 1_000_000;
 
+/** Ścieżki portów akceptujemy wyłącznie w postaci COM<n> — renderer nie wskaże pliku. */
+const COM_PATH = /^COM\d{1,3}$/i;
+
+/** Wartości spoza tej listy to niemal zawsze błąd; UART nie jest polem do eksperymentów. */
+const ALLOWED_BAUD_RATES = new Set([
+  300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600
+]);
+
+function parseSessionSpec(value: unknown): SessionSpec {
+  const source = asRecord(value);
+  const kind = source['kind'];
+
+  if (kind === 'pty') return { kind: 'pty' };
+
+  if (kind === 'serial') {
+    const path = requireString(source, 'path', 16);
+    if (!COM_PATH.test(path)) {
+      throw new IpcValidationError(`"path" musi mieć postać COM<n>, otrzymano "${path}"`);
+    }
+    const baudRate = source['baudRate'];
+    if (typeof baudRate !== 'number' || !ALLOWED_BAUD_RATES.has(baudRate)) {
+      throw new IpcValidationError(`"baudRate" spoza dozwolonych wartości: ${String(baudRate)}`);
+    }
+    return { kind: 'serial', path, baudRate };
+  }
+
+  throw new IpcValidationError(`nieznany rodzaj sesji: ${String(kind)}`);
+}
+
 export function parseTerminalCreate(payload: unknown): TerminalCreateRequest {
   const source = asRecord(payload);
   return {
+    spec: parseSessionSpec(source['spec']),
     columns: requireDimension(source, 'columns'),
     rows: requireDimension(source, 'rows')
   };

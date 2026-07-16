@@ -10,24 +10,36 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
+import type { SessionSpec } from '@shared/types/ipc';
 
 export type RendererKind = 'webgl' | 'canvas';
 
 interface TerminalViewProps {
-  onReady: (info: { shell: string }) => void;
-  onExit: (exitCode: number) => void;
+  /** Zmiana specyfikacji zamyka poprzednią sesję i otwiera nową. */
+  spec: SessionSpec;
+  onReady: (info: { label: string }) => void;
+  onExit: (exitCode: number | undefined) => void;
   onRenderer: (kind: RendererKind) => void;
+  onError: (message: string) => void;
 }
 
-export function TerminalView({ onReady, onExit, onRenderer }: TerminalViewProps): React.JSX.Element {
+export function TerminalView({
+  spec,
+  onReady,
+  onExit,
+  onRenderer,
+  onError
+}: TerminalViewProps): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
   // Callbacki trzymane w ref, żeby efekt nie restartował sesji przy każdym renderze.
   const onReadyRef = useRef(onReady);
   const onExitRef = useRef(onExit);
   const onRendererRef = useRef(onRenderer);
+  const onErrorRef = useRef(onError);
   onReadyRef.current = onReady;
   onExitRef.current = onExit;
   onRendererRef.current = onRenderer;
+  onErrorRef.current = onError;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -80,34 +92,44 @@ export function TerminalView({ onReady, onExit, onRenderer }: TerminalViewProps)
     let disposed = false;
     const cleanups: Array<() => void> = [];
 
-    void window.luma.terminal.create(term.cols, term.rows).then((session) => {
-      // Komponent mógł zniknąć zanim sesja wstała — inaczej zostałby sierocy PTY.
-      if (disposed) {
-        void window.luma.terminal.dispose(session.sessionId);
-        return;
-      }
+    void window.luma.terminal
+      .create(spec, term.cols, term.rows)
+      .catch((error: unknown) => {
+        // Otwarcie portu potrafi się nie udać: zajęty przez inny program, wypięty kabel.
+        // Użytkownik musi zobaczyć powód, a nie pusty terminal.
+        onErrorRef.current(error instanceof Error ? error.message : String(error));
+        return undefined;
+      })
+      .then((session) => {
+        if (!session) return;
+        // Komponent mógł zniknąć zanim sesja wstała — inaczej zostałby sierocy transport.
+        if (disposed) {
+          void window.luma.terminal.dispose(session.sessionId);
+          return;
+        }
 
-      sessionId = session.sessionId;
-      onReadyRef.current({ shell: session.shell });
+        sessionId = session.sessionId;
+        onReadyRef.current({ label: session.label });
 
-      cleanups.push(
-        window.luma.terminal.onData((event) => {
-          if (event.sessionId === sessionId) term.write(event.data);
-        })
-      );
+        cleanups.push(
+          window.luma.terminal.onData((event) => {
+            // xterm przyjmuje Uint8Array i sam składa UTF-8 rozjechany między porcjami.
+            if (event.sessionId === sessionId) term.write(event.data);
+          })
+        );
 
-      cleanups.push(
-        window.luma.terminal.onExit((event) => {
-          if (event.sessionId === sessionId) onExitRef.current(event.exitCode);
-        })
-      );
+        cleanups.push(
+          window.luma.terminal.onExit((event) => {
+            if (event.sessionId === sessionId) onExitRef.current(event.exitCode);
+          })
+        );
 
-      cleanups.push(
-        term.onData((data) => {
-          if (sessionId) void window.luma.terminal.write(sessionId, data);
-        }).dispose
-      );
-    });
+        cleanups.push(
+          term.onData((data) => {
+            if (sessionId) void window.luma.terminal.write(sessionId, data);
+          }).dispose
+        );
+      });
 
     const resize = (): void => {
       fit.fit();
@@ -124,7 +146,9 @@ export function TerminalView({ onReady, onExit, onRenderer }: TerminalViewProps)
       if (sessionId) void window.luma.terminal.dispose(sessionId);
       term.dispose();
     };
-  }, []);
+    // Zmiana specyfikacji celowo przebudowuje terminal: stara sesja jest zamykana,
+    // nowa otwierana od zera.
+  }, [spec]);
 
   return <div className="terminal" ref={hostRef} />;
 }

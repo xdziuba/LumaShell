@@ -6,11 +6,13 @@
  */
 
 import { ipcRenderer } from 'electron';
+import type { SerialPortInfo } from '@core/transports/transport';
 import type { LumaApi, Unsubscribe } from '@shared/types/api';
 import {
   IpcChannel,
   IpcEvent,
   type AppCapabilities,
+  type SessionSpec,
   type TerminalCreateResult,
   type TerminalDataEvent,
   type TerminalExitEvent
@@ -28,9 +30,13 @@ function subscribe<T>(channel: string, callback: (payload: T) => void): Unsubscr
 export const api: LumaApi = {
   getCapabilities: (): Promise<AppCapabilities> => ipcRenderer.invoke(IpcChannel.AppCapabilities),
 
+  serial: {
+    listPorts: (): Promise<SerialPortInfo[]> => ipcRenderer.invoke(IpcChannel.SerialListPorts)
+  },
+
   terminal: {
-    create: (columns: number, rows: number): Promise<TerminalCreateResult> =>
-      ipcRenderer.invoke(IpcChannel.TerminalCreate, { columns, rows }),
+    create: (spec: SessionSpec, columns: number, rows: number): Promise<TerminalCreateResult> =>
+      ipcRenderer.invoke(IpcChannel.TerminalCreate, { spec, columns, rows }),
     write: (sessionId: string, data: string): Promise<void> =>
       ipcRenderer.invoke(IpcChannel.TerminalWrite, { sessionId, data }),
     resize: (sessionId: string, columns: number, rows: number): Promise<void> =>
