@@ -15,7 +15,7 @@ const startedAt = Date.now();
 
 function bootstrap(): void {
   const window = createMainWindow();
-  registerWindowIpc(window);
+  registerWindowIpc();
   registerTerminalIpc(window);
 
   window.once('ready-to-show', () => {

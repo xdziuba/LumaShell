@@ -5,12 +5,14 @@
  * do zasobów bezpośrednio — wszystko przechodzi tędy (docs/security/01-model-procesow.md).
  */
 
-/** Kanały wywoływane przez renderer (żądanie → odpowiedź). */
+/**
+ * Kanały wywoływane przez renderer (żądanie → odpowiedź).
+ *
+ * Brak kanałów sterowania oknem jest celowy — przyciski okna są natywne
+ * (docs/architecture/10-decyzje.md).
+ */
 export const IpcChannel = {
   AppCapabilities: 'app:capabilities',
-  WindowMinimize: 'window:minimize',
-  WindowToggleMaximize: 'window:toggleMaximize',
-  WindowClose: 'window:close',
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
   TerminalResize: 'terminal:resize',
@@ -20,8 +22,7 @@ export const IpcChannel = {
 /** Kanały wypychane z main do renderera (zdarzenia). */
 export const IpcEvent = {
   TerminalData: 'terminal:data',
-  TerminalExit: 'terminal:exit',
-  WindowMaximizedChanged: 'window:maximizedChanged'
+  TerminalExit: 'terminal:exit'
 } as const;
 
 /**

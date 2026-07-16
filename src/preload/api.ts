@@ -28,14 +28,6 @@ function subscribe<T>(channel: string, callback: (payload: T) => void): Unsubscr
 export const api: LumaApi = {
   getCapabilities: (): Promise<AppCapabilities> => ipcRenderer.invoke(IpcChannel.AppCapabilities),
 
-  window: {
-    minimize: (): Promise<void> => ipcRenderer.invoke(IpcChannel.WindowMinimize),
-    toggleMaximize: (): Promise<boolean> => ipcRenderer.invoke(IpcChannel.WindowToggleMaximize),
-    close: (): Promise<void> => ipcRenderer.invoke(IpcChannel.WindowClose),
-    onMaximizedChanged: (callback: (maximized: boolean) => void): Unsubscribe =>
-      subscribe(IpcEvent.WindowMaximizedChanged, callback)
-  },
-
   terminal: {
     create: (columns: number, rows: number): Promise<TerminalCreateResult> =>
       ipcRenderer.invoke(IpcChannel.TerminalCreate, { columns, rows }),

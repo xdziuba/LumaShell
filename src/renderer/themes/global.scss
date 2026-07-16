@@ -43,18 +43,29 @@ body {
   }
 }
 
+// Pasek jest pełnej szerokości, żeby tło i obramowanie sięgały także pod natywne
+// przyciski (mają zerową alfę, więc prześwituje przez nie nasz glass + acrylic).
+// Ograniczona jest wyłącznie szerokość treści — patrz .titlebar__content.
 .titlebar {
-  height: var(--titlebar-height);
+  height: env(titlebar-area-height, var(--titlebar-height));
   flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-left: 12px;
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   user-select: none;
 
   @include glass(rgba(20, 55, 40, 0.55), rgba(5, 18, 13, 0.35), var(--bg-panel));
+
+  // Window Controls Overlay podaje szerokość wolną od natywnych przycisków.
+  // Bez tego długi tytuł wjechałby pod przyciski.
+  &__content {
+    height: 100%;
+    width: env(titlebar-area-width, 100%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 12px;
+    overflow: hidden;
+  }
 
   &__dot {
     width: 9px;
@@ -72,42 +83,6 @@ body {
     white-space: nowrap;
   }
 
-  &__controls {
-    margin-left: auto;
-    display: flex;
-    height: 100%;
-    // Przyciski muszą być wyjęte z obszaru przeciągania, inaczej nie da się kliknąć.
-    -webkit-app-region: no-drag;
-  }
-
-  &__button {
-    width: 46px;
-    display: grid;
-    place-items: center;
-    border: 0;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 11px;
-    cursor: default;
-    transition: background 120ms ease, color 120ms ease;
-
-    &:hover {
-      background: rgba(90, 255, 170, 0.1);
-      color: var(--text);
-    }
-
-    &--close:hover {
-      background: #c42b1c;
-      color: #fff;
-    }
-  }
-
-  // Ikony okna to glify z systemowego fontu Windows — bez niego renderują się
-  // jako puste prostokąty.
-  &__button--glyph {
-    font-family: 'Segoe Fluent Icons', 'Segoe MDL2 Assets', sans-serif;
-    font-size: 10px;
-  }
 }
 
 .body {

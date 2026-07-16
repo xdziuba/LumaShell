@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { TitleBar } from './components/TitleBar';
-import { TerminalView } from './terminal/TerminalView';
+import { TerminalView, type RendererKind } from './terminal/TerminalView';
 import type { AppCapabilities } from '@shared/types/ipc';
 
 export function App(): React.JSX.Element {
   const [capabilities, setCapabilities] = useState<AppCapabilities | null>(null);
   const [shell, setShell] = useState('uruchamianie…');
   const [exitCode, setExitCode] = useState<number | null>(null);
+  const [renderer, setRenderer] = useState<RendererKind | null>(null);
 
   useEffect(() => {
     void window.luma.getCapabilities().then((value) => {
@@ -27,12 +28,19 @@ export function App(): React.JSX.Element {
           <div className="sidebar__item">● {shell}</div>
         </aside>
 
-        <TerminalView onReady={(info) => setShell(info.shell)} onExit={setExitCode} />
+        <TerminalView
+          onReady={(info) => setShell(info.shell)}
+          onExit={setExitCode}
+          onRenderer={setRenderer}
+        />
       </div>
 
       <footer className="statusbar">
         <span>
           Szkło: <span className="statusbar__accent">{capabilities?.acrylic ? 'acrylic' : 'wyłączone'}</span>
+        </span>
+        <span>
+          Renderer: <span className="statusbar__accent">{renderer ?? '—'}</span>
         </span>
         <span>Build systemu: {capabilities?.osBuild || '—'}</span>
         {exitCode !== null && <span>Powłoka zakończona (kod {exitCode})</span>}

@@ -18,13 +18,6 @@ export type Unsubscribe = () => void;
 export interface LumaApi {
   getCapabilities(): Promise<AppCapabilities>;
 
-  window: {
-    minimize(): Promise<void>;
-    toggleMaximize(): Promise<boolean>;
-    close(): Promise<void>;
-    onMaximizedChanged(callback: (maximized: boolean) => void): Unsubscribe;
-  };
-
   terminal: {
     create(columns: number, rows: number): Promise<TerminalCreateResult>;
     write(sessionId: string, data: string): Promise<void>;

@@ -51,10 +51,32 @@ Pozytywne:
 
 Koszty:
 
-* aplikacja przejmuje pasek tytułu, przyciski okna, obszary przeciągania, zmianę rozmiaru,
-  Snap Layouts, podwójne kliknięcie i menu systemowe — **robota Etapu 0**,
+* aplikacja rysuje treść paska tytułu i wyznacza obszary przeciągania,
 * `backgroundMaterial` wymaga **Windows 11 22H2+**; na starszych systemach efekt nie
   zadziała i konieczna jest degradacja do jednolitego tła `#07110D`.
+
+### Aktualizacja po Etapie 0: `titleBarStyle: 'hidden'` zamiast `frame: false`
+
+Pierwotnie decyzja zakładała `frame: false` i pełne przejęcie ramy, z Snap Layouts
+i resize jako kosztem do samodzielnego opłacenia. **Implementacja pokazała, że to był zły
+szacunek.**
+
+Ustalenia z testów na Electron 43.1.1 / Windows 11 build 26200:
+
+| Sprawdzone | Wynik |
+| --- | --- |
+| Resize krawędziami przy `frame: false` | **działa** — `thickFrame` domyślnie `true` (zweryfikowane przeciągnięciem myszy: 1196 → 1316 px) |
+| Snap Layouts przy `frame: false` + własne przyciski HTML | **nie działa** — Windows nie wie, gdzie jest przycisk maksymalizacji |
+| Snap Layouts przy `titleBarStyle: 'hidden'` + `titleBarOverlay` | **działa** — flyout pojawia się po najechaniu |
+| `titleBarOverlay` z `color: '#00000000'` + acrylic | **działa** — rozmycie przebija pod natywnymi przyciskami |
+
+Dlatego okno używa `titleBarStyle: 'hidden'` + `titleBarOverlay` zamiast `frame: false`.
+Aplikacja rysuje treść paska, system daje przyciski, Snap Layouts i resize.
+
+Utracona jest wyłącznie możliwość dowolnego stylowania samych przycisków — zostaje
+`color` i `symbolColor`. To dobra cena za działający Snap Layouts, poprawny hover
+i dostępność. Konsekwencja uboczna: kanały IPC do sterowania oknem stały się zbędne
+i zostały usunięte.
 
 > **Windows 10 — rozstrzygnięte: pozostaje platformą wspieraną.** Mimo że Windows 10
 > zakończył wsparcie 14 października 2025, nie wypada z zakresu. Aplikacja działa tam
@@ -73,6 +95,7 @@ Koszty:
 | `transparent: true` | Daje przezroczystość, **nie rozmycie** — pulpit byłby ostry. Na Windows i tak wymaga `frame: false`. Nie łączyć z `backgroundMaterial`. |
 | `backdrop-filter` na panelach | Nie rozmywa pulpitu. Kosztowny przy dużych powierzchniach. Nad canvasem WebGL wymusza drogie kompozytowanie. |
 | Systemowa rama okna | Wyklucza wygląd zakładany przez projekt. |
+| `frame: false` + własne przyciski HTML | Zabija Snap Layouts, a zysk to wyłącznie stylowanie trzech przycisków. Odrzucone po testach — patrz aktualizacja powyżej. |
 
 ---
 

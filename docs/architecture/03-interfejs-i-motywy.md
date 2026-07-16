@@ -156,19 +156,55 @@ Zweryfikowane na Windows 11 build 26200: `os.release()` i `process.getSystemVers
 zwracają prawdziwy numer builda. Electron ma poprawny manifest zgodności, więc nie dotyczy
 go raportowanie zaniżonej wersji systemu.
 
-### Koszt własnej ramy
+### Własna rama: Window Controls Overlay, nie `frame: false`
 
-`frame: false` oznacza, że aplikacja przejmuje odpowiedzialność za elementy, które
-normalnie daje system:
+Rysujemy **treść** paska tytułu. Przyciski okna zostają natywne.
 
-* pasek tytułu i przyciski minimalizuj / maksymalizuj / zamknij,
-* obszary przeciągania (`-webkit-app-region: drag`, z `no-drag` na przyciskach),
-* zmianę rozmiaru przy krawędziach,
-* Snap Layouts systemu Windows 11,
-* podwójne kliknięcie w pasek = maksymalizacja,
-* menu systemowe pod prawym przyciskiem.
+```ts
+titleBarStyle: 'hidden',
+titleBarOverlay: {
+  color: acrylic ? '#00000000' : '#0B1913',  // zerowa alfa → acrylic przebija pod przyciskami
+  symbolColor: '#8CB8A3',
+  height: 38
+}
+```
 
-To świadomie zaakceptowany koszt Etapu 0.
+Powód jest twardy: przy `frame: false` przyciski są zwykłymi elementami HTML, więc Windows
+nie wie, gdzie jest przycisk maksymalizacji, i **Snap Layouts nie działa** — potwierdzone
+testem (najechanie na własny przycisk nie wywołuje flyoutu, na natywny wywołuje).
+
+Podział obowiązków przy tym wariancie:
+
+| Element | Kto obsługuje |
+| --- | --- |
+| Przyciski minimalizuj / maksymalizuj / zamknij | **system** (WCO) |
+| Snap Layouts (Windows 11) | **system** — działa dzięki natywnym przyciskom |
+| Zmiana rozmiaru przy krawędziach | **system** — `thickFrame` domyślnie `true` |
+| Podwójne kliknięcie w pasek = maksymalizacja | **system** — przez obszar `drag` |
+| Treść paska: tytuł, ikony, wskaźniki | **aplikacja** |
+| Obszar przeciągania | **aplikacja** — `-webkit-app-region: drag` |
+| Układ treści wolny od przycisków | **aplikacja** — `env(titlebar-area-width)` |
+
+Koszt własnej ramy okazał się **znacznie niższy** niż zakładano przy podejmowaniu decyzji
+D1: system oddaje przyciski, Snap Layouts i resize za darmo.
+
+### Geometria paska
+
+WCO wystawia zmienne CSS z geometrią wolnego obszaru:
+
+```scss
+.titlebar {
+  height: env(titlebar-area-height, 38px);   // pełna szerokość — tło sięga pod przyciski
+
+  &__content {
+    width: env(titlebar-area-width, 100%);   // treść kończy się przed przyciskami
+  }
+}
+```
+
+Sam pasek musi mieć **pełną szerokość**, żeby tło i obramowanie sięgały także pod natywne
+przyciski — mają zerową alfę, więc prześwituje przez nie glass i acrylic. Ograniczana jest
+wyłącznie szerokość treści, inaczej długi tytuł wjechałby pod przyciski.
 
 ### Personalizacja wyglądu
 

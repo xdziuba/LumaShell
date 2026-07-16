@@ -11,18 +11,23 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 
+export type RendererKind = 'webgl' | 'canvas';
+
 interface TerminalViewProps {
   onReady: (info: { shell: string }) => void;
   onExit: (exitCode: number) => void;
+  onRenderer: (kind: RendererKind) => void;
 }
 
-export function TerminalView({ onReady, onExit }: TerminalViewProps): React.JSX.Element {
+export function TerminalView({ onReady, onExit, onRenderer }: TerminalViewProps): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
   // Callbacki trzymane w ref, żeby efekt nie restartował sesji przy każdym renderze.
   const onReadyRef = useRef(onReady);
   const onExitRef = useRef(onExit);
+  const onRendererRef = useRef(onRenderer);
   onReadyRef.current = onReady;
   onExitRef.current = onExit;
+  onRendererRef.current = onRenderer;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -48,10 +53,25 @@ export function TerminalView({ onReady, onExit }: TerminalViewProps): React.JSX.
 
     // WebGL bywa niedostępny (sterowniki, zdalny pulpit). Terminal ma wtedy nadal
     // działać na rendererze canvas — docs/architecture/05-wydajnosc.md.
+    //
+    // Wynik jest raportowany na zewnątrz, bo cichy fallback wygląda identycznie jak
+    // działający WebGL i skrywałby utratę wydajności.
     try {
-      term.loadAddon(new WebglAddon());
+      const webgl = new WebglAddon();
+
+      // Kontekst GPU potrafi paść (uśpienie, zmiana sterownika, zdalny pulpit).
+      // Bez tego terminal zamarłby na martwym canvasie zamiast zejść na zapasowy.
+      webgl.onContextLoss(() => {
+        console.warn('[terminal] utracono kontekst WebGL — przejście na renderer zapasowy');
+        webgl.dispose();
+        onRendererRef.current('canvas');
+      });
+
+      term.loadAddon(webgl);
+      onRendererRef.current('webgl');
     } catch (error) {
       console.warn('[terminal] WebGL niedostępny, renderer zapasowy:', error);
+      onRendererRef.current('canvas');
     }
 
     fit.fit();
