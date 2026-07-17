@@ -64,6 +64,16 @@ export default function ThemeEditor({
   const setTerm = (key: keyof Theme['terminal'], value: string): void =>
     update({ ...draft, terminal: { ...draft.terminal, [key]: value } });
 
+  const pickWallpaper = (): void => {
+    void window.luma.themes.pickWallpaper().then((dataUrl) => {
+      if (dataUrl) update({ ...draft, wallpaper: { dataUrl, dim: draft.wallpaper?.dim ?? 0.5 } });
+    });
+  };
+  const clearWallpaper = (): void => {
+    const { wallpaper: _drop, ...rest } = draft;
+    update(rest);
+  };
+
   const save = (): void => {
     // Zmiana wbudowanego tworzy nowy motyw własny (wbudowanych nie nadpisujemy).
     const id = isBuiltIn ? slugify(draft.name) + '-custom' : draft.id;
@@ -112,9 +122,75 @@ export default function ThemeEditor({
           min={0}
           max={24}
           value={draft.effects.borderRadius}
-          onChange={(e) => update({ ...draft, effects: { borderRadius: Number(e.target.value) } })}
+          onChange={(e) => update({ ...draft, effects: { ...draft.effects, borderRadius: Number(e.target.value) } })}
         />
       </label>
+      <label className="settings__row">
+        <span>
+          Rozmycie szkła <em>{draft.effects.blur}px</em>
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={40}
+          value={draft.effects.blur}
+          onChange={(e) => update({ ...draft, effects: { ...draft.effects, blur: Number(e.target.value) } })}
+        />
+      </label>
+      <label className="settings__row">
+        <span>
+          Przezroczystość <em>{Math.round(draft.effects.opacity * 100)}%</em>
+        </span>
+        <input
+          type="range"
+          min={0.2}
+          max={1}
+          step={0.05}
+          value={draft.effects.opacity}
+          onChange={(e) => update({ ...draft, effects: { ...draft.effects, opacity: Number(e.target.value) } })}
+        />
+      </label>
+      <label className="settings__row">
+        <span>
+          Kąt gradientu <em>{draft.effects.gradientAngle}°</em>
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={360}
+          value={draft.effects.gradientAngle}
+          onChange={(e) => update({ ...draft, effects: { ...draft.effects, gradientAngle: Number(e.target.value) } })}
+        />
+      </label>
+
+      <div className="settings__row settings__row--inline theme-wallpaper">
+        <span>Tapeta terminala</span>
+        <button type="button" className="dialog__button" onClick={pickWallpaper}>
+          {draft.wallpaper ? 'Zmień' : 'Wybierz'}
+        </button>
+        {draft.wallpaper && (
+          <button type="button" className="dialog__button dialog__button--danger" onClick={clearWallpaper}>
+            Usuń
+          </button>
+        )}
+      </div>
+      {draft.wallpaper && (
+        <label className="settings__row">
+          <span>
+            Przyciemnienie <em>{Math.round(draft.wallpaper.dim * 100)}%</em>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={0.95}
+            step={0.05}
+            value={draft.wallpaper.dim}
+            onChange={(e) =>
+              update({ ...draft, wallpaper: { ...draft.wallpaper!, dim: Number(e.target.value) } })
+            }
+          />
+        </label>
+      )}
 
       <div className="theme-actions">
         <button className="dialog__button dialog__button--primary" onClick={save}>

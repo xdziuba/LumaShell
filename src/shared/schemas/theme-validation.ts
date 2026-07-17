@@ -43,14 +43,21 @@ function str(source: Record<string, unknown>, key: string, max: number): string 
 }
 
 /** Waliduje pełny motyw. Rzuca przy braku wymaganego pola. */
+/** Liczba przycięta do zakresu; poza zakresem/nie-liczba → wartość domyślna. */
+function num(value: unknown, fallback: number, min: number, max: number): number {
+  return typeof value === 'number' && value >= min && value <= max ? value : fallback;
+}
+
+/** Maksymalny rozmiar tapety (data URL) — chroni przed rozdęciem themes.json. */
+const MAX_WALLPAPER = 6_000_000;
+
 export function parseTheme(payload: unknown): Theme {
   const src = record(payload);
   const colors = record(src['colors']);
   const terminal = record(src['terminal']);
   const effects = record(src['effects'] ?? {});
-  const radius = effects['borderRadius'];
 
-  return {
+  const theme: Theme = {
     id: str(src, 'id', 64),
     name: str(src, 'name', 80),
     colors: {
@@ -70,7 +77,22 @@ export function parseTheme(payload: unknown): Theme {
       selection: color(terminal, 'selection')
     },
     effects: {
-      borderRadius: typeof radius === 'number' && radius >= 0 && radius <= 32 ? radius : 12
+      borderRadius: num(effects['borderRadius'], 12, 0, 32),
+      blur: num(effects['blur'], 12, 0, 40),
+      opacity: num(effects['opacity'], 1, 0.2, 1),
+      gradientAngle: num(effects['gradientAngle'], 135, 0, 360)
     }
   };
+
+  // Tapeta: akceptujemy tylko obraz jako data URL (bez odwołań do sieci/plików).
+  const wp = src['wallpaper'];
+  if (typeof wp === 'object' && wp !== null) {
+    const w = wp as Record<string, unknown>;
+    const dataUrl = w['dataUrl'];
+    if (typeof dataUrl === 'string' && /^data:image\//.test(dataUrl) && dataUrl.length <= MAX_WALLPAPER) {
+      theme.wallpaper = { dataUrl, dim: num(w['dim'], 0.5, 0, 0.95) };
+    }
+  }
+
+  return theme;
 }

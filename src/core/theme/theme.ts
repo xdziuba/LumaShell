@@ -27,6 +27,17 @@ export interface Theme {
   effects: {
     /** Promień zaokrągleń w px. */
     borderRadius: number;
+    /** Rozmycie szkła (backdrop-filter) w px — nakładki nad terminalem. */
+    blur: number;
+    /** Mnożnik przezroczystości powierzchni glass (0–1). */
+    opacity: number;
+    /** Kąt gradientu powierzchni glass w stopniach. */
+    gradientAngle: number;
+  };
+  /** Tapeta terminala: obraz (data URL) i poziom przyciemnienia (0–1). */
+  wallpaper?: {
+    dataUrl: string;
+    dim: number;
   };
 }
 
@@ -45,7 +56,10 @@ export function themeToCssVars(theme: Theme): Record<string, string> {
     '--term-fg': theme.terminal.foreground,
     '--term-cursor': theme.terminal.cursor,
     '--term-selection': theme.terminal.selection,
-    '--radius': `${theme.effects.borderRadius}px`
+    '--radius': `${theme.effects.borderRadius}px`,
+    '--glass-blur': `${theme.effects.blur}px`,
+    '--glass-opacity': `${theme.effects.opacity}`,
+    '--glass-angle': `${theme.effects.gradientAngle}deg`
   };
 }
 
@@ -68,7 +82,7 @@ export const DARK_GREEN_GLASS: Theme = {
     cursor: '#21e68a',
     selection: 'rgba(33, 230, 138, 0.25)'
   },
-  effects: { borderRadius: 12 }
+  effects: { borderRadius: 12, blur: 12, opacity: 1, gradientAngle: 135 }
 };
 
 const MIDNIGHT_BLUE: Theme = {
@@ -90,7 +104,7 @@ const MIDNIGHT_BLUE: Theme = {
     cursor: '#4aa3ff',
     selection: 'rgba(74, 163, 255, 0.25)'
   },
-  effects: { borderRadius: 12 }
+  effects: { borderRadius: 12, blur: 12, opacity: 1, gradientAngle: 135 }
 };
 
 const AMBER_CRT: Theme = {
@@ -112,7 +126,7 @@ const AMBER_CRT: Theme = {
     cursor: '#ffb020',
     selection: 'rgba(255, 176, 32, 0.25)'
   },
-  effects: { borderRadius: 12 }
+  effects: { borderRadius: 12, blur: 12, opacity: 1, gradientAngle: 135 }
 };
 
 /** Motywy dostarczone z aplikacją. Pierwszy jest domyślny. */

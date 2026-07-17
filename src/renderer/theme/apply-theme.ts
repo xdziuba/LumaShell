@@ -13,4 +13,16 @@ export function applyTheme(theme: Theme): void {
   for (const [name, value] of Object.entries(themeToCssVars(theme))) {
     root.style.setProperty(name, value);
   }
+
+  // Tapeta: obraz i przyciemnienie na tle całej aplikacji (widoczne przez panele glass).
+  // Przełącznik data-wallpaper włącza warstwy ::before/::after na .app.
+  if (theme.wallpaper) {
+    root.style.setProperty('--term-wallpaper', `url("${theme.wallpaper.dataUrl}")`);
+    root.style.setProperty('--term-dim', String(theme.wallpaper.dim));
+    root.dataset.wallpaper = 'true';
+  } else {
+    root.style.removeProperty('--term-wallpaper');
+    root.style.removeProperty('--term-dim');
+    delete root.dataset.wallpaper;
+  }
 }

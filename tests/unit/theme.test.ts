@@ -18,6 +18,9 @@ const sprawdz = (n: string, ok: boolean, d?: string): void => {
   sprawdz('--accent z motywu', vars['--accent'] === '#21e68a', vars['--accent']);
   sprawdz('--term-bg z terminala', vars['--term-bg'] === '#06100c');
   sprawdz('--radius w px', vars['--radius'] === '12px');
+  sprawdz('--glass-blur w px', vars['--glass-blur'] === '12px');
+  sprawdz('--glass-opacity liczba', vars['--glass-opacity'] === '1');
+  sprawdz('--glass-angle w deg', vars['--glass-angle'] === '135deg');
 }
 
 // Wbudowane motywy: unikalne id, min. 2 warianty.

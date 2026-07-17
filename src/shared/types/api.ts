@@ -54,6 +54,8 @@ export interface LumaApi {
     import(): Promise<Theme[] | null>;
     /** Eksport motywu do pliku (dialog); `true`, gdy zapisano. */
     export(theme: Theme): Promise<boolean>;
+    /** Wybór obrazu tapety (dialog); zwraca data URL albo null. */
+    pickWallpaper(): Promise<string | null>;
   };
 
   workspace: {

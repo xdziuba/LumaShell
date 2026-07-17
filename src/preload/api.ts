@@ -60,7 +60,8 @@ export const api: LumaApi = {
     save: (theme: Theme): Promise<Theme[]> => ipcRenderer.invoke(IpcChannel.ThemeSave, theme),
     delete: (id: string): Promise<Theme[]> => ipcRenderer.invoke(IpcChannel.ThemeDelete, id),
     import: (): Promise<Theme[] | null> => ipcRenderer.invoke(IpcChannel.ThemeImport),
-    export: (theme: Theme): Promise<boolean> => ipcRenderer.invoke(IpcChannel.ThemeExport, theme)
+    export: (theme: Theme): Promise<boolean> => ipcRenderer.invoke(IpcChannel.ThemeExport, theme),
+    pickWallpaper: (): Promise<string | null> => ipcRenderer.invoke(IpcChannel.ThemePickWallpaper)
   },
 
   workspace: {

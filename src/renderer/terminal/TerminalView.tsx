@@ -119,22 +119,17 @@ export function TerminalView({
     termRef.current = term;
     fitRef.current = fit;
 
-    // WebGL bywa niedostępny (sterowniki, zdalny pulpit). Terminal ma wtedy nadal
-    // działać na rendererze canvas — docs/architecture/05-wydajnosc.md.
-    //
-    // Wynik jest raportowany na zewnątrz, bo cichy fallback wygląda identycznie jak
-    // działający WebGL i skrywałby utratę wydajności.
+    // WebGL bywa niedostępny (sterowniki, zdalny pulpit). Terminal ma wtedy nadal działać
+    // na rendererze canvas — docs/architecture/05-wydajnosc.md. Cichy fallback wygląda
+    // identycznie jak działający WebGL, więc wynik raportujemy na zewnątrz.
     try {
       const webgl = new WebglAddon();
-
       // Kontekst GPU potrafi paść (uśpienie, zmiana sterownika, zdalny pulpit).
-      // Bez tego terminal zamarłby na martwym canvasie zamiast zejść na zapasowy.
       webgl.onContextLoss(() => {
         console.warn('[terminal] utracono kontekst WebGL — przejście na renderer zapasowy');
         webgl.dispose();
         onRendererRef.current('canvas');
       });
-
       term.loadAddon(webgl);
       onRendererRef.current('webgl');
     } catch (error) {

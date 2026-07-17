@@ -31,12 +31,43 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+// Tapeta: tło całej aplikacji widoczne przez półprzezroczyste panele glass (pasek,
+// panel boczny, statusbar). Terminal zostaje nieprzezroczysty dla czytelności — xterm
+// nie renderuje przezroczyście, więc tapeta świadomie NIE jest pod tekstem terminala.
+// docs/architecture/03-interfejs-i-motywy.md (poziom przyciemnienia tła)
+:root[data-wallpaper='true'] .app {
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image: var(--term-wallpaper);
+    background-size: cover;
+    background-position: center;
+  }
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: rgba(0, 0, 0, var(--term-dim));
+  }
 }
 
 // Powierzchnia "glass": przy acrylicu wyłącznie alfa — rozmycie robi DWM,
 // nie backdrop-filter. Bez acrylicu ta sama powierzchnia staje się jednolita.
-@mixin glass($from, $to, $opaque) {
-  background: linear-gradient(135deg, $from, $to);
+//
+// Alfa jest mnożona przez --glass-opacity z motywu (składnia rgb(R G B / calc(...))
+// działa w Chromium), a kąt gradientu pochodzi z --glass-angle.
+@mixin glass($a1, $a2, $opaque) {
+  background: linear-gradient(
+    var(--glass-angle),
+    rgb(20 55 40 / calc(#{$a1} * var(--glass-opacity))),
+    rgb(5 18 13 / calc(#{$a2} * var(--glass-opacity)))
+  );
 
   :root[data-acrylic='false'] & {
     background: $opaque;
@@ -53,7 +84,7 @@ body {
   -webkit-app-region: drag;
   user-select: none;
 
-  @include glass(rgba(20, 55, 40, 0.55), rgba(5, 18, 13, 0.35), var(--bg-panel));
+  @include glass(0.55, 0.35, var(--bg-panel));
 
   // Window Controls Overlay podaje szerokość wolną od natywnych przycisków.
   // Bez tego długi tytuł wjechałby pod przyciski.
@@ -94,7 +125,7 @@ body {
   overflow-x: auto;
   overflow-y: hidden;
 
-  @include glass(rgba(20, 55, 40, 0.4), rgba(5, 18, 13, 0.28), var(--bg-panel));
+  @include glass(0.4, 0.28, var(--bg-panel));
 
   &__item {
     display: flex;
@@ -334,7 +365,7 @@ body {
   border-right: 1px solid var(--border);
   font-size: 12px;
 
-  @include glass(rgba(20, 55, 40, 0.42), rgba(5, 18, 13, 0.3), var(--bg-panel));
+  @include glass(0.42, 0.3, var(--bg-panel));
 
   &__heading {
     display: flex;
@@ -432,7 +463,8 @@ body {
   }
 }
 
-// Obszar terminala: pełne krycie, zero efektów.
+// Obszar terminala: pełne krycie, zero efektów. Tapeta go nie dotyczy — xterm nie
+// renderuje przezroczyście, więc tekst zostaje czytelny na jednolitym tle.
 // docs/architecture/03-interfejs-i-motywy.md
 .terminal {
   flex: 1;
@@ -460,7 +492,7 @@ body {
   flex-direction: column;
   gap: 6px;
 
-  @include glass(rgba(20, 55, 40, 0.4), rgba(5, 18, 13, 0.28), var(--bg-panel));
+  @include glass(0.4, 0.28, var(--bg-panel));
 
   &__list {
     display: flex;
@@ -554,7 +586,7 @@ body {
   color: var(--text-muted);
   border-top: 1px solid var(--border);
 
-  @include glass(rgba(20, 55, 40, 0.5), rgba(5, 18, 13, 0.32), var(--bg-panel));
+  @include glass(0.5, 0.32, var(--bg-panel));
 
   &__accent {
     color: var(--accent);
@@ -628,7 +660,7 @@ body {
   // Nakładka nad nieprzezroczystym terminalem — tu backdrop-filter jest właściwym
   // narzędziem, bo rozmywa treść aplikacji, nie pulpit (docs/architecture/10-decyzje.md).
   background: linear-gradient(160deg, rgba(20, 55, 40, 0.9), rgba(5, 18, 13, 0.92));
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(var(--glass-blur));
 
   &__input {
     border: 0;
@@ -823,7 +855,7 @@ body {
   font-size: 12px;
   min-height: 0;
 
-  @include glass(rgba(20, 55, 40, 0.42), rgba(5, 18, 13, 0.3), var(--bg-panel));
+  @include glass(0.42, 0.3, var(--bg-panel));
 
   &--loading {
     padding: 14px;
@@ -993,7 +1025,7 @@ body {
   font-size: 12px;
   overflow-y: auto;
 
-  @include glass(rgba(20, 55, 40, 0.42), rgba(5, 18, 13, 0.3), var(--bg-panel));
+  @include glass(0.42, 0.3, var(--bg-panel));
 
   &--loading {
     color: var(--text-muted);

@@ -24,6 +24,7 @@ export const IpcChannel = {
   ThemeDelete: 'themes:delete',
   ThemeImport: 'themes:import',
   ThemeExport: 'themes:export',
+  ThemePickWallpaper: 'themes:pickWallpaper',
   WorkspaceGet: 'workspace:get',
   WorkspaceSave: 'workspace:save',
   ShellList: 'shell:list',

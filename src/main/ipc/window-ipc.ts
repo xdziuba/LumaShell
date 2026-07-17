@@ -60,4 +60,20 @@ export function registerWindowIpc(window: BrowserWindow): void {
     await writeFile(result.filePath, JSON.stringify(theme, null, 2), 'utf8');
     return true;
   });
+
+  // Wybór tapety: wczytaj obraz i zwróć jako data URL (self-contained w motywie).
+  ipcMain.handle(IpcChannel.ThemePickWallpaper, async (): Promise<string | null> => {
+    const result = await dialog.showOpenDialog(window, {
+      properties: ['openFile'],
+      filters: [{ name: 'Obraz', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }]
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const path = result.filePaths[0]!;
+    const buffer = await readFile(path);
+    // Zbyt duży obraz odrzucamy, żeby nie rozdąć themes.json.
+    if (buffer.length > 4_000_000) throw new Error('Obraz za duży (max 4 MB)');
+    const ext = path.split('.').pop()?.toLowerCase();
+    const mime = ext === 'jpg' ? 'jpeg' : (ext ?? 'png');
+    return `data:image/${mime};base64,${buffer.toString('base64')}`;
+  });
 }
