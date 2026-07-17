@@ -31,6 +31,15 @@ export type Unsubscribe = () => void;
 export interface LumaApi {
   getCapabilities(): Promise<AppCapabilities>;
 
+  /** Sterowanie oknem — własne przyciski (kółka) zamiast natywnego WCO. */
+  window: {
+    minimize(): void;
+    maximizeToggle(): void;
+    close(): void;
+    isMaximized(): Promise<boolean>;
+    onMaximizedChanged(callback: (maximized: boolean) => void): Unsubscribe;
+  };
+
   /** Powłoki wykryte w systemie. */
   listShells(): Promise<ShellInfo[]>;
 

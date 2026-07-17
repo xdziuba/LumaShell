@@ -19,11 +19,12 @@ export type RendererKind = 'webgl' | 'canvas';
 /**
  * Alfa tła terminala.
  *
- * Terminal jest teraz powierzchnią glass: tło xterm jest półprzezroczyste, więc prześwituje
- * przez nie tapeta i panele (allowTransparency). Wartość dobrana tak, by tekst zachował
- * kontrast ≥4.5:1 na przyciemnionej tapecie — patrz docs/architecture/03-interfejs-i-motywy.md.
+ * Tło xterm jest w PEŁNI przezroczyste (0): całe tło niesie jednolita tafla `.terminal`
+ * (glass w SCSS). Dzięki temu padding i obszar tekstu wyglądają identycznie — nie ma
+ * „podwójnej ramki" (płótno WebGL malowałoby tint tylko pod tekstem). Kontrast trzyma tafla
+ * + przyciemnienie tapety (docs/architecture/03-interfejs-i-motywy.md).
  */
-const TERM_ALPHA = 0.32;
+const TERM_ALPHA = 0;
 
 /** Nakłada alfę na kolor motywu (hex lub rgb/rgba). Zwraca rgba; nierozpoznany kolor bez zmian. */
 function withAlpha(color: string, alpha: number): string {

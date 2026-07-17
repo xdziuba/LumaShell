@@ -141,12 +141,67 @@ body {
   }
 
   &__title {
+    flex: 0 1 auto;
+    min-width: 0;
     font-size: 12.5px;
     letter-spacing: 0.3px;
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  // Własne przyciski okna — kolorowe kółka (styl „traffic lights", ale w palecie).
+  &__controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 100%;
+    padding: 0 14px 0 12px;
+    -webkit-app-region: no-drag;
+  }
+
+  &__ctrl {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 13px;
+    height: 13px;
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+    // Glif jest ukryty (przezroczysty), pojawia się po najechaniu na grupę.
+    color: transparent;
+    transition: filter 150ms var(--ease), transform 90ms var(--ease);
+
+    svg {
+      width: 8px;
+      height: 8px;
+    }
+
+    &--min {
+      background: #ffb020;
+    }
+    &--max {
+      background: var(--accent);
+    }
+    &--close {
+      background: #ff5f56;
+    }
+
+    &:hover {
+      filter: brightness(1.12) saturate(1.1);
+    }
+    &:active {
+      transform: scale(0.9);
+    }
+  }
+
+  // Glify ciemnieją i pokazują się dopiero przy najechaniu na grupę (jak w macOS).
+  &__controls:hover &__ctrl {
+    color: rgb(0 0 0 / 0.6);
   }
 }
 
@@ -171,7 +226,7 @@ body {
     border-right: 1px solid var(--border);
     color: var(--text-muted);
     font-size: 12px;
-    cursor: default;
+    cursor: pointer;
     user-select: none;
     flex: 0 0 auto;
     transition: background 150ms var(--ease), color 150ms var(--ease);
@@ -263,7 +318,7 @@ body {
     font-size: 10px;
     padding: 2px 4px;
     border-radius: 3px;
-    cursor: default;
+    cursor: pointer;
     opacity: 0;
 
     .tabs__item:hover &,
@@ -285,7 +340,7 @@ body {
     background: transparent;
     color: var(--text-muted);
     width: 34px;
-    cursor: default;
+    cursor: pointer;
     flex: 0 0 auto;
     transition: background 150ms var(--ease), color 150ms var(--ease);
 
@@ -430,7 +485,7 @@ body {
     background: transparent;
     color: var(--text-muted);
     line-height: 1;
-    cursor: default;
+    cursor: pointer;
     border-radius: 4px;
     transition: background 150ms var(--ease), color 150ms var(--ease);
 
@@ -461,7 +516,7 @@ body {
     font-size: 10px;
     padding: 4px 6px;
     border-radius: 3px;
-    cursor: default;
+    cursor: pointer;
     opacity: 0;
 
     .sidebar__profile:hover & {
@@ -492,7 +547,7 @@ body {
     background: transparent;
     font: inherit;
     color: var(--text-muted);
-    cursor: default;
+    cursor: pointer;
     border-radius: 6px;
     padding: 6px 8px;
     transition: background 150ms var(--ease), color 150ms var(--ease);
@@ -552,12 +607,12 @@ body {
   overflow: hidden;
   padding: 8px 2px 8px 10px;
 
-  // Delikatna tafla glass POD półprzezroczystym xtermem — trzyma kontrast tekstu także
-  // bez tapety (nad acryliciem) i wygładza remainder FitAddona, więc nie ma czarnej ramki.
+  // Jednolita tafla glass — całe tło terminala (xterm jest w pełni przezroczysty). Trzyma
+  // kontrast tekstu także bez tapety i wygładza remainder FitAddona; brak podwójnej ramki.
   background: linear-gradient(
     var(--glass-angle),
-    rgb(12 30 22 / calc(0.34 * var(--glass-opacity))),
-    rgb(4 13 9 / calc(0.46 * var(--glass-opacity)))
+    rgb(11 28 21 / calc(0.5 * var(--glass-opacity))),
+    rgb(4 12 9 / calc(0.62 * var(--glass-opacity)))
   );
   box-shadow:
     0 10px 30px rgb(0 0 0 / 0.32),
@@ -636,7 +691,7 @@ body {
     font: inherit;
     font-size: 11px;
     padding: 3px 8px;
-    cursor: default;
+    cursor: pointer;
     max-width: 220px;
     white-space: nowrap;
     overflow: hidden;
@@ -654,7 +709,7 @@ body {
     color: var(--text-muted);
     font-size: 9px;
     padding: 0 5px;
-    cursor: default;
+    cursor: pointer;
 
     &:hover {
       background: rgba(255, 95, 86, 0.25);
@@ -688,7 +743,7 @@ body {
     padding: 4px 8px;
     font: inherit;
     font-size: 11px;
-    cursor: default;
+    cursor: pointer;
   }
 
   &__submit:hover {
@@ -741,7 +796,7 @@ body {
     background: transparent;
     font: inherit;
     color: var(--text-muted);
-    cursor: default;
+    cursor: pointer;
     padding: 2px 8px;
     border-radius: 4px;
     transition: background 150ms var(--ease), color 150ms var(--ease), transform 90ms var(--ease);
@@ -868,7 +923,7 @@ body {
     padding: 8px 12px;
     border-radius: 6px;
     color: var(--text-muted);
-    cursor: default;
+    cursor: pointer;
 
     &.is-active {
       background: rgba(33, 230, 138, 0.14);
@@ -963,7 +1018,7 @@ body {
     font-size: 11px;
     text-align: left;
     padding: 4px 0;
-    cursor: default;
+    cursor: pointer;
   }
 
   &__advanced {
@@ -1001,7 +1056,7 @@ body {
     font: inherit;
     padding: 6px 14px;
     border-radius: 5px;
-    cursor: default;
+    cursor: pointer;
     transition: background 150ms var(--ease), transform 90ms var(--ease);
 
     &:hover:not(:disabled) {
@@ -1062,7 +1117,7 @@ body {
     border-radius: 5px;
     padding: 6px 9px;
     font: inherit;
-    cursor: default;
+    cursor: pointer;
 
     &:hover {
       background: rgba(90, 255, 170, 0.08);
@@ -1129,7 +1184,7 @@ body {
     border: 0;
     background: transparent;
     color: var(--text-muted);
-    cursor: default;
+    cursor: pointer;
     &:hover {
       color: var(--text);
     }
@@ -1151,7 +1206,7 @@ body {
     font-size: 11px;
     padding: 3px 7px;
     border-radius: 4px;
-    cursor: default;
+    cursor: pointer;
     &:hover:not(:disabled) {
       background: rgba(90, 255, 170, 0.1);
     }
@@ -1193,7 +1248,7 @@ body {
     padding: 4px 8px;
     border-radius: 4px;
     color: var(--text-muted);
-    cursor: default;
+    cursor: pointer;
     user-select: none;
 
     &:hover {
@@ -1298,7 +1353,7 @@ body {
     border: 0;
     background: transparent;
     color: var(--text-muted);
-    cursor: default;
+    cursor: pointer;
     font-size: 12px;
 
     &:hover {
