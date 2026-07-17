@@ -108,6 +108,7 @@ async function createTransport(
     transport: new LocalPtyTransport(sessionId, {
       shell: shell.path,
       args: shell.args,
+      cwd: spec.cwd,
       columns,
       rows
     }),

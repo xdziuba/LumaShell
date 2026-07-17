@@ -15,6 +15,9 @@ export const IpcChannel = {
   AppCapabilities: 'app:capabilities',
   SettingsGet: 'settings:get',
   SettingsSave: 'settings:save',
+  ProfilesList: 'profiles:list',
+  ProfilesSave: 'profiles:save',
+  ProfilesDelete: 'profiles:delete',
   ShellList: 'shell:list',
   SerialListPorts: 'serial:listPorts',
   TerminalCreate: 'terminal:create',
@@ -70,7 +73,7 @@ export interface AppCapabilities {
  */
 export type SessionSpec =
   /** `shellId` pochodzi z listy wykrytych powłok; brak = powłoka domyślna. */
-  | { kind: 'pty'; shellId?: string }
+  | { kind: 'pty'; shellId?: string; cwd?: string }
   | { kind: 'serial'; path: string; baudRate: number };
 
 /** Powłoka wykryta w systemie, w postaci widocznej dla renderera. */

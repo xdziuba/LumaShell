@@ -14,6 +14,7 @@ import type {
   TerminalExitEvent
 } from './ipc';
 import type { SerialPortInfo } from '@core/transports/transport';
+import type { Profile } from '@core/profiles/profile';
 import type { TerminalSettings } from './settings';
 
 /** Każdy nasłuch zwraca funkcję wypisującą. */
@@ -29,6 +30,13 @@ export interface LumaApi {
     get(): Promise<TerminalSettings>;
     /** Zwraca ustawienia po walidacji — mogą różnić się od wysłanych, jeśli były poza zakresem. */
     save(settings: TerminalSettings): Promise<TerminalSettings>;
+  };
+
+  profiles: {
+    list(): Promise<Profile[]>;
+    /** Wstawia lub nadpisuje profil po id; zwraca pełną listę. */
+    save(profile: Profile): Promise<Profile[]>;
+    delete(id: string): Promise<Profile[]>;
   };
 
   serial: {

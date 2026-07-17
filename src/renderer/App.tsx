@@ -6,8 +6,19 @@ import { useShortcuts, type ShortcutMap } from './hooks/useShortcuts';
 import { useWorkspace } from './store/workspace';
 import type { Command } from './commands/types';
 import type { SerialPortInfo } from '@core/transports/transport';
-import type { AppCapabilities, ShellInfo } from '@shared/types/ipc';
+import type { Profile } from '@core/profiles/profile';
+import type { AppCapabilities, SessionSpec, ShellInfo } from '@shared/types/ipc';
 import { DEFAULT_SETTINGS, type TerminalSettings } from '@shared/types/settings';
+
+/** Losowy identyfikator profilu — crypto.randomUUID jest dostępne w rendererze. */
+const newId = (): string => crypto.randomUUID();
+
+/** Cel profilu → specyfikacja sesji. Ten sam kształt, inny kontekst użycia. */
+function specFromProfile(profile: Profile): SessionSpec {
+  return profile.target.kind === 'serial'
+    ? { kind: 'serial', path: profile.target.path, baudRate: profile.target.baudRate }
+    : { kind: 'pty', shellId: profile.target.shellId, cwd: profile.target.cwd };
+}
 
 // Panele otwierane rzadko ładowane leniwie — poza bundlem startowym
 // (docs/architecture/05-wydajnosc.md).
@@ -23,6 +34,7 @@ export function App(): React.JSX.Element {
   const [ports, setPorts] = useState<SerialPortInfo[]>([]);
   const [renderer, setRenderer] = useState<RendererKind | null>(null);
   const [settings, setSettings] = useState<TerminalSettings>(DEFAULT_SETTINGS);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -44,6 +56,7 @@ export function App(): React.JSX.Element {
       document.documentElement.dataset.acrylic = String(value.acrylic);
     });
     void window.luma.settings.get().then(setSettings);
+    void window.luma.profiles.list().then(setProfiles);
     // Listowanie portów niczego nie otwiera, więc jest bezpieczne przy starcie.
     void window.luma.serial.listPorts().then(setPorts);
 
@@ -74,6 +87,24 @@ export function App(): React.JSX.Element {
     const first = shells[0];
     if (first) otworzPowloke(first);
   };
+
+  const otworzProfil = (profile: Profile): void =>
+    void open(specFromProfile(profile), profile.name);
+
+  const zapiszAktywnyJakoProfil = (): void => {
+    if (!activeTab) return;
+    // Profil dostaje nazwę aktywnej zakładki. Electron nie ma window.prompt, a edytor
+    // profili z nazywaniem wchodzi w Etapie 5 — tu liczy się sam zapis i odtwarzanie.
+    const spec = activeTab.spec;
+    const target: Profile['target'] =
+      spec.kind === 'serial'
+        ? { kind: 'serial', path: spec.path, baudRate: spec.baudRate }
+        : { kind: 'pty', shellId: spec.shellId, cwd: spec.cwd };
+
+    void window.luma.profiles.save({ id: newId(), name: activeTab.label, target }).then(setProfiles);
+  };
+
+  const usunProfil = (id: string): void => void window.luma.profiles.delete(id).then(setProfiles);
 
   const przesunZakladke = (delta: number): void => {
     if (tabs.length === 0) return;
@@ -111,6 +142,22 @@ export function App(): React.JSX.Element {
         run: () => otworzPort(port)
       });
     }
+    for (const profile of profiles) {
+      list.push({
+        id: `profile:${profile.id}`,
+        title: `Profil: ${profile.name}`,
+        keywords: 'profil profile zapisany',
+        run: () => otworzProfil(profile)
+      });
+    }
+    if (activeTab) {
+      list.push({
+        id: 'profile.save',
+        title: 'Zapisz aktywną sesję jako profil',
+        keywords: 'profil zapisz save',
+        run: zapiszAktywnyJakoProfil
+      });
+    }
     list.push(
       {
         id: 'tab.close',
@@ -142,9 +189,9 @@ export function App(): React.JSX.Element {
       }
     );
     return list;
-    // Zależymy od danych (shells, ports, tabs, activeId). Funkcje-akcje domykają się
-    // nad tym samym stanem, więc lista zależności obejmuje faktyczne wejścia.
-  }, [shells, ports, tabs, activeId]);
+    // Zależymy od danych (shells, ports, profiles, tabs, activeId). Funkcje-akcje domykają
+    // się nad tym samym stanem, więc lista zależności obejmuje faktyczne wejścia.
+  }, [shells, ports, profiles, tabs, activeId]);
 
   const shortcuts = useMemo<ShortcutMap>(() => {
     const map: ShortcutMap = {
@@ -198,6 +245,41 @@ export function App(): React.JSX.Element {
             >
               + {port.path}
             </button>
+          ))}
+
+          <div className="sidebar__heading sidebar__heading--spaced">
+            PROFILE
+            <button
+              className="sidebar__heading-action"
+              onClick={zapiszAktywnyJakoProfil}
+              disabled={!activeTab}
+              title="Zapisz aktywną sesję jako profil"
+            >
+              +
+            </button>
+          </div>
+          {profiles.length === 0 && <div className="sidebar__item">brak profili</div>}
+          {profiles.map((profile) => (
+            <div key={profile.id} className="sidebar__profile">
+              <button
+                className="sidebar__item sidebar__item--action sidebar__profile-open"
+                onClick={() => otworzProfil(profile)}
+                title={
+                  profile.target.kind === 'serial'
+                    ? `${profile.target.path} @ ${profile.target.baudRate}`
+                    : 'powłoka lokalna'
+                }
+              >
+                ▸ {profile.name}
+              </button>
+              <button
+                className="sidebar__profile-del"
+                onClick={() => usunProfil(profile.id)}
+                aria-label={`Usuń profil ${profile.name}`}
+              >
+                ✕
+              </button>
+            </div>
           ))}
         </aside>
 

@@ -66,11 +66,14 @@ function parseSessionSpec(value: unknown): SessionSpec {
   const kind = source['kind'];
 
   if (kind === 'pty') {
-    const shellId = source['shellId'];
-    if (shellId === undefined) return { kind: 'pty' };
+    const spec: { kind: 'pty'; shellId?: string; cwd?: string } = { kind: 'pty' };
     // Identyfikator jest odsyłany do listy wykrytych powłok, więc renderer nie może
     // podać dowolnej ścieżki do uruchomienia — to zwykły klucz, nie polecenie.
-    return { kind: 'pty', shellId: requireString(source, 'shellId', 64) };
+    if (source['shellId'] !== undefined) spec.shellId = requireString(source, 'shellId', 64);
+    // cwd to katalog startowy powłoki. To pełna ścieżka na maszynie użytkownika —
+    // ograniczamy tylko długość; istnienie katalogu weryfikuje dopiero PTY.
+    if (source['cwd'] !== undefined) spec.cwd = requireString(source, 'cwd', 512);
+    return spec;
   }
 
   if (kind === 'serial') {

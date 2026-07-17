@@ -7,6 +7,7 @@
 
 import { ipcRenderer } from 'electron';
 import type { SerialPortInfo } from '@core/transports/transport';
+import type { Profile } from '@core/profiles/profile';
 import type { LumaApi, Unsubscribe } from '@shared/types/api';
 import type { TerminalSettings } from '@shared/types/settings';
 import {
@@ -38,6 +39,13 @@ export const api: LumaApi = {
     get: (): Promise<TerminalSettings> => ipcRenderer.invoke(IpcChannel.SettingsGet),
     save: (settings: TerminalSettings): Promise<TerminalSettings> =>
       ipcRenderer.invoke(IpcChannel.SettingsSave, settings)
+  },
+
+  profiles: {
+    list: (): Promise<Profile[]> => ipcRenderer.invoke(IpcChannel.ProfilesList),
+    save: (profile: Profile): Promise<Profile[]> =>
+      ipcRenderer.invoke(IpcChannel.ProfilesSave, profile),
+    delete: (id: string): Promise<Profile[]> => ipcRenderer.invoke(IpcChannel.ProfilesDelete, id)
   },
 
   serial: {
