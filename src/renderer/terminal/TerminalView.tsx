@@ -5,7 +5,7 @@
  * z wąskim API preloadu (docs/architecture/02-warstwy-i-transporty.md).
  */
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
@@ -19,6 +19,13 @@ interface TerminalViewProps {
   /** Zmiana specyfikacji zamyka poprzednią sesję i otwiera nową. */
   spec: SessionSpec;
   settings: TerminalSettings;
+  /**
+   * Czy zakładka jest na wierzchu.
+   *
+   * Nieaktywne terminale zostają zamontowane — ich powłoki mają działać dalej — ale są
+   * ukryte i nie przeliczają wymiarów (docs/architecture/05-wydajnosc.md).
+   */
+  active: boolean;
   onReady: (info: { label: string }) => void;
   onExit: (exitCode: number | undefined) => void;
   onRenderer: (kind: RendererKind) => void;
@@ -28,6 +35,7 @@ interface TerminalViewProps {
 export function TerminalView({
   spec,
   settings,
+  active,
   onReady,
   onExit,
   onRenderer,
@@ -51,6 +59,26 @@ export function TerminalView({
   onExitRef.current = onExit;
   onRendererRef.current = onRenderer;
   onErrorRef.current = onError;
+
+  /**
+   * Dopasowanie terminala do kontenera i przekazanie nowego rozmiaru do sesji.
+   *
+   * Sięga wyłącznie po refy, więc jest stabilne i nie wciąga efektów w przeliczanie.
+   */
+  const dopasuj = useCallback((): void => {
+    const host = hostRef.current;
+    const term = termRef.current;
+    const fit = fitRef.current;
+    if (!host || !term || !fit) return;
+
+    // Ukryta zakładka ma zerowe wymiary. `fit()` policzyłby z nich bezsensowną liczbę
+    // kolumn i wierszy, a potem wysłał ją do PTY — powłoka zobaczyłaby okno 1×1.
+    if (host.clientWidth === 0 || host.clientHeight === 0) return;
+
+    fit.fit();
+    const id = sessionIdRef.current;
+    if (id) void window.luma.terminal.resize(id, term.cols, term.rows);
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -102,7 +130,7 @@ export function TerminalView({
       onRendererRef.current('canvas');
     }
 
-    fit.fit();
+    dopasuj();
 
     let disposed = false;
     const cleanups: Array<() => void> = [];
@@ -189,13 +217,9 @@ export function TerminalView({
         );
       });
 
-    const resize = (): void => {
-      fit.fit();
-      const id = sessionIdRef.current;
-      if (id) void window.luma.terminal.resize(id, term.cols, term.rows);
-    };
-
-    const observer = new ResizeObserver(resize);
+    // Ukrycie zakładki też odpala obserwator (wymiary spadają do zera) — dopasuj()
+    // taki przypadek odsiewa.
+    const observer = new ResizeObserver(dopasuj);
     observer.observe(host);
 
     return () => {
@@ -211,14 +235,13 @@ export function TerminalView({
     };
     // Zmiana specyfikacji celowo przebudowuje terminal: stara sesja jest zamykana,
     // nowa otwierana od zera.
-  }, [spec]);
+  }, [spec, dopasuj]);
 
   // Ustawienia stosowane na żywo, bez dotykania sesji. Zmiana rozmiaru czcionki
   // zmienia liczbę kolumn i wierszy, więc PTY musi dostać nowy rozmiar.
   useEffect(() => {
     const term = termRef.current;
-    const fit = fitRef.current;
-    if (!term || !fit) return;
+    if (!term) return;
 
     term.options.fontFamily = `${settings.fontFamily}, Consolas, monospace`;
     term.options.fontSize = settings.fontSize;
@@ -227,11 +250,22 @@ export function TerminalView({
     term.options.cursorBlink = settings.cursorBlink;
     term.options.scrollback = settings.scrollback;
 
-    fit.fit();
-    if (sessionIdRef.current) {
-      void window.luma.terminal.resize(sessionIdRef.current, term.cols, term.rows);
-    }
-  }, [settings]);
+    dopasuj();
+  }, [settings, dopasuj]);
 
-  return <div className="terminal" ref={hostRef} />;
+  // Powrót na wierzch: kontener dopiero teraz odzyskał wymiary, więc terminal trzeba
+  // przeliczyć — w tle nie było z czego.
+  useEffect(() => {
+    if (active) dopasuj();
+  }, [active, dopasuj]);
+
+  return (
+    <div
+      className={`terminal${active ? '' : ' terminal--hidden'}`}
+      ref={hostRef}
+      // Ukryta zakładka zostaje zamontowana (jej powłoka ma żyć dalej), ale znika
+      // dla czytników ekranu.
+      aria-hidden={!active}
+    />
+  );
 }

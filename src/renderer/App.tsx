@@ -1,29 +1,38 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { TabBar } from './components/TabBar';
 import { TitleBar } from './components/TitleBar';
 import { TerminalView, type RendererKind } from './terminal/TerminalView';
+import { useWorkspace } from './store/workspace';
 import type { SerialPortInfo } from '@core/transports/transport';
-import type { AppCapabilities, SessionSpec, ShellInfo } from '@shared/types/ipc';
+import type { AppCapabilities, ShellInfo } from '@shared/types/ipc';
 import { DEFAULT_SETTINGS, type TerminalSettings } from '@shared/types/settings';
 
 // Panel ustawień ładowany dopiero przy otwarciu — nie wchodzi do bundle'a startowego
 // (docs/architecture/05-wydajnosc.md).
 const SettingsPanel = lazy(() => import('./settings/SettingsPanel'));
 
-/** Etap 1 nie ma jeszcze ustawień portu — prędkość na sztywno. */
+/** Etap 2 nie ma jeszcze ustawień portu — prędkość na sztywno. */
 const PROTOTYPE_BAUD_RATE = 115200;
 
 export function App(): React.JSX.Element {
   const [capabilities, setCapabilities] = useState<AppCapabilities | null>(null);
   const [shells, setShells] = useState<ShellInfo[]>([]);
   const [ports, setPorts] = useState<SerialPortInfo[]>([]);
-  const [label, setLabel] = useState('uruchamianie…');
   const [renderer, setRenderer] = useState<RendererKind | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [spec, setSpec] = useState<SessionSpec>({ kind: 'pty' });
   const [settings, setSettings] = useState<TerminalSettings>(DEFAULT_SETTINGS);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  const { tabs, activeId, open, close, activate, update } = useWorkspace();
+  const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
+
+  // `StrictMode` uruchamia efekty dwukrotnie w trybie deweloperskim. Bez tego strażnika
+  // `npm run dev` otwierałby dwie zakładki startowe zamiast jednej.
+  const wystartowano = useRef(false);
+
   useEffect(() => {
+    if (wystartowano.current) return;
+    wystartowano.current = true;
+
     void window.luma.getCapabilities().then((value) => {
       setCapabilities(value);
       // Renderer nie wykrywa systemu sam — dostaje gotową flagę i tylko przełącza styl
@@ -31,10 +40,18 @@ export function App(): React.JSX.Element {
       document.documentElement.dataset.acrylic = String(value.acrylic);
     });
     void window.luma.settings.get().then(setSettings);
-    void window.luma.listShells().then(setShells);
     // Listowanie portów niczego nie otwiera, więc jest bezpieczne przy starcie.
     void window.luma.serial.listPorts().then(setPorts);
-  }, []);
+
+    void window.luma.listShells().then((found) => {
+      setShells(found);
+      // Pierwsza zakładka dopiero po wykryciu powłok — inaczej etykieta byłaby zgadywana.
+      const first = found[0];
+      if (first) open({ kind: 'pty', shellId: first.id }, first.label);
+    });
+    // Pusta lista zależności jest celowa: to zadania startowe, mają wykonać się raz.
+    // `open` pochodzi ze store'u Zustanda i jest stabilne między renderami.
+  }, [open]);
 
   const zmienUstawienia = (next: TerminalSettings): void => {
     // Podgląd natychmiast, zapis w tle. Proces główny zwraca wartości po walidacji,
@@ -43,76 +60,83 @@ export function App(): React.JSX.Element {
     void window.luma.settings.save(next).then(setSettings);
   };
 
-  const isSerial = spec.kind === 'serial';
-  const activePath = isSerial ? spec.path : null;
-  const activeShell = spec.kind === 'pty' ? spec.shellId : undefined;
+  const otworzPowloke = (shell: ShellInfo): void =>
+    void open({ kind: 'pty', shellId: shell.id }, shell.label);
 
-  const openShell = (shellId: string): void => {
-    setStatus(null);
-    setLabel('uruchamianie…');
-    setSpec({ kind: 'pty', shellId });
+  const otworzPort = (port: SerialPortInfo): void =>
+    void open({ kind: 'serial', path: port.path, baudRate: PROTOTYPE_BAUD_RATE }, port.path);
+
+  const nowaZakladka = (): void => {
+    const first = shells[0];
+    if (first) otworzPowloke(first);
   };
-
-  const openSerial = (path: string): void => {
-    setStatus(null);
-    setLabel('otwieranie…');
-    setSpec({ kind: 'serial', path, baudRate: PROTOTYPE_BAUD_RATE });
-  };
-
-  // Nowy obiekt spec przy każdym renderze restartowałby sesję w kółko.
-  const stableSpec = useMemo(
-    () => spec,
-    [spec.kind, activeShell ?? '', isSerial ? spec.path : '', isSerial ? spec.baudRate : 0]
-  );
 
   return (
     <div className="app">
-      <TitleBar subtitle={label} />
+      <TitleBar subtitle={activeTab?.label ?? 'brak sesji'} />
+
+      <TabBar
+        tabs={tabs}
+        activeId={activeId}
+        onSelect={activate}
+        onClose={close}
+        onNew={nowaZakladka}
+      />
 
       <div className="body">
         <aside className="sidebar">
           <div className="sidebar__heading">POWŁOKI</div>
           {shells.length === 0 && <div className="sidebar__item">wykrywanie…</div>}
-          {shells.map((shell, index) => {
-            // Sesja startowa idzie bez shellId, więc pierwsza powłoka jest wtedy aktywna.
-            const active =
-              spec.kind === 'pty' && (activeShell === shell.id || (!activeShell && index === 0));
-            return (
-              <button
-                key={shell.id}
-                className={`sidebar__item sidebar__item--action${active ? ' is-active' : ''}`}
-                onClick={() => openShell(shell.id)}
-              >
-                {active ? '●' : '○'} {shell.label}
-              </button>
-            );
-          })}
+          {shells.map((shell) => (
+            <button
+              key={shell.id}
+              className="sidebar__item sidebar__item--action"
+              onClick={() => otworzPowloke(shell)}
+            >
+              + {shell.label}
+            </button>
+          ))}
 
           <div className="sidebar__heading sidebar__heading--spaced">PORTY COM</div>
           {ports.length === 0 && <div className="sidebar__item">brak portów</div>}
           {ports.map((port) => (
             <button
               key={port.path}
-              className={`sidebar__item sidebar__item--action${activePath === port.path ? ' is-active' : ''}`}
-              onClick={() => openSerial(port.path)}
+              className="sidebar__item sidebar__item--action"
+              onClick={() => otworzPort(port)}
               title={port.friendlyName ?? port.path}
             >
-              {activePath === port.path ? '●' : '○'} {port.path}
+              + {port.path}
             </button>
           ))}
         </aside>
 
-        <TerminalView
-          spec={stableSpec}
-          settings={settings}
-          onReady={(info) => setLabel(info.label)}
-          onExit={(code) => setStatus(code === undefined ? 'Sesja zamknięta' : `Powłoka zakończona (kod ${code})`)}
-          onRenderer={setRenderer}
-          onError={(message) => {
-            setLabel('błąd');
-            setStatus(message);
-          }}
-        />
+        <div className="stack">
+          {tabs.length === 0 && <div className="stack__empty">Brak otwartych sesji</div>}
+
+          {/*
+            Wszystkie zakładki zostają zamontowane — ich powłoki mają działać w tle.
+            Widoczna jest tylko aktywna. `key` trzyma instancję przy życiu, więc
+            przełączanie zakładek nie dotyka sesji.
+          */}
+          {tabs.map((tab) => (
+            <TerminalView
+              key={tab.id}
+              spec={tab.spec}
+              settings={settings}
+              active={tab.id === activeId}
+              onReady={(info) => update(tab.id, { label: info.label, status: 'running' })}
+              onExit={(code) =>
+                update(tab.id, {
+                  status: 'closed',
+                  detail: code === undefined ? 'Sesja zamknięta' : `Zakończona (kod ${code})`
+                })
+              }
+              onRenderer={setRenderer}
+              onError={(message) => update(tab.id, { status: 'error', detail: message })}
+            />
+          ))}
+        </div>
 
         {settingsOpen && (
           <Suspense fallback={<aside className="settings settings--loading">ładowanie…</aside>}>
@@ -132,14 +156,16 @@ export function App(): React.JSX.Element {
         <span>
           Renderer: <span className="statusbar__accent">{renderer ?? '—'}</span>
         </span>
-        <span>Build systemu: {capabilities?.osBuild || '—'}</span>
+        <span>
+          Sesje: <span className="statusbar__accent">{tabs.length}</span>
+        </span>
         <button
           className={`statusbar__button${settingsOpen ? ' is-active' : ''}`}
-          onClick={() => setSettingsOpen((open) => !open)}
+          onClick={() => setSettingsOpen((isOpen) => !isOpen)}
         >
           Ustawienia
         </button>
-        {status && <span className="statusbar__status">{status}</span>}
+        {activeTab?.detail && <span className="statusbar__status">{activeTab.detail}</span>}
       </footer>
     </div>
   );
