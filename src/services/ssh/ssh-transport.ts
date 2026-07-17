@@ -2,8 +2,8 @@
  * Implementacja `TerminalTransport` dla SSH (ssh2).
  *
  * Uwierzytelnianie hasłem, kluczem lub agentem, interaktywna powłoka, keep-alive,
- * weryfikacja klucza hosta (Etap 3). Jump host, forwarding i SFTP wchodzą później
- * (docs/architecture/08-roadmapa.md).
+ * weryfikacja klucza hosta, automatyczne wznawianie po zerwaniu (Etap 3). Jump host,
+ * forwarding i SFTP wchodzą później (docs/architecture/08-roadmapa.md).
  */
 
 import { Client, type ClientChannel } from 'ssh2';
@@ -12,6 +12,10 @@ import type {
   SshOptions,
   TerminalTransport
 } from '@core/transports/transport';
+
+/** Kolor komunikatów LumaShell wstrzykiwanych w strumień terminala. */
+const NOTICE = (text: string): Buffer => Buffer.from(`\r\n\x1b[33m[LumaShell] ${text}\x1b[0m\r\n`);
+const OK_NOTICE = (text: string): Buffer => Buffer.from(`\r\n\x1b[32m[LumaShell] ${text}\x1b[0m\r\n`);
 
 export class SshTransport implements TerminalTransport {
   readonly type = 'ssh';
@@ -22,6 +26,9 @@ export class SshTransport implements TerminalTransport {
   #dataHandlers: Array<(data: Uint8Array) => void> = [];
   #stateHandlers: Array<(state: ConnectionState) => void> = [];
   #errorHandlers: Array<(error: Error) => void> = [];
+  /** Ustawiane, gdy rozłączenie zainicjował użytkownik — wtedy nie wznawiamy. */
+  #userClosed = false;
+  #reconnectTimer: NodeJS.Timeout | undefined;
 
   constructor(
     readonly id: string,
@@ -34,8 +41,12 @@ export class SshTransport implements TerminalTransport {
 
   async connect(): Promise<void> {
     if (this.#client) return;
-    this.#setState('connecting');
+    await this.#establish();
+  }
 
+  /** Zestawia klient + interaktywną powłokę i podpina obsługę strumienia. */
+  async #establish(): Promise<void> {
+    this.#setState('connecting');
     const client = new Client();
     this.#client = client;
 
@@ -84,17 +95,15 @@ export class SshTransport implements TerminalTransport {
     }
 
     // Strumień oddaje Buffery — zgodnie z kontraktem idą dalej bez dekodowania.
-    this.#stream.on('data', (chunk: Buffer) => {
-      for (const handler of this.#dataHandlers) handler(chunk);
-    });
-
+    this.#stream.on('data', (chunk: Buffer) => this.#emitData(chunk));
     // stderr zdalnej powłoki też należy do obrazu terminala.
-    this.#stream.stderr.on('data', (chunk: Buffer) => {
-      for (const handler of this.#dataHandlers) handler(chunk);
-    });
+    this.#stream.stderr.on('data', (chunk: Buffer) => this.#emitData(chunk));
 
     this.#stream.once('close', () => {
-      void this.disconnect();
+      // Zamknięcie zainicjowane przez użytkownika obsługuje disconnect(); tu reagujemy
+      // tylko na zerwanie z zewnątrz.
+      if (this.#userClosed) return;
+      void this.#handleDrop();
     });
 
     client.once('error', (error) => this.#emitError(error));
@@ -102,7 +111,46 @@ export class SshTransport implements TerminalTransport {
     this.#setState('connected');
   }
 
+  /** Zerwane połączenie: próbuje wznowić z backoffem albo się poddaje. */
+  async #handleDrop(): Promise<void> {
+    this.#client = undefined;
+    this.#stream = undefined;
+
+    const attempts = this.options.reconnect?.attempts ?? 5;
+    const baseDelay = this.options.reconnect?.delayMs ?? 1000;
+    if (attempts <= 0) {
+      this.#setState('closed');
+      return;
+    }
+
+    for (let n = 1; n <= attempts && !this.#userClosed; n += 1) {
+      this.#emitData(NOTICE(`Połączenie zerwane — ponawiam (${n}/${attempts})…`));
+      // Backoff wykładniczy z sufitem, żeby nie zalewać zdalnego hosta.
+      const delay = Math.min(baseDelay * 2 ** (n - 1), 15_000);
+      await new Promise<void>((resolve) => {
+        this.#reconnectTimer = setTimeout(resolve, delay);
+      });
+      if (this.#userClosed) return;
+
+      try {
+        await this.#establish();
+        // `#establish` ustawia już stan 'connected' i ustawia nowy stream.
+        this.#emitData(OK_NOTICE('Połączono ponownie.'));
+        return;
+      } catch {
+        // Kolejna próba w następnej iteracji.
+      }
+    }
+
+    if (!this.#userClosed) {
+      this.#emitData(NOTICE('Nie udało się wznowić połączenia.'));
+      this.#setState('closed');
+    }
+  }
+
   async disconnect(): Promise<void> {
+    this.#userClosed = true;
+    if (this.#reconnectTimer) clearTimeout(this.#reconnectTimer);
     this.#stream?.end();
     this.#stream = undefined;
     this.#client?.end();
@@ -129,6 +177,10 @@ export class SshTransport implements TerminalTransport {
 
   onError(callback: (error: Error) => void): void {
     this.#errorHandlers.push(callback);
+  }
+
+  #emitData(chunk: Uint8Array): void {
+    for (const handler of this.#dataHandlers) handler(chunk);
   }
 
   #setState(state: ConnectionState): void {

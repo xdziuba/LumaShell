@@ -79,6 +79,8 @@ export interface SshOptions {
    * proces główny zawsze go dostarcza; pomijają go jedynie kontrolowane testy.
    */
   verifyHost?: (hostKey: Uint8Array) => Promise<boolean>;
+  /** Automatyczne wznawianie po zerwaniu. `attempts: 0` wyłącza. */
+  reconnect?: { attempts?: number; delayMs?: number };
 }
 
 /** Port szeregowy wykryty w systemie. */

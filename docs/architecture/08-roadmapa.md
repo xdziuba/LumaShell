@@ -76,7 +76,7 @@ to osobny temat). Podziały międzyokienne i quake mode należą do dalszych eta
 * ✔ SSH agent (obsługiwany; na maszynie testowej wyłączony, więc bez próby na żywo),
 * ✔ keep-alive,
 * ✔ magazyn poświadczeń przez safeStorage (DPAPI),
-* reconnect,
+* ✔ reconnect — automatyczne wznawianie po zerwaniu, backoff wykładniczy, komunikat w terminalu,
 * forwarding,
 * jump host,
 * SFTP.
