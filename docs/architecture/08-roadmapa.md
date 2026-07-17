@@ -96,15 +96,22 @@ to osobny temat). Podziały międzyokienne i quake mode należą do dalszych eta
 
 ### Etap 4 — port szeregowy
 
-* lista portów,
-* konfiguracja transmisji,
-* widok tekstowy,
-* widok hex,
-* timestampy,
-* makra,
-* logowanie,
+* ✔ lista portów (z Etapu 0/2),
+* ✔ konfiguracja transmisji — prędkość, bity danych/stopu, parzystość, RTS/CTS,
+* ✔ widok tekstowy,
+* ✔ widok hex — zrzut `hexdump -C` z wyrównaniem między porcjami,
+* ✔ timestampy — prefiks `[HH:MM:SS.mmm]` na porcji,
+* ✔ makra — gotowe komendy z wyborem zakończenia linii, trwałe,
+* ✔ logowanie — zapis surowych bajtów sesji do pliku,
 * wysyłanie plików,
 * automatyczne ponowne połączenie.
+
+> **Do potwierdzenia na żywym porcie.** Formater hex ma testy jednostkowe (10/10), a
+> konfiguracja i wysyłanie — walidację i wpięcie przez typy. Renderowanie hex na żywym
+> strumieniu szeregowym oraz wysłanie makra do urządzenia wymagają realnego portu i
+> zostały świadomie pozostawione do ręcznej weryfikacji (bezpieczeństwo sprzętu:
+> otwarcie portu przestawia DTR/RTS, makra wysyłają dane do urządzenia).
+> Wysyłanie plików (XMODEM/raw) i auto-reconnect portu to pozostałe elementy etapu.
 
 ### Etap 5 — system motywów
 
