@@ -7,6 +7,8 @@
 
 import { useState } from 'react';
 import type { TabStatus } from '../store/workspace';
+import type { SessionSpec } from '@shared/types/ipc';
+import { IconPlus, SessionIcon } from './icons';
 
 /** Kropka statusu zamiast tekstu: pasek musi zostać czytelny przy wielu zakładkach. */
 const STATUS_TITLE: Record<TabStatus, string> = {
@@ -20,6 +22,8 @@ export interface TabView {
   id: string;
   label: string;
   status: TabStatus;
+  /** Rodzaj sesji aktywnego panelu — decyduje o ikonie zakładki. */
+  kind: SessionSpec['kind'];
   /** Ile paneli ma zakładka — pokazujemy licznik przy podziale. */
   paneCount: number;
 }
@@ -97,7 +101,7 @@ export function TabBar({
             }}
             title={`${tab.label} — ${STATUS_TITLE[tab.status]}`}
           >
-            <span className={`tabs__dot tabs__dot--${tab.status}`} />
+            <SessionIcon kind={tab.kind} className={`tabs__icon tabs__icon--${tab.status}`} />
             <span className="tabs__label">{tab.label}</span>
             {tab.paneCount > 1 && <span className="tabs__count">{tab.paneCount}</span>}
             <button
@@ -116,7 +120,7 @@ export function TabBar({
       })}
 
       <button className="tabs__new" onClick={onNew} aria-label="Nowa zakładka" title="Nowa zakładka">
-        +
+        <IconPlus />
       </button>
     </div>
   );

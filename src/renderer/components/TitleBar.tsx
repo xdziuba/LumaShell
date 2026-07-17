@@ -6,12 +6,16 @@
  * Szerokość zajętą przez natywne przyciski oddaje CSS przez `env(titlebar-area-width)`.
  */
 
+import logoUrl from '../assets/logo-128.png';
+
 export function TitleBar({ subtitle }: { subtitle: string }): React.JSX.Element {
   return (
     <header className="titlebar">
       <div className="titlebar__content">
-        <span className="titlebar__dot" />
-        <span className="titlebar__title">LumaShell — {subtitle}</span>
+        <img className="titlebar__logo" src={logoUrl} alt="LumaShell" draggable={false} />
+        <span className="titlebar__brand">LumaShell</span>
+        <span className="titlebar__sep" aria-hidden="true" />
+        <span className="titlebar__title">{subtitle}</span>
       </div>
     </header>
   );
