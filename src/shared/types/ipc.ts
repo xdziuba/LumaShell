@@ -108,6 +108,18 @@ export interface SshConnectRequest {
   /** Ścieżka do pliku klucza prywatnego (auth = 'key'). */
   keyPath?: string;
   passphrase?: string;
+  /** Host pośredniczący (bastion). Ma własne poświadczenia i weryfikację klucza. */
+  jump?: {
+    host: string;
+    port: number;
+    username: string;
+    auth: SshAuthMethod;
+    password?: string;
+    keyPath?: string;
+    passphrase?: string;
+  };
+  /** Lokalne przekierowania portów (-L). */
+  localForwards?: Array<{ localPort: number; destHost: string; destPort: number }>;
 }
 
 /** Wpis w zdalnym katalogu (SFTP). */

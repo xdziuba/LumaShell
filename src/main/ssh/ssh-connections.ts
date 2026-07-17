@@ -39,6 +39,39 @@ export function dropConnection(connectionId: string): void {
  * bez pytania, nieznany i zmieniony trafiają do dialogu w rendererze. Zaakceptowanie
  * zapamiętuje odcisk.
  */
+/** Pola uwierzytelniania (wspólne dla hosta docelowego i jump hosta). */
+interface AuthFields {
+  auth: 'password' | 'key' | 'agent';
+  password?: string;
+  keyPath?: string;
+  passphrase?: string;
+}
+
+/** Domyślny pipe agenta OpenSSH na Windows. */
+const DEFAULT_AGENT = process.env.SSH_AUTH_SOCK ?? '\\\\.\\pipe\\openssh-ssh-agent';
+
+/** Buduje część uwierzytelniającą opcji — klucz czytany z pliku dopiero tutaj. */
+async function authOptions(a: AuthFields): Promise<Partial<SshOptions>> {
+  if (a.auth === 'password') return { password: a.password };
+  if (a.auth === 'key') {
+    if (!a.keyPath) throw new Error('Brak ścieżki do klucza prywatnego');
+    return { privateKey: await readFile(a.keyPath, 'utf8'), passphrase: a.passphrase };
+  }
+  return { agent: DEFAULT_AGENT };
+}
+
+/** Weryfikator klucza dla danego host:port — magazyn known_hosts + pytanie użytkownika. */
+function hostVerifier(host: string, port: number, window: BrowserWindow) {
+  return async (key: Uint8Array): Promise<boolean> => {
+    const fp = fingerprint(Buffer.from(key));
+    const trust = await evaluateHostKey(host, port, fp);
+    if (trust === 'trusted') return true;
+    const decision = await requestHostVerification(window, { host, port, fingerprint: fp, reason: trust });
+    if (decision) await trustHostKey(host, port, fp);
+    return decision;
+  };
+}
+
 export async function resolveOptions(
   connectionId: string,
   window: BrowserWindow,
@@ -54,34 +87,23 @@ export async function resolveOptions(
     username: d.username,
     columns,
     rows,
-    verifyHost: async (key: Uint8Array): Promise<boolean> => {
-      const fp = fingerprint(Buffer.from(key));
-      const trust = await evaluateHostKey(d.host, d.port, fp);
-      if (trust === 'trusted') return true;
-
-      const decision = await requestHostVerification(window, {
-        host: d.host,
-        port: d.port,
-        fingerprint: fp,
-        reason: trust // 'unknown' | 'changed'
-      });
-      if (decision) await trustHostKey(d.host, d.port, fp);
-      return decision;
-    }
+    verifyHost: hostVerifier(d.host, d.port, window),
+    ...(await authOptions(d))
   };
 
-  if (d.auth === 'password') {
-    options.password = d.password;
-  } else if (d.auth === 'key') {
-    if (!d.keyPath) throw new Error('Brak ścieżki do klucza prywatnego');
-    // Klucz czytany dopiero przy połączeniu — nie trzymamy jego treści w deskryptorze.
-    options.privateKey = await readFile(d.keyPath, 'utf8');
-    options.passphrase = d.passphrase;
-  } else {
-    // agent: ssh2 sam znajdzie pipe, gdy podamy zmienną SSH_AUTH_SOCK; na Windows to
-    // nazwany pipe OpenSSH.
-    options.agent = process.env.SSH_AUTH_SOCK ?? '\\\\.\\pipe\\openssh-ssh-agent';
+  if (d.jump) {
+    const jump = d.jump;
+    options.jump = {
+      host: jump.host,
+      port: jump.port,
+      username: jump.username,
+      // Jump host ma własny odcisk — osobna weryfikacja.
+      verifyHost: hostVerifier(jump.host, jump.port, window),
+      ...(await authOptions(jump))
+    };
   }
+
+  if (d.localForwards?.length) options.localForwards = d.localForwards;
 
   return options;
 }

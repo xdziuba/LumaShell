@@ -637,6 +637,26 @@ body {
     }
   }
 
+  &__toggle {
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    font-size: 11px;
+    text-align: left;
+    padding: 4px 0;
+    cursor: default;
+  }
+
+  &__advanced {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
   &__fingerprint {
     display: block;
     background: var(--term-bg);

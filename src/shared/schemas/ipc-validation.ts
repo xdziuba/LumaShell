@@ -105,27 +105,65 @@ function parseSessionSpec(value: unknown): SessionSpec {
 
 const SSH_AUTH = new Set(['password', 'key', 'agent']);
 
-/** Waliduje żądanie połączenia SSH. Sekrety są ograniczane długością, nigdy logowane. */
-export function parseSshConnect(payload: unknown): SshConnectRequest {
-  const source = asRecord(payload);
-  const port = source['port'];
-  if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new IpcValidationError('port poza zakresem 1–65535');
+function requirePort(source: Record<string, unknown>, key: string): number {
+  const value = source[key];
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 65535) {
+    throw new IpcValidationError(`${key} poza zakresem 1–65535`);
   }
+  return value;
+}
+
+/** Wspólna walidacja pól uwierzytelniania (dla hosta docelowego i jump hosta). */
+function parseAuthFields(source: Record<string, unknown>): {
+  auth: SshConnectRequest['auth'];
+  password?: string;
+  keyPath?: string;
+  passphrase?: string;
+} {
   const auth = source['auth'];
   if (typeof auth !== 'string' || !SSH_AUTH.has(auth)) {
     throw new IpcValidationError(`nieznana metoda uwierzytelniania: ${String(auth)}`);
   }
-
-  const request: SshConnectRequest = {
-    host: requireString(source, 'host', 255),
-    port,
-    username: requireString(source, 'username', 128),
+  const out: { auth: SshConnectRequest['auth']; password?: string; keyPath?: string; passphrase?: string } = {
     auth: auth as SshConnectRequest['auth']
   };
-  if (source['password'] !== undefined) request.password = requireString(source, 'password', 1024);
-  if (source['keyPath'] !== undefined) request.keyPath = requireString(source, 'keyPath', 512);
-  if (source['passphrase'] !== undefined) request.passphrase = requireString(source, 'passphrase', 1024);
+  if (source['password'] !== undefined) out.password = requireString(source, 'password', 1024);
+  if (source['keyPath'] !== undefined) out.keyPath = requireString(source, 'keyPath', 512);
+  if (source['passphrase'] !== undefined) out.passphrase = requireString(source, 'passphrase', 1024);
+  return out;
+}
+
+/** Waliduje żądanie połączenia SSH. Sekrety są ograniczane długością, nigdy logowane. */
+export function parseSshConnect(payload: unknown): SshConnectRequest {
+  const source = asRecord(payload);
+  const request: SshConnectRequest = {
+    host: requireString(source, 'host', 255),
+    port: requirePort(source, 'port'),
+    username: requireString(source, 'username', 128),
+    ...parseAuthFields(source)
+  };
+
+  if (source['jump'] !== undefined) {
+    const jump = asRecord(source['jump']);
+    request.jump = {
+      host: requireString(jump, 'host', 255),
+      port: requirePort(jump, 'port'),
+      username: requireString(jump, 'username', 128),
+      ...parseAuthFields(jump)
+    };
+  }
+
+  if (Array.isArray(source['localForwards'])) {
+    request.localForwards = source['localForwards'].map((raw) => {
+      const f = asRecord(raw);
+      return {
+        localPort: requirePort(f, 'localPort'),
+        destHost: requireString(f, 'destHost', 255),
+        destPort: requirePort(f, 'destPort')
+      };
+    });
+  }
+
   return request;
 }
 

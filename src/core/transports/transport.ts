@@ -81,6 +81,25 @@ export interface SshOptions {
   verifyHost?: (hostKey: Uint8Array) => Promise<boolean>;
   /** Automatyczne wznawianie po zerwaniu. `attempts: 0` wyłącza. */
   reconnect?: { attempts?: number; delayMs?: number };
+  /**
+   * Host pośredniczący (bastion / ProxyJump). Najpierw łączymy się z nim, a przez jego
+   * tunel z hostem docelowym. Jump ma własne poświadczenia i własną weryfikację klucza.
+   */
+  jump?: {
+    host: string;
+    port?: number;
+    username: string;
+    password?: string;
+    privateKey?: string;
+    passphrase?: string;
+    agent?: string;
+    verifyHost?: (hostKey: Uint8Array) => Promise<boolean>;
+  };
+  /**
+   * Lokalne przekierowania portów (-L): nasłuch lokalny → cel przez tunel SSH.
+   * Otwierane po zestawieniu sesji; zamykane przy rozłączeniu.
+   */
+  localForwards?: Array<{ localPort: number; destHost: string; destPort: number }>;
 }
 
 /** Port szeregowy wykryty w systemie. */

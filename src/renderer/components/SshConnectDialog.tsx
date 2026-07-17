@@ -23,6 +23,19 @@ export default function SshConnectDialog({ onConnect, onClose }: SshConnectDialo
   const [keyPath, setKeyPath] = useState('');
   const [passphrase, setPassphrase] = useState('');
 
+  const [advanced, setAdvanced] = useState(false);
+  // Jump host (bastion) — na razie tylko uwierzytelnianie hasłem, żeby dialog nie urósł.
+  const [jumpOn, setJumpOn] = useState(false);
+  const [jumpHost, setJumpHost] = useState('');
+  const [jumpPort, setJumpPort] = useState(22);
+  const [jumpUser, setJumpUser] = useState('');
+  const [jumpPass, setJumpPass] = useState('');
+  // Jedno lokalne przekierowanie portu (-L).
+  const [fwdOn, setFwdOn] = useState(false);
+  const [fwdLocal, setFwdLocal] = useState(8080);
+  const [fwdHost, setFwdHost] = useState('127.0.0.1');
+  const [fwdPort, setFwdPort] = useState(80);
+
   const submit = (event: React.FormEvent): void => {
     event.preventDefault();
     if (!host || !username) return;
@@ -31,6 +44,18 @@ export default function SshConnectDialog({ onConnect, onClose }: SshConnectDialo
     if (auth === 'key') {
       request.keyPath = keyPath.trim();
       if (passphrase) request.passphrase = passphrase;
+    }
+    if (jumpOn && jumpHost && jumpUser) {
+      request.jump = {
+        host: jumpHost.trim(),
+        port: jumpPort,
+        username: jumpUser.trim(),
+        auth: 'password',
+        password: jumpPass
+      };
+    }
+    if (fwdOn && fwdHost) {
+      request.localForwards = [{ localPort: fwdLocal, destHost: fwdHost.trim(), destPort: fwdPort }];
     }
     onConnect(request);
   };
@@ -88,6 +113,64 @@ export default function SshConnectDialog({ onConnect, onClose }: SshConnectDialo
               <input type="password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} />
             </label>
           </>
+        )}
+
+        <button
+          type="button"
+          className="dialog__toggle"
+          onClick={() => setAdvanced((v) => !v)}
+        >
+          {advanced ? '▾' : '▸'} Zaawansowane (jump host, przekierowanie)
+        </button>
+
+        {advanced && (
+          <div className="dialog__advanced">
+            <label className="dialog__row dialog__row--inline">
+              <input type="checkbox" checked={jumpOn} onChange={(e) => setJumpOn(e.target.checked)} />
+              <span>Przez host pośredniczący (jump)</span>
+            </label>
+            {jumpOn && (
+              <>
+                <label className="dialog__row">
+                  <span>Jump host</span>
+                  <input value={jumpHost} onChange={(e) => setJumpHost(e.target.value)} />
+                </label>
+                <label className="dialog__row">
+                  <span>Jump port</span>
+                  <input type="number" value={jumpPort} onChange={(e) => setJumpPort(Number(e.target.value))} />
+                </label>
+                <label className="dialog__row">
+                  <span>Jump użytkownik</span>
+                  <input value={jumpUser} onChange={(e) => setJumpUser(e.target.value)} />
+                </label>
+                <label className="dialog__row">
+                  <span>Jump hasło</span>
+                  <input type="password" value={jumpPass} onChange={(e) => setJumpPass(e.target.value)} />
+                </label>
+              </>
+            )}
+
+            <label className="dialog__row dialog__row--inline">
+              <input type="checkbox" checked={fwdOn} onChange={(e) => setFwdOn(e.target.checked)} />
+              <span>Przekierowanie portu (-L)</span>
+            </label>
+            {fwdOn && (
+              <>
+                <label className="dialog__row">
+                  <span>Lokalny port</span>
+                  <input type="number" value={fwdLocal} onChange={(e) => setFwdLocal(Number(e.target.value))} />
+                </label>
+                <label className="dialog__row">
+                  <span>Cel host</span>
+                  <input value={fwdHost} onChange={(e) => setFwdHost(e.target.value)} />
+                </label>
+                <label className="dialog__row">
+                  <span>Cel port</span>
+                  <input type="number" value={fwdPort} onChange={(e) => setFwdPort(Number(e.target.value))} />
+                </label>
+              </>
+            )}
+          </div>
         )}
 
         <div className="dialog__actions">

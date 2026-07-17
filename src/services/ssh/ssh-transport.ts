@@ -6,6 +6,7 @@
  * forwarding i SFTP wchodzą później (docs/architecture/08-roadmapa.md).
  */
 
+import { createServer, type Server, type Socket } from 'node:net';
 import { Client, type ClientChannel, type SFTPWrapper } from 'ssh2';
 import type {
   ConnectionState,
@@ -28,8 +29,10 @@ export class SshTransport implements TerminalTransport {
   readonly type = 'ssh';
 
   #client: Client | undefined;
+  #jumpClient: Client | undefined;
   #stream: ClientChannel | undefined;
   #sftp: SFTPWrapper | undefined;
+  #forwardServers: Server[] = [];
   #state: ConnectionState = 'idle';
   #dataHandlers: Array<(data: Uint8Array) => void> = [];
   #stateHandlers: Array<(state: ConnectionState) => void> = [];
@@ -59,6 +62,10 @@ export class SshTransport implements TerminalTransport {
     this.#client = client;
 
     try {
+      // Jump host: łączymy się z bastionem i tunelujemy do celu; strumień tunelu
+      // staje się gniazdem połączenia docelowego.
+      const sock = this.options.jump ? await this.#connectThroughJump() : undefined;
+
       await new Promise<void>((resolve, reject) => {
         client.once('ready', resolve);
         client.once('error', reject);
@@ -66,6 +73,7 @@ export class SshTransport implements TerminalTransport {
         client.connect({
           host: this.options.host,
           port: this.options.port ?? 22,
+          sock,
           username: this.options.username,
           password: this.options.password,
           privateKey: this.options.privateKey,
@@ -96,8 +104,10 @@ export class SshTransport implements TerminalTransport {
     } catch (error) {
       this.#setState('error');
       this.#emitError(error);
-      // Bez tego wiszące gniazdo przeżyłoby nieudaną próbę połączenia.
+      // Bez tego wiszące gniazda przeżyłyby nieudaną próbę połączenia.
       client.end();
+      this.#jumpClient?.end();
+      this.#jumpClient = undefined;
       this.#client = undefined;
       throw error;
     }
@@ -116,11 +126,85 @@ export class SshTransport implements TerminalTransport {
 
     client.once('error', (error) => this.#emitError(error));
 
+    // Lokalne przekierowania portów po zestawieniu sesji.
+    this.#startLocalForwards();
+
     this.#setState('connected');
+  }
+
+  /** Łączy z jump hostem i otwiera tunel do celu; zwraca gniazdo dla połączenia docelowego. */
+  async #connectThroughJump(): Promise<Socket> {
+    const jump = this.options.jump!;
+    const jumpClient = new Client();
+    this.#jumpClient = jumpClient;
+
+    await new Promise<void>((resolve, reject) => {
+      jumpClient.once('ready', resolve);
+      jumpClient.once('error', reject);
+      jumpClient.connect({
+        host: jump.host,
+        port: jump.port ?? 22,
+        username: jump.username,
+        password: jump.password,
+        privateKey: jump.privateKey,
+        passphrase: jump.passphrase,
+        agent: jump.agent,
+        readyTimeout: 150_000,
+        // Jump host ma WŁASNĄ weryfikację klucza — inny host, inny odcisk.
+        hostVerifier: (key: Buffer, accept: (ok: boolean) => void) => {
+          const verify = jump.verifyHost;
+          if (!verify) return accept(true);
+          verify(key).then(accept).catch(() => accept(false));
+        }
+      });
+    });
+
+    return new Promise<Socket>((resolve, reject) => {
+      jumpClient.forwardOut(
+        '127.0.0.1',
+        0,
+        this.options.host,
+        this.options.port ?? 22,
+        (error, stream) => (error ? reject(error) : resolve(stream as unknown as Socket))
+      );
+    });
+  }
+
+  /** Otwiera lokalne serwery TCP; każde połączenie tuneluje przez sesję SSH (-L). */
+  #startLocalForwards(): void {
+    const client = this.#client;
+    if (!client || !this.options.localForwards?.length) return;
+
+    for (const fwd of this.options.localForwards) {
+      const server = createServer((socket: Socket) => {
+        client.forwardOut('127.0.0.1', fwd.localPort, fwd.destHost, fwd.destPort, (error, stream) => {
+          if (error) {
+            socket.destroy();
+            return;
+          }
+          socket.pipe(stream).pipe(socket);
+        });
+      });
+      server.on('error', (error) => this.#emitError(error));
+      server.listen(fwd.localPort, '127.0.0.1', () => {
+        this.#emitData(
+          OK_NOTICE(`Przekierowanie: 127.0.0.1:${fwd.localPort} → ${fwd.destHost}:${fwd.destPort}`)
+        );
+      });
+      this.#forwardServers.push(server);
+    }
+  }
+
+  #stopLocalForwards(): void {
+    for (const server of this.#forwardServers) server.close();
+    this.#forwardServers = [];
   }
 
   /** Zerwane połączenie: próbuje wznowić z backoffem albo się poddaje. */
   async #handleDrop(): Promise<void> {
+    this.#stopLocalForwards();
+    this.#jumpClient?.end();
+    this.#jumpClient = undefined;
     this.#client = undefined;
     this.#stream = undefined;
     this.#sftp = undefined;
@@ -160,11 +244,14 @@ export class SshTransport implements TerminalTransport {
   async disconnect(): Promise<void> {
     this.#userClosed = true;
     if (this.#reconnectTimer) clearTimeout(this.#reconnectTimer);
+    this.#stopLocalForwards();
     this.#stream?.end();
     this.#stream = undefined;
     this.#sftp = undefined;
     this.#client?.end();
     this.#client = undefined;
+    this.#jumpClient?.end();
+    this.#jumpClient = undefined;
     if (this.#state !== 'closed') this.#setState('closed');
   }
 
