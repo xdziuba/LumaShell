@@ -1,15 +1,18 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { TabBar } from './components/TabBar';
 import { TitleBar } from './components/TitleBar';
 import { TerminalView, type RendererKind } from './terminal/TerminalView';
+import { useShortcuts, type ShortcutMap } from './hooks/useShortcuts';
 import { useWorkspace } from './store/workspace';
+import type { Command } from './commands/types';
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { AppCapabilities, ShellInfo } from '@shared/types/ipc';
 import { DEFAULT_SETTINGS, type TerminalSettings } from '@shared/types/settings';
 
-// Panel ustawień ładowany dopiero przy otwarciu — nie wchodzi do bundle'a startowego
+// Panele otwierane rzadko ładowane leniwie — poza bundlem startowym
 // (docs/architecture/05-wydajnosc.md).
 const SettingsPanel = lazy(() => import('./settings/SettingsPanel'));
+const CommandPalette = lazy(() => import('./components/CommandPalette'));
 
 /** Etap 2 nie ma jeszcze ustawień portu — prędkość na sztywno. */
 const PROTOTYPE_BAUD_RATE = 115200;
@@ -21,6 +24,7 @@ export function App(): React.JSX.Element {
   const [renderer, setRenderer] = useState<RendererKind | null>(null);
   const [settings, setSettings] = useState<TerminalSettings>(DEFAULT_SETTINGS);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const { tabs, activeId, open, close, activate, update } = useWorkspace();
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
@@ -70,6 +74,92 @@ export function App(): React.JSX.Element {
     const first = shells[0];
     if (first) otworzPowloke(first);
   };
+
+  const przesunZakladke = (delta: number): void => {
+    if (tabs.length === 0) return;
+    const i = tabs.findIndex((tab) => tab.id === activeId);
+    const next = tabs[(i + delta + tabs.length) % tabs.length];
+    if (next) activate(next.id);
+  };
+
+  const zakladkaNr = (n: number): void => {
+    // Ctrl+9 skacze na ostatnią zakładkę — odruch znany z przeglądarek.
+    const tab = n === 9 ? tabs.at(-1) : tabs[n - 1];
+    if (tab) activate(tab.id);
+  };
+
+  const zamknijAktywna = (): void => {
+    if (activeId) close(activeId);
+  };
+
+  // Komendy zależą od bieżącego stanu, więc paleta i skróty korzystają z tej samej listy.
+  const commands = useMemo<Command[]>(() => {
+    const list: Command[] = [];
+    for (const shell of shells) {
+      list.push({
+        id: `new:${shell.id}`,
+        title: `Nowa zakładka: ${shell.label}`,
+        keywords: 'nowa terminal powłoka shell',
+        run: () => otworzPowloke(shell)
+      });
+    }
+    for (const port of ports) {
+      list.push({
+        id: `serial:${port.path}`,
+        title: `Otwórz port: ${port.path}`,
+        keywords: `serial com uart ${port.friendlyName ?? ''}`,
+        run: () => otworzPort(port)
+      });
+    }
+    list.push(
+      {
+        id: 'tab.close',
+        title: 'Zamknij aktywną zakładkę',
+        keywords: 'zamknij close',
+        hint: 'Ctrl+W',
+        run: zamknijAktywna
+      },
+      {
+        id: 'tab.next',
+        title: 'Następna zakładka',
+        keywords: 'przełącz',
+        hint: 'Ctrl+Tab',
+        run: () => przesunZakladke(1)
+      },
+      {
+        id: 'tab.prev',
+        title: 'Poprzednia zakładka',
+        keywords: 'przełącz',
+        hint: 'Ctrl+Shift+Tab',
+        run: () => przesunZakladke(-1)
+      },
+      {
+        id: 'settings',
+        title: 'Ustawienia',
+        keywords: 'czcionka rozmiar',
+        hint: 'Ctrl+,',
+        run: () => setSettingsOpen((isOpen) => !isOpen)
+      }
+    );
+    return list;
+    // Zależymy od danych (shells, ports, tabs, activeId). Funkcje-akcje domykają się
+    // nad tym samym stanem, więc lista zależności obejmuje faktyczne wejścia.
+  }, [shells, ports, tabs, activeId]);
+
+  const shortcuts = useMemo<ShortcutMap>(() => {
+    const map: ShortcutMap = {
+      'ctrl+shift+p': () => setPaletteOpen((open) => !open),
+      'ctrl+t': nowaZakladka,
+      'ctrl+w': zamknijAktywna,
+      'ctrl+comma': () => setSettingsOpen((open) => !open),
+      'ctrl+tab': () => przesunZakladke(1),
+      'ctrl+shift+tab': () => przesunZakladke(-1)
+    };
+    for (let n = 1; n <= 9; n += 1) map[`ctrl+${n}`] = () => zakladkaNr(n);
+    return map;
+  }, [shells, tabs, activeId]);
+
+  useShortcuts(shortcuts);
 
   return (
     <div className="app">
@@ -148,6 +238,12 @@ export function App(): React.JSX.Element {
           </Suspense>
         )}
       </div>
+
+      {paletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />
+        </Suspense>
+      )}
 
       <footer className="statusbar">
         <span>
