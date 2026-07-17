@@ -605,7 +605,6 @@ body {
   border-radius: 10px;
   border: 1px solid var(--border);
   overflow: hidden;
-  padding: 8px 2px 8px 10px;
 
   // Jednolita tafla glass — całe tło terminala (xterm jest w pełni przezroczysty). Trzyma
   // kontrast tekstu także bez tapety i wygładza remainder FitAddona; brak podwójnej ramki.
@@ -624,39 +623,70 @@ body {
     background: var(--term-bg);
   }
 
-  .xterm {
-    height: 100%;
-  }
-
-  // xterm ustawia na viewporcie nieprzezroczyste tło motywu — to ono dawało „czarną
-  // ramkę" na krawędziach. Zerujemy je: całe tło niesie tafla .terminal + tint xterma.
-  .xterm-viewport {
-    background-color: transparent !important;
-
-    // Stylowany, subtelny scrollbar zamiast surowego natywnego (zielony, zaokrąglony).
-    &::-webkit-scrollbar {
-      width: 12px;
-    }
-    &::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    &::-webkit-scrollbar-thumb {
-      background: rgb(90 255 170 / 0.26);
-      border-radius: 8px;
-      border: 3px solid transparent;
-      background-clip: padding-box;
-      transition: background 150ms ease;
-    }
-    &::-webkit-scrollbar-thumb:hover {
-      background: rgb(90 255 170 / 0.48);
-    }
-  }
-
   // Nieaktywna zakładka: znika z widoku, ale zostaje zamontowana — jej powłoka
   // działa dalej, a bufor się zapełnia. `display: none` zeruje wymiary, dlatego
   // TerminalView nie przelicza rozmiaru, dopóki zakładka nie wróci na wierzch.
   &--hidden {
     display: none;
+  }
+}
+
+// Kontener montujący xterm — wypełnia taflę, z prawej zostawia miejsce na własny scrollbar.
+.term-host {
+  position: absolute;
+  inset: 0;
+  padding: 8px 14px 8px 12px;
+
+  .xterm {
+    height: 100%;
+  }
+
+  // xterm ustawia na viewporcie nieprzezroczyste tło motywu i rezerwuje natywny gutter —
+  // zerujemy jedno i drugie; tło niesie tafla .terminal, a przewijanie pokazuje .term-scrollbar.
+  .xterm-viewport {
+    background-color: transparent !important;
+
+    &::-webkit-scrollbar {
+      width: 0;
+      height: 0;
+    }
+  }
+}
+
+// Własny scrollbar terminala: nakładka po prawej, widoczna tylko przy przepełnieniu.
+.term-scrollbar {
+  position: absolute;
+  top: 5px;
+  right: 4px;
+  bottom: 5px;
+  width: 10px;
+  z-index: 6;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms var(--ease);
+
+  &.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &__thumb {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 7px;
+    border-radius: 6px;
+    background: rgb(90 255 170 / 0.3);
+    cursor: pointer;
+    will-change: transform;
+    transition: background 150ms var(--ease), width 120ms var(--ease);
+  }
+
+  // Rozjaśnienie i pogrubienie kciuka na hover toru lub w trakcie przeciągania.
+  &:hover &__thumb,
+  &.is-dragging &__thumb {
+    width: 10px;
+    background: rgb(90 255 170 / 0.55);
   }
 }
 

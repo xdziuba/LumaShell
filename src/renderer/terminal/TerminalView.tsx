@@ -81,6 +81,10 @@ export function TerminalView({
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  // Własny scrollbar: xterm z WebGL nie przepełnia viewportu, więc rysujemy nakładkę
+  // synchronizowaną z buforem (pojawia się przy overflow, przeciągalna; kółko działa dalej).
+  const scrollbarRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLDivElement>(null);
   // Ustawienia w ref, żeby nie weszły do zależności efektu montującego — inaczej
   // zmiana rozmiaru czcionki ubiłaby powłokę i otworzyła nową sesję.
   const settingsRef = useRef(settings);
@@ -103,6 +107,33 @@ export function TerminalView({
   terminalThemeRef.current = terminalTheme;
 
   /**
+   * Odświeżenie własnego scrollbara: rozmiar i pozycja kciuka z aktualnego bufora xterm.
+   * Chowa scrollbar, gdy całość mieści się w widoku.
+   */
+  const syncScrollbar = useCallback((): void => {
+    const term = termRef.current;
+    const scrollbar = scrollbarRef.current;
+    const thumb = thumbRef.current;
+    if (!term || !scrollbar || !thumb) return;
+
+    const buffer = term.buffer.active;
+    const total = buffer.length;
+    const rows = term.rows;
+    if (total <= rows) {
+      scrollbar.classList.remove('is-visible');
+      return;
+    }
+    scrollbar.classList.add('is-visible');
+
+    const trackHeight = scrollbar.clientHeight;
+    const thumbHeight = Math.max(28, (rows / total) * trackHeight);
+    const maxTop = total - rows;
+    const thumbTop = maxTop > 0 ? (buffer.viewportY / maxTop) * (trackHeight - thumbHeight) : 0;
+    thumb.style.height = `${thumbHeight}px`;
+    thumb.style.transform = `translateY(${Math.round(thumbTop)}px)`;
+  }, []);
+
+  /**
    * Dopasowanie terminala do kontenera i przekazanie nowego rozmiaru do sesji.
    *
    * Sięga wyłącznie po refy, więc jest stabilne i nie wciąga efektów w przeliczanie.
@@ -120,7 +151,8 @@ export function TerminalView({
     fit.fit();
     const id = sessionIdRef.current;
     if (id) void window.luma.terminal.resize(id, term.cols, term.rows);
-  }, []);
+    syncScrollbar();
+  }, [syncScrollbar]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -216,6 +248,62 @@ export function TerminalView({
     host.addEventListener('contextmenu', menuKontekstowe);
     cleanups.push(() => host.removeEventListener('contextmenu', menuKontekstowe));
 
+    // Własny scrollbar: aktualizuj przy przewijaniu i po zapisie, throttlowane do klatki.
+    let syncPending = false;
+    const scheduleSync = (): void => {
+      if (syncPending) return;
+      syncPending = true;
+      requestAnimationFrame(() => {
+        syncPending = false;
+        syncScrollbar();
+      });
+    };
+    cleanups.push(term.onScroll(scheduleSync).dispose);
+    cleanups.push(term.onWriteParsed(scheduleSync).dispose);
+    const scrollbar = scrollbarRef.current;
+    const thumb = thumbRef.current;
+    if (scrollbar && thumb) {
+      const onThumbDown = (event: MouseEvent): void => {
+        event.preventDefault();
+        event.stopPropagation();
+        const buffer = term.buffer.active;
+        const maxTop = buffer.length - term.rows;
+        if (maxTop <= 0) return;
+        const trackHeight = scrollbar.clientHeight;
+        const thumbHeight = Math.max(28, (term.rows / buffer.length) * trackHeight);
+        const range = trackHeight - thumbHeight;
+        const startY = event.clientY;
+        const startTop = buffer.viewportY;
+        scrollbar.classList.add('is-dragging');
+        const move = (e: MouseEvent): void => {
+          const delta = range > 0 ? ((e.clientY - startY) / range) * maxTop : 0;
+          term.scrollToLine(Math.max(0, Math.min(maxTop, Math.round(startTop + delta))));
+        };
+        const up = (): void => {
+          window.removeEventListener('mousemove', move);
+          window.removeEventListener('mouseup', up);
+          scrollbar.classList.remove('is-dragging');
+        };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up);
+      };
+      // Klik w tor poza kciukiem — skok do wskazanego miejsca bufora.
+      const onTrackDown = (event: MouseEvent): void => {
+        const buffer = term.buffer.active;
+        const maxTop = buffer.length - term.rows;
+        if (maxTop <= 0) return;
+        const rect = scrollbar.getBoundingClientRect();
+        const ratio = (event.clientY - rect.top) / rect.height;
+        term.scrollToLine(Math.max(0, Math.min(maxTop, Math.round(ratio * maxTop))));
+      };
+      thumb.addEventListener('mousedown', onThumbDown);
+      scrollbar.addEventListener('mousedown', onTrackDown);
+      cleanups.push(() => {
+        thumb.removeEventListener('mousedown', onThumbDown);
+        scrollbar.removeEventListener('mousedown', onTrackDown);
+      });
+    }
+
     void window.luma.terminal
       .create(spec, term.cols, term.rows)
       .catch((error: unknown) => {
@@ -285,7 +373,7 @@ export function TerminalView({
     };
     // Zmiana specyfikacji celowo przebudowuje terminal: stara sesja jest zamykana,
     // nowa otwierana od zera.
-  }, [spec, dopasuj]);
+  }, [spec, dopasuj, syncScrollbar]);
 
   // Ustawienia stosowane na żywo, bez dotykania sesji. Zmiana rozmiaru czcionki
   // zmienia liczbę kolumn i wierszy, więc PTY musi dostać nowy rozmiar.
@@ -336,12 +424,13 @@ export function TerminalView({
   }, [monitor?.hex, monitor?.timestamps]);
 
   return (
-    <div
-      className={`terminal${active ? '' : ' terminal--hidden'}`}
-      ref={hostRef}
-      // Ukryta zakładka zostaje zamontowana (jej powłoka ma żyć dalej), ale znika
-      // dla czytników ekranu.
-      aria-hidden={!active}
-    />
+    // Ukryta zakładka zostaje zamontowana (jej powłoka ma żyć dalej), ale znika dla
+    // czytników ekranu. xterm montuje się w .term-host; scrollbar to nakładka po prawej.
+    <div className={`terminal${active ? '' : ' terminal--hidden'}`} aria-hidden={!active}>
+      <div className="term-host" ref={hostRef} />
+      <div className="term-scrollbar" ref={scrollbarRef}>
+        <div className="term-scrollbar__thumb" ref={thumbRef} />
+      </div>
+    </div>
   );
 }
