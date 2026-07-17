@@ -10,7 +10,8 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
-import type { SessionSpec } from '@shared/types/ipc';
+import { HexFormatter, timestamp } from './hex-format';
+import type { MonitorMode, SessionSpec } from '@shared/types/ipc';
 import type { TerminalSettings } from '@shared/types/settings';
 
 export type RendererKind = 'webgl' | 'canvas';
@@ -26,6 +27,8 @@ interface TerminalViewProps {
    * ukryte i nie przeliczają wymiarów (docs/architecture/05-wydajnosc.md).
    */
   active: boolean;
+  /** Tryb monitora — gdy podany, dane są przetwarzane (hex / znaczniki czasu). */
+  monitor?: MonitorMode;
   onReady: (info: { label: string; sessionId: string }) => void;
   onExit: (exitCode: number | undefined) => void;
   onRenderer: (kind: RendererKind) => void;
@@ -36,6 +39,7 @@ export function TerminalView({
   spec,
   settings,
   active,
+  monitor,
   onReady,
   onExit,
   onRenderer,
@@ -59,6 +63,9 @@ export function TerminalView({
   onExitRef.current = onExit;
   onRendererRef.current = onRenderer;
   onErrorRef.current = onError;
+  // Tryb monitora w refie — zmiana nie może restartować sesji.
+  const monitorRef = useRef(monitor);
+  const hexRef = useRef<HexFormatter | null>(null);
 
   /**
    * Dopasowanie terminala do kontenera i przekazanie nowego rozmiaru do sesji.
@@ -198,8 +205,19 @@ export function TerminalView({
 
         cleanups.push(
           window.luma.terminal.onData((event) => {
-            // xterm przyjmuje Uint8Array i sam składa UTF-8 rozjechany między porcjami.
-            if (event.sessionId === sessionIdRef.current) term.write(event.data);
+            if (event.sessionId !== sessionIdRef.current) return;
+            const mode = monitorRef.current;
+            if (mode?.hex) {
+              // Widok hex: bajty jako zrfmt. zrzut, z zachowaniem wyrównania między porcjami.
+              hexRef.current ??= new HexFormatter();
+              term.write(hexRef.current.push(event.data));
+            } else if (mode?.timestamps) {
+              // Tryb tekstowy ze znacznikiem czasu na początku każdej porcji.
+              term.write(timestamp() + new TextDecoder().decode(event.data));
+            } else {
+              // xterm przyjmuje Uint8Array i sam składa UTF-8 rozjechany między porcjami.
+              term.write(event.data);
+            }
           })
         );
 
@@ -258,6 +276,20 @@ export function TerminalView({
   useEffect(() => {
     if (active) dopasuj();
   }, [active, dopasuj]);
+
+  // Zmiana trybu monitora: domknij niepełną linię hex i zaznacz przełączenie, żeby
+  // dane sprzed i po zmianie się nie zlewały.
+  useEffect(() => {
+    const term = termRef.current;
+    const prev = monitorRef.current;
+    monitorRef.current = monitor;
+    if (!term) return;
+    if (prev?.hex && !monitor?.hex && hexRef.current) {
+      term.write(hexRef.current.flush());
+      hexRef.current = null;
+    }
+    if (monitor?.hex) hexRef.current ??= new HexFormatter();
+  }, [monitor?.hex, monitor?.timestamps]);
 
   return (
     <div

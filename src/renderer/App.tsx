@@ -179,6 +179,14 @@ export function App(): React.JSX.Element {
   const activeSessionId = activeLeaf?.status === 'running' ? activeLeaf.sessionId : undefined;
   const isLogging = activeSessionId ? loggingSessions.has(activeSessionId) : false;
 
+  // Tryb monitora (hex / znaczniki czasu) — tylko dla aktywnego panelu szeregowego.
+  const isSerial = activeLeaf?.spec.kind === 'serial';
+  const monitor = activeLeaf?.monitor ?? { hex: false, timestamps: false };
+  const setMonitor = (patch: Partial<typeof monitor>): void => {
+    if (!activeTab || !activeLeaf) return;
+    updatePane(activeTab.id, activeLeaf.id, { monitor: { ...monitor, ...patch } });
+  };
+
   const przelaczZapis = (): void => {
     if (!activeSessionId) return;
     const id = activeSessionId;
@@ -530,6 +538,24 @@ export function App(): React.JSX.Element {
           >
             Pliki (SFTP)
           </button>
+        )}
+        {isSerial && (
+          <>
+            <button
+              className={`statusbar__button${monitor.hex ? ' is-active' : ''}`}
+              onClick={() => setMonitor({ hex: !monitor.hex })}
+              title="Widok szesnastkowy"
+            >
+              HEX
+            </button>
+            <button
+              className={`statusbar__button${monitor.timestamps ? ' is-active' : ''}`}
+              onClick={() => setMonitor({ timestamps: !monitor.timestamps })}
+              title="Znaczniki czasu"
+            >
+              Czas
+            </button>
+          </>
         )}
         {activeSessionId && (
           <button

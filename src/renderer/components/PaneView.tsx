@@ -36,6 +36,7 @@ export function PaneView({ node, cb }: { node: Pane; cb: PaneCallbacks }): React
           spec={node.spec}
           settings={cb.settings}
           active={cb.tabActive}
+          monitor={node.monitor}
           onReady={(info) => cb.onReady(node.id, info.label, info.sessionId)}
           onExit={(code) => cb.onExit(node.id, code)}
           onRenderer={cb.onRenderer}

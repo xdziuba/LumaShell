@@ -9,7 +9,7 @@
  * drzewo, nie zmieniają wejścia.
  */
 
-import type { SessionSpec } from '@shared/types/ipc';
+import type { MonitorMode, SessionSpec } from '@shared/types/ipc';
 
 export type PaneStatus = 'starting' | 'running' | 'closed' | 'error';
 export type SplitDirection = 'row' | 'column';
@@ -23,6 +23,8 @@ export interface LeafPane {
   detail?: string;
   /** Identyfikator sesji z procesu głównego — ustawiany po zestawieniu (do SFTP itp.). */
   sessionId?: string;
+  /** Tryb monitora (port szeregowy): hex / znaczniki czasu. */
+  monitor?: MonitorMode;
 }
 
 export interface SplitPane {

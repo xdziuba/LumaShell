@@ -82,6 +82,12 @@ export interface AppCapabilities {
  * Renderer prosi o rodzaj połączenia, nie o konkretną bibliotekę — po drugiej stronie
  * stoi odpowiedni `TerminalTransport` (docs/architecture/02-warstwy-i-transporty.md).
  */
+/** Tryb monitora portu szeregowego: widok hex i/lub znaczniki czasu. */
+export interface MonitorMode {
+  hex: boolean;
+  timestamps: boolean;
+}
+
 /** Parametry ramki portu szeregowego. */
 export interface SerialFraming {
   dataBits?: 5 | 6 | 7 | 8;
