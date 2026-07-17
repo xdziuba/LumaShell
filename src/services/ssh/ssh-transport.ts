@@ -54,6 +54,10 @@ export class SshTransport implements TerminalTransport {
           agent: this.options.agent,
           // Keep-alive utrzymuje sesję przy życiu za NAT-em i na kapryśnych łączach.
           keepaliveInterval: this.options.keepAliveInterval ?? 15_000,
+          // Handshake obejmuje weryfikację klucza hosta, a ta czeka na decyzję użytkownika
+          // (np. przy groźnym „klucz się zmienił"). Domyślne 20 s ssh2 bywa za krótkie,
+          // więc dajemy zapas obejmujący nasz 2-minutowy timeout pytania.
+          readyTimeout: 150_000,
           // Weryfikacja klucza hosta. Odrzucenie tutaj zrywa handshake, zanim polecą
           // jakiekolwiek dane uwierzytelniające — chroni przed MITM.
           hostVerifier: (key: Buffer, accept: (ok: boolean) => void) => {

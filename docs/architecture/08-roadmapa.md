@@ -70,15 +70,22 @@ to osobny temat). Podziały międzyokienne i quake mode należą do dalszych eta
 
 ### Etap 3 — SSH
 
-* hasło,
-* klucz prywatny,
-* known hosts,
-* SSH agent,
+* ✔ hasło,
+* ✔ klucz prywatny (plik + hasło klucza),
+* ✔ known hosts — model TOFU, wykrywanie zmiany klucza (MITM), pytanie użytkownika,
+* ✔ SSH agent (obsługiwany; na maszynie testowej wyłączony, więc bez próby na żywo),
+* ✔ keep-alive,
+* ✔ magazyn poświadczeń przez safeStorage (DPAPI),
 * reconnect,
-* keep-alive,
 * forwarding,
 * jump host,
 * SFTP.
+
+> **Bezpieczeństwo poświadczeń.** Hasła i hasła kluczy nigdy nie przechodzą przez
+> `SessionSpec` ani snapshot workspace'u — deskryptor połączenia z sekretami żyje ulotnie
+> w procesie głównym, renderer dostaje tylko `connectionId`. Sesje SSH nie są przywracane
+> po restarcie (jak porty COM). Zapis połączeń SSH jako trwałych profili (z sekretami w
+> safeStorage) to kolejny krok tego etapu.
 
 ### Etap 4 — port szeregowy
 

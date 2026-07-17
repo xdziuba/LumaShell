@@ -14,8 +14,10 @@ import {
   IpcChannel,
   IpcEvent,
   type AppCapabilities,
+  type HostVerifyRequest,
   type SessionSpec,
   type ShellInfo,
+  type SshConnectRequest,
   type TerminalCreateResult,
   type TerminalDataEvent,
   type TerminalExitEvent,
@@ -57,6 +59,16 @@ export const api: LumaApi = {
 
   serial: {
     listPorts: (): Promise<SerialPortInfo[]> => ipcRenderer.invoke(IpcChannel.SerialListPorts)
+  },
+
+  ssh: {
+    connect: (request: SshConnectRequest): Promise<{ connectionId: string; label: string }> =>
+      ipcRenderer.invoke(IpcChannel.SshConnect, request),
+    onHostVerify: (callback: (request: HostVerifyRequest) => void): Unsubscribe =>
+      subscribe(IpcEvent.SshHostVerify, callback),
+    respondHostVerify: (requestId: string, accepted: boolean): void => {
+      ipcRenderer.send(IpcChannel.SshHostVerifyResponse, { requestId, accepted });
+    }
   },
 
   terminal: {

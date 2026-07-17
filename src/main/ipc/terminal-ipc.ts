@@ -11,7 +11,11 @@ import type { TerminalTransport } from '@core/transports/transport';
 import { LocalPtyTransport } from '@services/pty/local-pty-transport';
 import { discoverShells, type ShellDefinition } from '@services/pty/shell-detection';
 import { SerialTransport, listSerialPorts } from '@services/serial/serial-transport';
+import { SshTransport } from '@services/ssh/ssh-transport';
+import { dropConnection, registerConnection, resolveOptions } from '../ssh/ssh-connections';
+import { registerHostVerifyIpc } from '../ssh/host-verify';
 import {
+  parseSshConnect,
   parseTerminalCreate,
   parseTerminalDispose,
   parseTerminalResize,
@@ -37,6 +41,8 @@ interface Session {
   transport: TerminalTransport;
   pending: Uint8Array[];
   timer: NodeJS.Timeout | undefined;
+  /** Ustawione dla sesji SSH — deskryptor połączenia do sprzątnięcia przy zamknięciu. */
+  connectionId?: string;
 }
 
 const sessions = new Map<string, Session>();
@@ -68,6 +74,8 @@ function disposeSession(sessionId: string): void {
   if (!session) return;
   if (session.timer) clearTimeout(session.timer);
   void session.transport.disconnect();
+  // Sekrety SSH znikają z pamięci wraz z deskryptorem połączenia.
+  if (session.connectionId) dropConnection(session.connectionId);
   sessions.delete(sessionId);
 }
 
@@ -89,13 +97,19 @@ async function createTransport(
   sessionId: string,
   spec: SessionSpec,
   columns: number,
-  rows: number
+  rows: number,
+  window: BrowserWindow
 ): Promise<{ transport: TerminalTransport; label: string }> {
   if (spec.kind === 'serial') {
     return {
       transport: new SerialTransport(sessionId, { path: spec.path, baudRate: spec.baudRate }),
       label: `${spec.path} @ ${spec.baudRate}`
     };
+  }
+
+  if (spec.kind === 'ssh') {
+    const options = await resolveOptions(spec.connectionId, window, columns, rows);
+    return { transport: new SshTransport(sessionId, options), label: spec.label };
   }
 
   const shells = await getShells();
@@ -117,18 +131,29 @@ async function createTransport(
 }
 
 export function registerTerminalIpc(window: BrowserWindow): void {
+  registerHostVerifyIpc();
+
   ipcMain.handle(IpcChannel.ShellList, async () =>
     (await getShells()).map(({ id, label }) => ({ id, label }))
   );
 
   ipcMain.handle(IpcChannel.SerialListPorts, () => listSerialPorts());
 
+  // Rejestracja połączenia SSH: sekrety zostają w procesie głównym, renderer dostaje
+  // tylko connectionId, którym potem otwiera sesję.
+  ipcMain.handle(IpcChannel.SshConnect, (_event, payload) => registerConnection(parseSshConnect(payload)));
+
   ipcMain.handle(IpcChannel.TerminalCreate, async (_event, payload): Promise<TerminalCreateResult> => {
     const { spec, columns, rows } = parseTerminalCreate(payload);
     const sessionId = randomUUID();
-    const { transport, label } = await createTransport(sessionId, spec, columns, rows);
+    const { transport, label } = await createTransport(sessionId, spec, columns, rows, window);
 
-    sessions.set(sessionId, { transport, pending: [], timer: undefined });
+    sessions.set(sessionId, {
+      transport,
+      pending: [],
+      timer: undefined,
+      connectionId: spec.kind === 'ssh' ? spec.connectionId : undefined
+    });
 
     transport.onData((data) => {
       sessions.get(sessionId)?.pending.push(data);

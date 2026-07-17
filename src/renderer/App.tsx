@@ -9,7 +9,13 @@ import { findLeaf, leaves } from '@core/workspace/pane-tree';
 import type { Command } from './commands/types';
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { Profile } from '@core/profiles/profile';
-import type { AppCapabilities, SessionSpec, ShellInfo } from '@shared/types/ipc';
+import type {
+  AppCapabilities,
+  HostVerifyRequest,
+  SessionSpec,
+  ShellInfo,
+  SshConnectRequest
+} from '@shared/types/ipc';
 import { DEFAULT_SETTINGS, type TerminalSettings } from '@shared/types/settings';
 
 /** Losowy identyfikator profilu — crypto.randomUUID jest dostępne w rendererze. */
@@ -26,6 +32,8 @@ function specFromProfile(profile: Profile): SessionSpec {
 // (docs/architecture/05-wydajnosc.md).
 const SettingsPanel = lazy(() => import('./settings/SettingsPanel'));
 const CommandPalette = lazy(() => import('./components/CommandPalette'));
+const SshConnectDialog = lazy(() => import('./components/SshConnectDialog'));
+const HostVerifyDialog = lazy(() => import('./components/HostVerifyDialog'));
 
 /** Etap 2 nie ma jeszcze ustawień portu — prędkość na sztywno. */
 const PROTOTYPE_BAUD_RATE = 115200;
@@ -39,6 +47,8 @@ export function App(): React.JSX.Element {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [sshOpen, setSshOpen] = useState(false);
+  const [hostVerify, setHostVerify] = useState<HostVerifyRequest | null>(null);
 
   const {
     tabs,
@@ -122,6 +132,16 @@ export function App(): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [tabs, activeId]);
 
+  // Nasłuch próśb o weryfikację klucza hosta — niezależny od cyklu startowego.
+  useEffect(() => window.luma.ssh.onHostVerify(setHostVerify), []);
+
+  const polaczSsh = (request: SshConnectRequest): void => {
+    setSshOpen(false);
+    void window.luma.ssh.connect(request).then(({ connectionId, label }) => {
+      open({ kind: 'ssh', connectionId, label }, label);
+    });
+  };
+
   const zmienUstawienia = (next: TerminalSettings): void => {
     // Podgląd natychmiast, zapis w tle. Proces główny zwraca wartości po walidacji,
     // więc to one są ostatecznie prawdą.
@@ -143,17 +163,23 @@ export function App(): React.JSX.Element {
   const otworzProfil = (profile: Profile): void =>
     void open(specFromProfile(profile), profile.name);
 
-  const zapiszAktywnyJakoProfil = (): void => {
-    if (!activeLeaf) return;
-    // Profil dostaje nazwę aktywnego panelu. Electron nie ma window.prompt, a edytor
-    // profili z nazywaniem wchodzi w Etapie 5 — tu liczy się sam zapis i odtwarzanie.
-    const spec = activeLeaf.spec;
-    const target: Profile['target'] =
-      spec.kind === 'serial'
-        ? { kind: 'serial', path: spec.path, baudRate: spec.baudRate }
-        : { kind: 'pty', shellId: spec.shellId, cwd: spec.cwd };
+  // Zapis profilu obsługuje pty i serial. Profile SSH (z poświadczeniami w safeStorage)
+  // to osobny kawałek Etapu 3 — sesji SSH na razie nie da się zapisać jako profil.
+  const canSaveProfile = activeLeaf?.spec.kind === 'pty' || activeLeaf?.spec.kind === 'serial';
 
-    void window.luma.profiles.save({ id: newId(), name: activeLeaf.label, target }).then(setProfiles);
+  const zapiszAktywnyJakoProfil = (): void => {
+    const spec = activeLeaf?.spec;
+    if (!spec) return;
+    // Electron nie ma window.prompt; profil dostaje nazwę aktywnego panelu.
+    let target: Profile['target'];
+    if (spec.kind === 'serial') {
+      target = { kind: 'serial', path: spec.path, baudRate: spec.baudRate };
+    } else if (spec.kind === 'pty') {
+      target = { kind: 'pty', shellId: spec.shellId, cwd: spec.cwd };
+    } else {
+      return; // SSH — patrz wyżej
+    }
+    void window.luma.profiles.save({ id: newId(), name: activeLeaf!.label, target }).then(setProfiles);
   };
 
   const usunProfil = (id: string): void => void window.luma.profiles.delete(id).then(setProfiles);
@@ -195,6 +221,12 @@ export function App(): React.JSX.Element {
         run: () => otworzPort(port)
       });
     }
+    list.push({
+      id: 'ssh.connect',
+      title: 'Połącz przez SSH…',
+      keywords: 'ssh zdalny remote połączenie',
+      run: () => setSshOpen(true)
+    });
     for (const profile of profiles) {
       list.push({
         id: `profile:${profile.id}`,
@@ -203,14 +235,16 @@ export function App(): React.JSX.Element {
         run: () => otworzProfil(profile)
       });
     }
+    if (canSaveProfile) {
+      list.push({
+        id: 'profile.save',
+        title: 'Zapisz aktywną sesję jako profil',
+        keywords: 'profil zapisz save',
+        run: zapiszAktywnyJakoProfil
+      });
+    }
     if (activeTab) {
       list.push(
-        {
-          id: 'profile.save',
-          title: 'Zapisz aktywną sesję jako profil',
-          keywords: 'profil zapisz save',
-          run: zapiszAktywnyJakoProfil
-        },
         {
           id: 'pane.split.row',
           title: 'Podziel panel w pionie',
@@ -306,6 +340,11 @@ export function App(): React.JSX.Element {
             </button>
           ))}
 
+          <div className="sidebar__heading sidebar__heading--spaced">ZDALNE</div>
+          <button className="sidebar__item sidebar__item--action" onClick={() => setSshOpen(true)}>
+            + Połączenie SSH…
+          </button>
+
           <div className="sidebar__heading sidebar__heading--spaced">PORTY COM</div>
           {ports.length === 0 && <div className="sidebar__item">brak portów</div>}
           {ports.map((port) => (
@@ -324,7 +363,7 @@ export function App(): React.JSX.Element {
             <button
               className="sidebar__heading-action"
               onClick={zapiszAktywnyJakoProfil}
-              disabled={!activeTab}
+              disabled={!canSaveProfile}
               title="Zapisz aktywną sesję jako profil"
             >
               +
@@ -404,6 +443,24 @@ export function App(): React.JSX.Element {
       {paletteOpen && (
         <Suspense fallback={null}>
           <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />
+        </Suspense>
+      )}
+
+      {sshOpen && (
+        <Suspense fallback={null}>
+          <SshConnectDialog onConnect={polaczSsh} onClose={() => setSshOpen(false)} />
+        </Suspense>
+      )}
+
+      {hostVerify && (
+        <Suspense fallback={null}>
+          <HostVerifyDialog
+            request={hostVerify}
+            onDecision={(accepted) => {
+              window.luma.ssh.respondHostVerify(hostVerify.requestId, accepted);
+              setHostVerify(null);
+            }}
+          />
         </Suspense>
       )}
 

@@ -579,6 +579,115 @@ body {
   }
 }
 
+.dialog {
+  width: 420px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: linear-gradient(160deg, rgba(20, 55, 40, 0.95), rgba(5, 18, 13, 0.96));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+
+  &--danger {
+    border-color: rgba(255, 95, 86, 0.5);
+  }
+
+  &__title {
+    color: var(--accent-neon);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    margin-bottom: 4px;
+  }
+
+  &--danger &__title {
+    color: #ff8b84;
+  }
+
+  &__text {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    font-size: 12px;
+
+    span {
+      flex: 0 0 110px;
+    }
+
+    input,
+    select {
+      flex: 1;
+      min-width: 0;
+      background: var(--term-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 8px;
+      font: inherit;
+    }
+  }
+
+  &__fingerprint {
+    display: block;
+    background: var(--term-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    color: var(--accent);
+    font-family: 'Cascadia Mono', Consolas, monospace;
+    font-size: 12px;
+    word-break: break-all;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  &__button {
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    padding: 6px 14px;
+    border-radius: 5px;
+    cursor: default;
+
+    &:hover:not(:disabled) {
+      background: rgba(90, 255, 170, 0.1);
+    }
+    &:disabled {
+      opacity: 0.4;
+    }
+
+    &--primary {
+      background: var(--accent-dark);
+      border-color: var(--accent);
+      color: #041a10;
+      font-weight: 600;
+    }
+
+    &--danger {
+      background: #7a241d;
+      border-color: #ff5f56;
+      color: #fff;
+      font-weight: 600;
+    }
+  }
+}
+
 .settings {
   width: 250px;
   flex: 0 0 auto;

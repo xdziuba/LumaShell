@@ -22,6 +22,8 @@ export const IpcChannel = {
   WorkspaceSave: 'workspace:save',
   ShellList: 'shell:list',
   SerialListPorts: 'serial:listPorts',
+  SshConnect: 'ssh:connect',
+  SshHostVerifyResponse: 'ssh:hostVerifyResponse',
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
   TerminalResize: 'terminal:resize',
@@ -31,7 +33,8 @@ export const IpcChannel = {
 /** Kanały wypychane z main do renderera (zdarzenia). */
 export const IpcEvent = {
   TerminalData: 'terminal:data',
-  TerminalExit: 'terminal:exit'
+  TerminalExit: 'terminal:exit',
+  SshHostVerify: 'ssh:hostVerify'
 } as const;
 
 /**
@@ -76,7 +79,42 @@ export interface AppCapabilities {
 export type SessionSpec =
   /** `shellId` pochodzi z listy wykrytych powłok; brak = powłoka domyślna. */
   | { kind: 'pty'; shellId?: string; cwd?: string }
-  | { kind: 'serial'; path: string; baudRate: number };
+  | { kind: 'serial'; path: string; baudRate: number }
+  /**
+   * `connectionId` wskazuje deskryptor SSH żyjący w procesie głównym — poświadczenia
+   * NIGDY nie przechodzą przez SessionSpec ani snapshot (docs/security/02-sekrety.md).
+   */
+  | { kind: 'ssh'; connectionId: string; label: string };
+
+/** Metoda uwierzytelniania SSH. */
+export type SshAuthMethod = 'password' | 'key' | 'agent';
+
+/**
+ * Żądanie połączenia SSH z renderera.
+ *
+ * Sekrety (hasło, hasło klucza) idą tędy raz, do procesu głównego, który trzyma je
+ * ulotnie w pamięci i nie zwraca ich rendererowi ani nie zapisuje na dysk.
+ */
+export interface SshConnectRequest {
+  host: string;
+  port: number;
+  username: string;
+  auth: SshAuthMethod;
+  password?: string;
+  /** Ścieżka do pliku klucza prywatnego (auth = 'key'). */
+  keyPath?: string;
+  passphrase?: string;
+}
+
+/** Prośba o weryfikację klucza hosta wysyłana do renderera w trakcie handshake'u. */
+export interface HostVerifyRequest {
+  requestId: string;
+  host: string;
+  port: number;
+  fingerprint: string;
+  /** 'unknown' — pierwszy kontakt (TOFU); 'changed' — odcisk się zmienił (możliwy MITM). */
+  reason: 'unknown' | 'changed';
+}
 
 /** Powłoka wykryta w systemie, w postaci widocznej dla renderera. */
 export interface ShellInfo {

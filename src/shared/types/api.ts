@@ -7,8 +7,10 @@
 
 import type {
   AppCapabilities,
+  HostVerifyRequest,
   SessionSpec,
   ShellInfo,
+  SshConnectRequest,
   TerminalCreateResult,
   TerminalDataEvent,
   TerminalExitEvent,
@@ -49,6 +51,14 @@ export interface LumaApi {
   serial: {
     /** Wyłącznie odczyt listy — nie otwiera żadnego portu. */
     listPorts(): Promise<SerialPortInfo[]>;
+  };
+
+  ssh: {
+    /** Rejestruje połączenie (sekrety zostają w procesie głównym); zwraca connectionId. */
+    connect(request: SshConnectRequest): Promise<{ connectionId: string; label: string }>;
+    /** Prośba o weryfikację klucza hosta w trakcie łączenia. */
+    onHostVerify(callback: (request: HostVerifyRequest) => void): Unsubscribe;
+    respondHostVerify(requestId: string, accepted: boolean): void;
   };
 
   terminal: {

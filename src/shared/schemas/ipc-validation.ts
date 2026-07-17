@@ -9,6 +9,7 @@
 
 import type {
   SessionSpec,
+  SshConnectRequest,
   StoredPane,
   TerminalCreateRequest,
   TerminalDisposeRequest,
@@ -90,7 +91,42 @@ function parseSessionSpec(value: unknown): SessionSpec {
     return { kind: 'serial', path, baudRate };
   }
 
+  if (kind === 'ssh') {
+    // connectionId to klucz deskryptora w procesie głównym; sekretów tu nie ma.
+    return {
+      kind: 'ssh',
+      connectionId: requireString(source, 'connectionId', 64),
+      label: requireString(source, 'label', 120)
+    };
+  }
+
   throw new IpcValidationError(`nieznany rodzaj sesji: ${String(kind)}`);
+}
+
+const SSH_AUTH = new Set(['password', 'key', 'agent']);
+
+/** Waliduje żądanie połączenia SSH. Sekrety są ograniczane długością, nigdy logowane. */
+export function parseSshConnect(payload: unknown): SshConnectRequest {
+  const source = asRecord(payload);
+  const port = source['port'];
+  if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new IpcValidationError('port poza zakresem 1–65535');
+  }
+  const auth = source['auth'];
+  if (typeof auth !== 'string' || !SSH_AUTH.has(auth)) {
+    throw new IpcValidationError(`nieznana metoda uwierzytelniania: ${String(auth)}`);
+  }
+
+  const request: SshConnectRequest = {
+    host: requireString(source, 'host', 255),
+    port,
+    username: requireString(source, 'username', 128),
+    auth: auth as SshConnectRequest['auth']
+  };
+  if (source['password'] !== undefined) request.password = requireString(source, 'password', 1024);
+  if (source['keyPath'] !== undefined) request.keyPath = requireString(source, 'keyPath', 512);
+  if (source['passphrase'] !== undefined) request.passphrase = requireString(source, 'passphrase', 1024);
+  return request;
 }
 
 export function parseTerminalCreate(payload: unknown): TerminalCreateRequest {
