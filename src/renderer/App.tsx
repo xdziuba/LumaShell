@@ -51,6 +51,8 @@ export function App(): React.JSX.Element {
   const [sftpOpen, setSftpOpen] = useState(false);
   // Ścieżka portu, dla którego otwarty jest dialog konfiguracji (null = zamknięty).
   const [serialDialogPath, setSerialDialogPath] = useState<string | null>(null);
+  // Identyfikatory sesji z aktywnym zapisem do pliku.
+  const [loggingSessions, setLoggingSessions] = useState<Set<string>>(new Set());
 
   const {
     tabs,
@@ -172,6 +174,27 @@ export function App(): React.JSX.Element {
   // SFTP dostępny tylko dla aktywnego panelu SSH z zestawioną sesją.
   const sshSessionId =
     activeLeaf?.spec.kind === 'ssh' && activeLeaf.status === 'running' ? activeLeaf.sessionId : undefined;
+
+  // Sesja aktywnego panelu (dowolny typ) do zapisu do pliku.
+  const activeSessionId = activeLeaf?.status === 'running' ? activeLeaf.sessionId : undefined;
+  const isLogging = activeSessionId ? loggingSessions.has(activeSessionId) : false;
+
+  const przelaczZapis = (): void => {
+    if (!activeSessionId) return;
+    const id = activeSessionId;
+    if (isLogging) {
+      void window.luma.sessionLog.stop(id);
+      setLoggingSessions((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    } else {
+      void window.luma.sessionLog.start(id).then((started) => {
+        if (started) setLoggingSessions((prev) => new Set(prev).add(id));
+      });
+    }
+  };
 
   const zapiszAktywnyJakoProfil = (): void => {
     const spec = activeLeaf?.spec;
@@ -506,6 +529,15 @@ export function App(): React.JSX.Element {
             onClick={() => setSftpOpen((isOpen) => !isOpen)}
           >
             Pliki (SFTP)
+          </button>
+        )}
+        {activeSessionId && (
+          <button
+            className={`statusbar__button${isLogging ? ' is-active' : ''}`}
+            onClick={przelaczZapis}
+            title="Zapis surowych danych sesji do pliku"
+          >
+            {isLogging ? '● Zapis' : 'Zapis do pliku'}
           </button>
         )}
         <button

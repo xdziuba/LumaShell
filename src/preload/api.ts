@@ -72,6 +72,13 @@ export const api: LumaApi = {
     }
   },
 
+  sessionLog: {
+    start: (sessionId: string): Promise<boolean> =>
+      ipcRenderer.invoke(IpcChannel.SessionLogStart, sessionId),
+    stop: (sessionId: string): Promise<boolean> =>
+      ipcRenderer.invoke(IpcChannel.SessionLogStop, sessionId)
+  },
+
   sftp: {
     realpath: (sessionId: string, path: string): Promise<string> =>
       ipcRenderer.invoke(IpcChannel.SftpRealpath, sessionId, path),

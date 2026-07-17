@@ -28,6 +28,8 @@ export const IpcChannel = {
   SftpList: 'sftp:list',
   SftpDownload: 'sftp:download',
   SftpUpload: 'sftp:upload',
+  SessionLogStart: 'sessionLog:start',
+  SessionLogStop: 'sessionLog:stop',
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
   TerminalResize: 'terminal:resize',

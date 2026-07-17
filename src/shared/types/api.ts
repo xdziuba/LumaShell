@@ -62,6 +62,13 @@ export interface LumaApi {
     respondHostVerify(requestId: string, accepted: boolean): void;
   };
 
+  /** Zapis surowych danych sesji do pliku. */
+  sessionLog: {
+    /** Pokazuje dialog zapisu i zaczyna log; `true`, gdy uruchomiono. */
+    start(sessionId: string): Promise<boolean>;
+    stop(sessionId: string): Promise<boolean>;
+  };
+
   /** SFTP działa na istniejącej sesji SSH (po jej sessionId). */
   sftp: {
     realpath(sessionId: string, path: string): Promise<string>;

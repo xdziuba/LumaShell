@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
+import { createWriteStream, type WriteStream } from 'node:fs';
 import { dialog, ipcMain, type BrowserWindow } from 'electron';
 import type { TerminalTransport } from '@core/transports/transport';
 import { LocalPtyTransport } from '@services/pty/local-pty-transport';
@@ -45,6 +46,8 @@ interface Session {
   timer: NodeJS.Timeout | undefined;
   /** Ustawione dla sesji SSH — deskryptor połączenia do sprzątnięcia przy zamknięciu. */
   connectionId?: string;
+  /** Aktywny zapis danych sesji do pliku (włączany na żądanie). */
+  logStream?: WriteStream;
 }
 
 const sessions = new Map<string, Session>();
@@ -75,6 +78,7 @@ function disposeSession(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (!session) return;
   if (session.timer) clearTimeout(session.timer);
+  session.logStream?.end();
   void session.transport.disconnect();
   // Sekrety SSH znikają z pamięci wraz z deskryptorem połączenia.
   if (session.connectionId) dropConnection(session.connectionId);
@@ -166,6 +170,27 @@ export function registerTerminalIpc(window: BrowserWindow): void {
     return value;
   };
 
+  // --- Logowanie danych sesji do pliku (dowolna sesja) ---
+  ipcMain.handle(IpcChannel.SessionLogStart, async (_e, sessionId): Promise<boolean> => {
+    if (typeof sessionId !== 'string') return false;
+    const session = sessions.get(sessionId);
+    if (!session || session.logStream) return false;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const result = await dialog.showSaveDialog(window, { defaultPath: `lumashell-${stamp}.log` });
+    if (result.canceled || !result.filePath) return false;
+    session.logStream = createWriteStream(result.filePath, { flags: 'a' });
+    return true;
+  });
+
+  ipcMain.handle(IpcChannel.SessionLogStop, (_e, sessionId): boolean => {
+    if (typeof sessionId !== 'string') return false;
+    const session = sessions.get(sessionId);
+    if (!session?.logStream) return false;
+    session.logStream.end();
+    session.logStream = undefined;
+    return true;
+  });
+
   ipcMain.handle(IpcChannel.SftpRealpath, (_e, sessionId, path) =>
     sshSession(sessionId).sftpRealpath(remotePath(path))
   );
@@ -210,7 +235,10 @@ export function registerTerminalIpc(window: BrowserWindow): void {
     });
 
     transport.onData((data) => {
-      sessions.get(sessionId)?.pending.push(data);
+      const session = sessions.get(sessionId);
+      session?.pending.push(data);
+      // Zapis do pliku surowych bajtów sesji — dokładnie tego, co przyszło z transportu.
+      session?.logStream?.write(Buffer.from(data));
       schedule(sessionId, window);
     });
 
