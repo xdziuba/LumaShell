@@ -51,7 +51,11 @@ Celem jest sprawdzenie, czy aplikacja zachowuje płynność przy dużej ilości 
 * ✔ przywracanie sesji po restarcie — **tylko powłoki**, patrz niżej,
 * ✔ podziały (pionowe/poziome) — pełne drzewo binarne, dowolne zagnieżdżenie,
   przeciągane granice, fokus panelu; logika drzewa w `core`, przetestowana jednostkowo,
-* przeciąganie zakładek.
+* ✔ przeciąganie zakładek — zmiana kolejności drag & drop ze wskaźnikiem miejsca upuszczenia.
+
+**Etap 2 zamknięty.** Poza zakresem świadomie zostały: wyszukiwanie w buforze terminala
+(dochodzi z resztą funkcji terminala) oraz przenoszenie zakładek między oknami (wiele okien
+to osobny temat). Podziały międzyokienne i quake mode należą do dalszych etapów UI.
 
 > Profile Etapu 2 to podzbiór modelu z sekcji 10: powłoka + katalog roboczy albo port COM
 > z prędkością. Pełny zestaw pól (zmienne środowiskowe, motyw, tagi, SSH) i graficzny

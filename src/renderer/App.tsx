@@ -51,7 +51,8 @@ export function App(): React.JSX.Element {
     splitActivePane,
     closePane,
     focusPane,
-    resizeSplit
+    resizeSplit,
+    reorderTab
   } = useWorkspace();
 
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
@@ -288,6 +289,7 @@ export function App(): React.JSX.Element {
         onSelect={activate}
         onClose={closeTab}
         onNew={nowaZakladka}
+        onReorder={reorderTab}
       />
 
       <div className="body">

@@ -74,6 +74,8 @@ interface WorkspaceState {
   closeTab: (id: string) => void;
   activate: (id: string) => void;
   restore: (tabs: WorkspaceTab[], activeIndex: number) => void;
+  /** Przenosi zakładkę przed albo za wskazaną (drag & drop kolejności). */
+  reorderTab: (id: string, targetId: string, before: boolean) => void;
 
   /** Aktualizacja liścia (etykieta, status) — szuka po całym drzewie zakładki. */
   updatePane: (tabId: string, paneId: string, patch: Partial<Omit<LeafPane, 'id' | 'kind'>>) => void;
@@ -105,6 +107,21 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     }),
 
   activate: (id) => set({ activeId: id }),
+
+  reorderTab: (id, targetId, before) =>
+    set((state) => {
+      if (id === targetId) return state;
+      const tabs = [...state.tabs];
+      const from = tabs.findIndex((tab) => tab.id === id);
+      if (from === -1) return state;
+      const [moved] = tabs.splice(from, 1);
+      // Indeks celu liczony PO usunięciu przeciąganej — dzięki temu brak off-by-one
+      // przy przenoszeniu w prawo.
+      const targetIndex = tabs.findIndex((tab) => tab.id === targetId);
+      if (targetIndex === -1) return state;
+      tabs.splice(before ? targetIndex : targetIndex + 1, 0, moved!);
+      return { tabs };
+    }),
 
   restore: (stored, activeIndex) =>
     set(() => {
