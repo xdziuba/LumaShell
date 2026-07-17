@@ -38,12 +38,15 @@ export function App(): React.JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  const { tabs, activeId, open, close, activate, update } = useWorkspace();
+  const { tabs, activeId, open, close, activate, update, restore } = useWorkspace();
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
 
   // `StrictMode` uruchamia efekty dwukrotnie w trybie deweloperskim. Bez tego strażnika
-  // `npm run dev` otwierałby dwie zakładki startowe zamiast jednej.
+  // `npm run dev` odtwarzałby układ dwa razy.
   const wystartowano = useRef(false);
+  // Zapis workspace'u jest wstrzymany, dopóki nie skończy się odtwarzanie — inaczej
+  // pusty stan startowy nadpisałby zapamiętany układ.
+  const odtworzono = useRef(false);
 
   useEffect(() => {
     if (wystartowano.current) return;
@@ -60,15 +63,39 @@ export function App(): React.JSX.Element {
     // Listowanie portów niczego nie otwiera, więc jest bezpieczne przy starcie.
     void window.luma.serial.listPorts().then(setPorts);
 
-    void window.luma.listShells().then((found) => {
-      setShells(found);
-      // Pierwsza zakładka dopiero po wykryciu powłok — inaczej etykieta byłaby zgadywana.
-      const first = found[0];
-      if (first) open({ kind: 'pty', shellId: first.id }, first.label);
-    });
-    // Pusta lista zależności jest celowa: to zadania startowe, mają wykonać się raz.
-    // `open` pochodzi ze store'u Zustanda i jest stabilne między renderami.
-  }, [open]);
+    // Powłoki i zapamiętany układ ładowane razem: odtwarzamy tylko sesje powłok
+    // (workspace-store odsiał już porty COM), a gdy nic nie zapisano — pierwsza powłoka.
+    void Promise.all([window.luma.listShells(), window.luma.workspace.get()]).then(
+      ([found, snapshot]) => {
+        setShells(found);
+        if (snapshot.tabs.length > 0) {
+          restore(snapshot.tabs, snapshot.activeIndex);
+        } else {
+          const first = found[0];
+          if (first) open({ kind: 'pty', shellId: first.id }, first.label);
+        }
+        odtworzono.current = true;
+      }
+    );
+    // Zadania startowe — mają wykonać się raz. `open`/`restore` są stabilne (Zustand).
+  }, [open, restore]);
+
+  // Zapamiętywanie układu przy każdej zmianie zakładek, z opóźnieniem, żeby nie zapisywać
+  // przy każdym drgnięciu. Serializujemy wszystkie zakładki — proces główny odsieje porty.
+  useEffect(() => {
+    if (!odtworzono.current) return;
+    const timer = setTimeout(() => {
+      const activeIndex = Math.max(
+        0,
+        tabs.findIndex((tab) => tab.id === activeId)
+      );
+      void window.luma.workspace.save({
+        tabs: tabs.map((tab) => ({ spec: tab.spec, label: tab.label })),
+        activeIndex
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [tabs, activeId]);
 
   const zmienUstawienia = (next: TerminalSettings): void => {
     // Podgląd natychmiast, zapis w tle. Proces główny zwraca wartości po walidacji,

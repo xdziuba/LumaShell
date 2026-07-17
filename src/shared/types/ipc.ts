@@ -18,6 +18,8 @@ export const IpcChannel = {
   ProfilesList: 'profiles:list',
   ProfilesSave: 'profiles:save',
   ProfilesDelete: 'profiles:delete',
+  WorkspaceGet: 'workspace:get',
+  WorkspaceSave: 'workspace:save',
   ShellList: 'shell:list',
   SerialListPorts: 'serial:listPorts',
   TerminalCreate: 'terminal:create',
@@ -80,6 +82,24 @@ export type SessionSpec =
 export interface ShellInfo {
   id: string;
   label: string;
+}
+
+/** Pojedyncza zakładka w zapisanym workspace. */
+export interface WorkspaceTab {
+  spec: SessionSpec;
+  label: string;
+}
+
+/**
+ * Zapamiętany układ zakładek.
+ *
+ * Przywracane są wyłącznie sesje powłok — port szeregowy jest pomijany, bo jego
+ * automatyczne otwarcie przestawia linie sterujące i może zresetować urządzenie
+ * (docs/security/03-polityka-agenta.md). Filtr robi proces główny przy zapisie.
+ */
+export interface WorkspaceSnapshot {
+  tabs: WorkspaceTab[];
+  activeIndex: number;
 }
 
 export interface TerminalCreateRequest {

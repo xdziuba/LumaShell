@@ -48,14 +48,20 @@ Celem jest sprawdzenie, czy aplikacja zachowuje płynność przy dużej ilości 
 * ✔ profile — zapis i odtwarzanie sparametryzowanej sesji, trwałe w `profiles.json`,
 * ✔ command palette (Ctrl+Shift+P) z wyszukiwaniem,
 * ✔ skróty — Ctrl+T/W, Ctrl+Tab, Ctrl+1..9, Ctrl+,
+* ✔ przywracanie sesji po restarcie — **tylko powłoki**, patrz niżej,
 * podziały (pionowe/poziome),
-* przywracanie sesji po restarcie,
 * przeciąganie zakładek.
 
 > Profile Etapu 2 to podzbiór modelu z sekcji 10: powłoka + katalog roboczy albo port COM
 > z prędkością. Pełny zestaw pól (zmienne środowiskowe, motyw, tagi, SSH) i graficzny
 > edytor dochodzą w Etapach 3 i 5. Nazwa profilu to na razie etykieta zakładki — Electron
 > nie ma `window.prompt`, a osobne okno dialogowe należy do edytora z Etapu 5.
+
+> **Przywracanie sesji obejmuje wyłącznie sesje powłok.** Porty szeregowe są świadomie
+> pomijane: automatyczne otwarcie portu przy każdym starcie przestawiłoby linie DTR/RTS
+> i mogło zresetować podłączone urządzenie (docs/security/03-polityka-agenta.md), a samo
+> urządzenie może być odpięte. Filtr działa przy zapisie — plik `workspace.json` nigdy nie
+> zawiera zakładek COM. Port otwiera się ponownie świadomym kliknięciem lub z profilu.
 
 ### Etap 3 — SSH
 

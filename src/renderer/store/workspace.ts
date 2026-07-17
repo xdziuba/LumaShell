@@ -29,6 +29,8 @@ interface WorkspaceState {
   close: (id: string) => void;
   activate: (id: string) => void;
   update: (id: string, patch: Partial<Omit<Tab, 'id'>>) => void;
+  /** Odtworzenie zakładek z zapisanego układu — jednym krokiem, bez migotania. */
+  restore: (entries: Array<{ spec: SessionSpec; label: string }>, activeIndex: number) => void;
 }
 
 export const useWorkspace = create<WorkspaceState>((set) => ({
@@ -63,5 +65,17 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   update: (id, patch) =>
     set((state) => ({
       tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, ...patch } : tab))
-    }))
+    })),
+
+  restore: (entries, activeIndex) =>
+    set(() => {
+      const tabs: Tab[] = entries.map((entry) => ({
+        id: `tab-${nextId++}`,
+        spec: entry.spec,
+        label: entry.label,
+        status: 'starting'
+      }));
+      const active = tabs[Math.min(activeIndex, tabs.length - 1)] ?? null;
+      return { tabs, activeId: active?.id ?? null };
+    })
 }));

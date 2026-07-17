@@ -10,6 +10,7 @@ import { ipcMain } from 'electron';
 import { detectCapabilities } from '../capabilities';
 import { loadSettings, saveSettings } from '../settings-store';
 import { deleteProfile, listProfiles, saveProfile } from '../profiles-store';
+import { loadWorkspace, saveWorkspace } from '../workspace-store';
 import { IpcChannel } from '@shared/types/ipc';
 
 export function registerWindowIpc(): void {
@@ -23,4 +24,7 @@ export function registerWindowIpc(): void {
   ipcMain.handle(IpcChannel.ProfilesList, () => listProfiles());
   ipcMain.handle(IpcChannel.ProfilesSave, (_event, payload) => saveProfile(payload));
   ipcMain.handle(IpcChannel.ProfilesDelete, (_event, id) => deleteProfile(id));
+
+  ipcMain.handle(IpcChannel.WorkspaceGet, () => loadWorkspace());
+  ipcMain.handle(IpcChannel.WorkspaceSave, (_event, payload) => saveWorkspace(payload));
 }

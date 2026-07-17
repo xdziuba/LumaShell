@@ -12,7 +12,8 @@ import type {
   TerminalCreateRequest,
   TerminalDisposeRequest,
   TerminalResizeRequest,
-  TerminalWriteRequest
+  TerminalWriteRequest,
+  WorkspaceSnapshot
 } from '@shared/types/ipc';
 
 export class IpcValidationError extends Error {
@@ -120,4 +121,41 @@ export function parseTerminalResize(payload: unknown): TerminalResizeRequest {
 export function parseTerminalDispose(payload: unknown): TerminalDisposeRequest {
   const source = asRecord(payload);
   return { sessionId: requireString(source, 'sessionId', MAX_SESSION_ID) };
+}
+
+/**
+ * Waliduje snapshot workspace'u.
+ *
+ * Zachowuje **wyłącznie zakładki powłok** — port szeregowy nie jest przywracany
+ * automatycznie (patrz WorkspaceSnapshot). Uszkodzone zakładki są pomijane, nie
+ * wywracają całości. Nigdy nie rzuca: zły plik daje pusty workspace.
+ */
+export function parseWorkspaceSnapshot(payload: unknown): WorkspaceSnapshot {
+  let source: Record<string, unknown>;
+  try {
+    source = asRecord(payload);
+  } catch {
+    return { tabs: [], activeIndex: 0 };
+  }
+
+  const rawTabs = Array.isArray(source['tabs']) ? source['tabs'] : [];
+  const tabs: WorkspaceSnapshot['tabs'] = [];
+  for (const raw of rawTabs) {
+    try {
+      const record = asRecord(raw);
+      const spec = parseSessionSpec(record['spec']);
+      if (spec.kind !== 'pty') continue; // porty COM nie są przywracane
+      tabs.push({ spec, label: requireString(record, 'label', 120) });
+    } catch {
+      // pomiń uszkodzoną zakładkę
+    }
+  }
+
+  const rawIndex = source['activeIndex'];
+  const activeIndex =
+    typeof rawIndex === 'number' && Number.isInteger(rawIndex) && rawIndex >= 0
+      ? Math.min(rawIndex, Math.max(0, tabs.length - 1))
+      : 0;
+
+  return { tabs, activeIndex };
 }

@@ -11,7 +11,8 @@ import type {
   ShellInfo,
   TerminalCreateResult,
   TerminalDataEvent,
-  TerminalExitEvent
+  TerminalExitEvent,
+  WorkspaceSnapshot
 } from './ipc';
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { Profile } from '@core/profiles/profile';
@@ -37,6 +38,12 @@ export interface LumaApi {
     /** Wstawia lub nadpisuje profil po id; zwraca pełną listę. */
     save(profile: Profile): Promise<Profile[]>;
     delete(id: string): Promise<Profile[]>;
+  };
+
+  workspace: {
+    /** Zapamiętany układ zakładek; puste `tabs`, gdy nic nie zapisano. */
+    get(): Promise<WorkspaceSnapshot>;
+    save(snapshot: WorkspaceSnapshot): Promise<void>;
   };
 
   serial: {

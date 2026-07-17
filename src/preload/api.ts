@@ -18,7 +18,8 @@ import {
   type ShellInfo,
   type TerminalCreateResult,
   type TerminalDataEvent,
-  type TerminalExitEvent
+  type TerminalExitEvent,
+  type WorkspaceSnapshot
 } from '@shared/types/ipc';
 
 /** Zwraca funkcję wypisującą nasłuch — inaczej React w trybie strict zdubluje handlery. */
@@ -46,6 +47,12 @@ export const api: LumaApi = {
     save: (profile: Profile): Promise<Profile[]> =>
       ipcRenderer.invoke(IpcChannel.ProfilesSave, profile),
     delete: (id: string): Promise<Profile[]> => ipcRenderer.invoke(IpcChannel.ProfilesDelete, id)
+  },
+
+  workspace: {
+    get: (): Promise<WorkspaceSnapshot> => ipcRenderer.invoke(IpcChannel.WorkspaceGet),
+    save: (snapshot: WorkspaceSnapshot): Promise<void> =>
+      ipcRenderer.invoke(IpcChannel.WorkspaceSave, snapshot)
   },
 
   serial: {
