@@ -7,6 +7,7 @@
 
 import type {
   AppCapabilities,
+  ContainerInfo,
   HostVerifyRequest,
   PluginCommand,
   PluginNotification,
@@ -69,6 +70,11 @@ export interface LumaApi {
   serial: {
     /** Wyłącznie odczyt listy — nie otwiera żadnego portu. */
     listPorts(): Promise<SerialPortInfo[]>;
+  };
+
+  containers: {
+    /** Wykrywa kontenery Docker i pody K8s; pusto, gdy brak CLI. Niczego nie uruchamia. */
+    list(): Promise<ContainerInfo[]>;
   };
 
   ssh: {

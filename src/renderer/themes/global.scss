@@ -881,6 +881,65 @@ body {
       font-weight: 600;
     }
   }
+
+  // Lista wykrytych kontenerów/podów w dialogu dołączania (Etap 7).
+  &__discovered {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  &__hint {
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.5;
+    padding: 4px 2px;
+  }
+
+  &__pick {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    text-align: left;
+    border: 1px solid var(--border);
+    background: var(--term-bg);
+    color: var(--text);
+    border-radius: 5px;
+    padding: 6px 9px;
+    font: inherit;
+    cursor: default;
+
+    &:hover {
+      background: rgba(90, 255, 170, 0.08);
+    }
+    &.is-active {
+      border-color: var(--accent);
+      background: var(--accent-dark);
+    }
+  }
+
+  &__pick-tag {
+    flex: 0 0 auto;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  &__pick-name {
+    font-weight: 600;
+  }
+
+  &__pick-detail {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .sftp {

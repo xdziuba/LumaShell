@@ -157,12 +157,35 @@ są w modelu i walidacji, a ich realne wpięcie w sesje przyjdzie z narzędziami
 
 ### Etap 7 — dodatkowe protokoły
 
-* TCP, UDP, TLS,
-* Telnet,
-* WebSocket,
-* Docker,
-* Kubernetes,
+* ✔ TCP i UDP — surowe gniazda (`net`, `dgram`); UDP w trybie skojarzonym z peerem,
+* ✔ TLS — TCP z szyfrowaniem, z opcją akceptacji certyfikatu self-signed,
+* ✔ Telnet — TCP z odsiewaniem negocjacji IAC i minimalną, ale poprawną polityką opcji,
+* ✔ WebSocket (ws/wss) — na globalnym `WebSocket` z Node 24, bez dodatkowej zależności,
+* ✔ Docker — dołączanie przez `docker exec -it` owinięte w PTY, z wykrywaniem kontenerów,
+* ✔ Kubernetes — dołączanie przez `kubectl exec -it`, z namespace i wykrywaniem podów,
 * dodatkowe protokoły jako wtyczki.
+
+**Etap 7 zamknięty w zakresie rdzenia.** Rodzina transportów sieciowych i owijki kontenerów
+działają jako pełnoprawne `TerminalTransport`, spójnie z SSH i portem szeregowym. Otwarte
+świadomie: publiczne API rejestracji własnych protokołów przez wtyczki — to nakładka nad
+istniejącym już kontraktem transportu, dochodzi z dojrzewaniem Plugin API (Etap 6/AI-6).
+
+> **Bez sekretów — spec idzie wprost.** Sesje sieciowe i kontenerowe nie niosą poświadczeń,
+> więc — inaczej niż SSH — parametry lecą w `SessionSpec` bez pośrednictwa deskryptora w
+> procesie głównym. Wszystko jest jednak walidowane: protokół z listy, host o dozwolonym
+> zestawie znaków, port w zakresie, a **nazwa kontenera/poda musi zaczynać się od znaku
+> alfanumerycznego** — to odcina podszycie się pod flagę CLI (np. `--privileged`). Proces
+> `docker`/`kubectl` jest uruchamiany z tablicą argumentów (bez powłoki), a `kubectl` dostaje
+> `--` przed powłoką, więc nie ma wstrzyknięcia komend.
+
+> **Telnet naprawdę negocjuje.** Serwer wysyła sekwencje IAC (WILL/DO…), a klient je odsiewa
+> ze strumienia do terminala i odpowiada: przyjmuje echo oraz „suppress go-ahead", resztę
+> odrzuca, i celowo nie odpowiada na potwierdzenia (WONT/DONT), żeby nie wpaść w pętlę.
+> Sprawdzone testem integracyjnym na żywym gnieździe (odpowiedzi DO ECHO i WILL SGA).
+
+> **Wykrywanie kontenerów jest miękkie.** `docker ps` / `kubectl get pods` z krótkim limitem
+> czasu; brak CLI albo niedziałający demon dają pustą listę, nigdy błąd — interfejs się nie
+> wywraca. Ręczne wpisanie celu zawsze działa niezależnie od wykrywania.
 
 ### Etap 8 — przygotowanie wersji 1.0
 

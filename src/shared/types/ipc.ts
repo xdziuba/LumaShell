@@ -29,6 +29,7 @@ export const IpcChannel = {
   WorkspaceSave: 'workspace:save',
   ShellList: 'shell:list',
   SerialListPorts: 'serial:listPorts',
+  ContainerList: 'container:list',
   SshConnect: 'ssh:connect',
   SshHostVerifyResponse: 'ssh:hostVerifyResponse',
   SftpRealpath: 'sftp:realpath',
@@ -122,6 +123,12 @@ export interface SerialFraming {
   rtscts?: boolean;
 }
 
+/** Protokół sesji sieciowej (Etap 7). Powtórzone w shared, by nie ciągnąć core do renderera. */
+export type NetworkProtocol = 'tcp' | 'tls' | 'telnet' | 'ws' | 'wss' | 'udp';
+
+/** Środowisko kontenera do dołączenia przez CLI (Etap 7). */
+export type ContainerRuntime = 'docker' | 'kubernetes';
+
 export type SessionSpec =
   /** `shellId` pochodzi z listy wykrytych powłok; brak = powłoka domyślna. */
   | { kind: 'pty'; shellId?: string; cwd?: string }
@@ -130,7 +137,29 @@ export type SessionSpec =
    * `connectionId` wskazuje deskryptor SSH żyjący w procesie głównym — poświadczenia
    * NIGDY nie przechodzą przez SessionSpec ani snapshot (docs/security/02-sekrety.md).
    */
-  | { kind: 'ssh'; connectionId: string; label: string };
+  | { kind: 'ssh'; connectionId: string; label: string }
+  /**
+   * Sesja sieciowa (TCP/TLS/Telnet/WebSocket/UDP). Bez sekretów, więc parametry idą wprost
+   * — inaczej niż SSH. `host`/`port` to zdalny cel; `path` dotyczy tylko WebSocketu.
+   */
+  | {
+      kind: 'network';
+      protocol: NetworkProtocol;
+      host: string;
+      port: number;
+      path?: string;
+      insecureTls?: boolean;
+      label: string;
+    }
+  /** Dołączenie do kontenera/poda przez `docker exec` / `kubectl exec` (owijka PTY). */
+  | {
+      kind: 'container';
+      runtime: ContainerRuntime;
+      target: string;
+      shell?: string;
+      namespace?: string;
+      label: string;
+    };
 
 /** Metoda uwierzytelniania SSH. */
 export type SshAuthMethod = 'password' | 'key' | 'agent';
@@ -169,6 +198,13 @@ export interface SftpEntry {
   name: string;
   type: 'dir' | 'file' | 'other';
   size: number;
+}
+
+/** Kontener/pod wykryty przez CLI — do wyboru w interfejsie (Etap 7). */
+export interface ContainerInfo {
+  runtime: ContainerRuntime;
+  target: string;
+  detail?: string;
 }
 
 /** Prośba o weryfikację klucza hosta wysyłana do renderera w trakcie handshake'u. */
