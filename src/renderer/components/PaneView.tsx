@@ -15,7 +15,7 @@ export interface PaneCallbacks {
   /** Czy zakładka tego drzewa jest na wierzchu — steruje widocznością i dopasowaniem. */
   tabActive: boolean;
   activePaneId: string;
-  onReady: (paneId: string, label: string) => void;
+  onReady: (paneId: string, label: string, sessionId: string) => void;
   onExit: (paneId: string, code: number | undefined) => void;
   onError: (paneId: string, message: string) => void;
   onRenderer: (kind: RendererKind) => void;
@@ -36,7 +36,7 @@ export function PaneView({ node, cb }: { node: Pane; cb: PaneCallbacks }): React
           spec={node.spec}
           settings={cb.settings}
           active={cb.tabActive}
-          onReady={(info) => cb.onReady(node.id, info.label)}
+          onReady={(info) => cb.onReady(node.id, info.label, info.sessionId)}
           onExit={(code) => cb.onExit(node.id, code)}
           onRenderer={cb.onRenderer}
           onError={(message) => cb.onError(node.id, message)}

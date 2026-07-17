@@ -34,6 +34,7 @@ const SettingsPanel = lazy(() => import('./settings/SettingsPanel'));
 const CommandPalette = lazy(() => import('./components/CommandPalette'));
 const SshConnectDialog = lazy(() => import('./components/SshConnectDialog'));
 const HostVerifyDialog = lazy(() => import('./components/HostVerifyDialog'));
+const SftpPanel = lazy(() => import('./components/SftpPanel'));
 
 /** Etap 2 nie ma jeszcze ustawień portu — prędkość na sztywno. */
 const PROTOTYPE_BAUD_RATE = 115200;
@@ -49,6 +50,7 @@ export function App(): React.JSX.Element {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sshOpen, setSshOpen] = useState(false);
   const [hostVerify, setHostVerify] = useState<HostVerifyRequest | null>(null);
+  const [sftpOpen, setSftpOpen] = useState(false);
 
   const {
     tabs,
@@ -166,6 +168,10 @@ export function App(): React.JSX.Element {
   // Zapis profilu obsługuje pty i serial. Profile SSH (z poświadczeniami w safeStorage)
   // to osobny kawałek Etapu 3 — sesji SSH na razie nie da się zapisać jako profil.
   const canSaveProfile = activeLeaf?.spec.kind === 'pty' || activeLeaf?.spec.kind === 'serial';
+
+  // SFTP dostępny tylko dla aktywnego panelu SSH z zestawioną sesją.
+  const sshSessionId =
+    activeLeaf?.spec.kind === 'ssh' && activeLeaf.status === 'running' ? activeLeaf.sessionId : undefined;
 
   const zapiszAktywnyJakoProfil = (): void => {
     const spec = activeLeaf?.spec;
@@ -407,7 +413,8 @@ export function App(): React.JSX.Element {
               settings,
               tabActive: tab.id === activeId,
               activePaneId: tab.activePaneId,
-              onReady: (paneId, label) => updatePane(tab.id, paneId, { label, status: 'running' }),
+              onReady: (paneId, label, sessionId) =>
+                updatePane(tab.id, paneId, { label, status: 'running', sessionId }),
               onExit: (paneId, code) =>
                 updatePane(tab.id, paneId, {
                   status: 'closed',
@@ -436,6 +443,12 @@ export function App(): React.JSX.Element {
               onChange={zmienUstawienia}
               onClose={() => setSettingsOpen(false)}
             />
+          </Suspense>
+        )}
+
+        {sftpOpen && sshSessionId && (
+          <Suspense fallback={<aside className="sftp sftp--loading">ładowanie…</aside>}>
+            <SftpPanel sessionId={sshSessionId} onClose={() => setSftpOpen(false)} />
           </Suspense>
         )}
       </div>
@@ -474,6 +487,14 @@ export function App(): React.JSX.Element {
         <span>
           Sesje: <span className="statusbar__accent">{tabs.length}</span>
         </span>
+        {sshSessionId && (
+          <button
+            className={`statusbar__button${sftpOpen ? ' is-active' : ''}`}
+            onClick={() => setSftpOpen((isOpen) => !isOpen)}
+          >
+            Pliki (SFTP)
+          </button>
+        )}
         <button
           className={`statusbar__button${settingsOpen ? ' is-active' : ''}`}
           onClick={() => setSettingsOpen((isOpen) => !isOpen)}

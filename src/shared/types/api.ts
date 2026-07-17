@@ -10,6 +10,7 @@ import type {
   HostVerifyRequest,
   SessionSpec,
   ShellInfo,
+  SftpEntry,
   SshConnectRequest,
   TerminalCreateResult,
   TerminalDataEvent,
@@ -59,6 +60,16 @@ export interface LumaApi {
     /** Prośba o weryfikację klucza hosta w trakcie łączenia. */
     onHostVerify(callback: (request: HostVerifyRequest) => void): Unsubscribe;
     respondHostVerify(requestId: string, accepted: boolean): void;
+  };
+
+  /** SFTP działa na istniejącej sesji SSH (po jej sessionId). */
+  sftp: {
+    realpath(sessionId: string, path: string): Promise<string>;
+    list(sessionId: string, path: string): Promise<SftpEntry[]>;
+    /** Pobiera plik zdalny; pokazuje dialog zapisu. `true`, gdy zapisano. */
+    download(sessionId: string, path: string): Promise<boolean>;
+    /** Wysyła wybrany plik lokalny do katalogu zdalnego; zwraca nazwę albo null. */
+    upload(sessionId: string, dir: string): Promise<string | null>;
   };
 
   terminal: {

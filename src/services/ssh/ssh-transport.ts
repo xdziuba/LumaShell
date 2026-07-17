@@ -6,12 +6,19 @@
  * forwarding i SFTP wchodzą później (docs/architecture/08-roadmapa.md).
  */
 
-import { Client, type ClientChannel } from 'ssh2';
+import { Client, type ClientChannel, type SFTPWrapper } from 'ssh2';
 import type {
   ConnectionState,
   SshOptions,
   TerminalTransport
 } from '@core/transports/transport';
+
+/** Wpis katalogu zdalnego. */
+export interface SftpEntry {
+  name: string;
+  type: 'dir' | 'file' | 'other';
+  size: number;
+}
 
 /** Kolor komunikatów LumaShell wstrzykiwanych w strumień terminala. */
 const NOTICE = (text: string): Buffer => Buffer.from(`\r\n\x1b[33m[LumaShell] ${text}\x1b[0m\r\n`);
@@ -22,6 +29,7 @@ export class SshTransport implements TerminalTransport {
 
   #client: Client | undefined;
   #stream: ClientChannel | undefined;
+  #sftp: SFTPWrapper | undefined;
   #state: ConnectionState = 'idle';
   #dataHandlers: Array<(data: Uint8Array) => void> = [];
   #stateHandlers: Array<(state: ConnectionState) => void> = [];
@@ -115,6 +123,7 @@ export class SshTransport implements TerminalTransport {
   async #handleDrop(): Promise<void> {
     this.#client = undefined;
     this.#stream = undefined;
+    this.#sftp = undefined;
 
     const attempts = this.options.reconnect?.attempts ?? 5;
     const baseDelay = this.options.reconnect?.delayMs ?? 1000;
@@ -153,6 +162,7 @@ export class SshTransport implements TerminalTransport {
     if (this.#reconnectTimer) clearTimeout(this.#reconnectTimer);
     this.#stream?.end();
     this.#stream = undefined;
+    this.#sftp = undefined;
     this.#client?.end();
     this.#client = undefined;
     if (this.#state !== 'closed') this.#setState('closed');
@@ -165,6 +175,61 @@ export class SshTransport implements TerminalTransport {
   async resize(columns: number, rows: number): Promise<void> {
     // Wysokość i szerokość w pikselach są nieznane — zero oznacza „bez znaczenia".
     this.#stream?.setWindow(rows, columns, 0, 0);
+  }
+
+  // --- SFTP: podsystem plików na tym samym połączeniu SSH ---
+
+  /** Otwiera (leniwie) i cache'uje jedną sesję SFTP na tym połączeniu. */
+  async #ensureSftp(): Promise<SFTPWrapper> {
+    if (this.#sftp) return this.#sftp;
+    const client = this.#client;
+    if (!client) throw new Error('Sesja SSH nie jest połączona');
+    this.#sftp = await new Promise<SFTPWrapper>((resolve, reject) => {
+      client.sftp((error, sftp) => (error ? reject(error) : resolve(sftp)));
+    });
+    // Po zerwaniu klienta cache SFTP jest nieważny.
+    this.#sftp.once('close', () => {
+      this.#sftp = undefined;
+    });
+    return this.#sftp;
+  }
+
+  /** Rozwija ścieżkę (np. '.' albo '~') do bezwzględnej — punkt startowy przeglądarki. */
+  async sftpRealpath(path: string): Promise<string> {
+    const sftp = await this.#ensureSftp();
+    return new Promise<string>((resolve, reject) => {
+      sftp.realpath(path, (error, abs) => (error ? reject(error) : resolve(abs)));
+    });
+  }
+
+  async sftpList(path: string): Promise<SftpEntry[]> {
+    const sftp = await this.#ensureSftp();
+    return new Promise<SftpEntry[]>((resolve, reject) => {
+      sftp.readdir(path, (error, list) => {
+        if (error) return reject(error);
+        resolve(
+          list.map((entry) => ({
+            name: entry.filename,
+            type: entry.attrs.isDirectory() ? 'dir' : entry.attrs.isFile() ? 'file' : 'other',
+            size: entry.attrs.size
+          }))
+        );
+      });
+    });
+  }
+
+  async sftpRead(path: string): Promise<Buffer> {
+    const sftp = await this.#ensureSftp();
+    return new Promise<Buffer>((resolve, reject) => {
+      sftp.readFile(path, (error, data) => (error ? reject(error) : resolve(data)));
+    });
+  }
+
+  async sftpWrite(path: string, data: Buffer): Promise<void> {
+    const sftp = await this.#ensureSftp();
+    return new Promise<void>((resolve, reject) => {
+      sftp.writeFile(path, data, (error) => (error ? reject(error) : resolve()));
+    });
   }
 
   onData(callback: (data: Uint8Array) => void): void {

@@ -26,7 +26,7 @@ interface TerminalViewProps {
    * ukryte i nie przeliczają wymiarów (docs/architecture/05-wydajnosc.md).
    */
   active: boolean;
-  onReady: (info: { label: string }) => void;
+  onReady: (info: { label: string; sessionId: string }) => void;
   onExit: (exitCode: number | undefined) => void;
   onRenderer: (kind: RendererKind) => void;
   onError: (message: string) => void;
@@ -194,7 +194,7 @@ export function TerminalView({
         }
 
         sessionIdRef.current = session.sessionId;
-        onReadyRef.current({ label: session.label });
+        onReadyRef.current({ label: session.label, sessionId: session.sessionId });
 
         cleanups.push(
           window.luma.terminal.onData((event) => {

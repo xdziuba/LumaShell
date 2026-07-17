@@ -77,9 +77,13 @@ to osobny temat). Podziały międzyokienne i quake mode należą do dalszych eta
 * ✔ keep-alive,
 * ✔ magazyn poświadczeń przez safeStorage (DPAPI),
 * ✔ reconnect — automatyczne wznawianie po zerwaniu, backoff wykładniczy, komunikat w terminalu,
+* ✔ SFTP — przeglądarka plików na sesji SSH: listowanie, nawigacja, pobieranie, wysyłanie,
 * forwarding,
-* jump host,
-* SFTP.
+* jump host.
+
+> SFTP działa na istniejącej sesji SSH (jedna sesja SFTP na połączenie, otwierana leniwie).
+> Pobieranie i wysyłanie korzystają z natywnych dialogów zapisu/otwarcia. Port forwarding
+> i jump host to pozostałe elementy tego etapu.
 
 > **Bezpieczeństwo poświadczeń.** Hasła i hasła kluczy nigdy nie przechodzą przez
 > `SessionSpec` ani snapshot workspace'u — deskryptor połączenia z sekretami żyje ulotnie

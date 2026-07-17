@@ -24,6 +24,10 @@ export const IpcChannel = {
   SerialListPorts: 'serial:listPorts',
   SshConnect: 'ssh:connect',
   SshHostVerifyResponse: 'ssh:hostVerifyResponse',
+  SftpRealpath: 'sftp:realpath',
+  SftpList: 'sftp:list',
+  SftpDownload: 'sftp:download',
+  SftpUpload: 'sftp:upload',
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
   TerminalResize: 'terminal:resize',
@@ -104,6 +108,13 @@ export interface SshConnectRequest {
   /** Ścieżka do pliku klucza prywatnego (auth = 'key'). */
   keyPath?: string;
   passphrase?: string;
+}
+
+/** Wpis w zdalnym katalogu (SFTP). */
+export interface SftpEntry {
+  name: string;
+  type: 'dir' | 'file' | 'other';
+  size: number;
 }
 
 /** Prośba o weryfikację klucza hosta wysyłana do renderera w trakcie handshake'u. */

@@ -21,6 +21,8 @@ export interface LeafPane {
   label: string;
   status: PaneStatus;
   detail?: string;
+  /** Identyfikator sesji z procesu głównego — ustawiany po zestawieniu (do SFTP itp.). */
+  sessionId?: string;
 }
 
 export interface SplitPane {

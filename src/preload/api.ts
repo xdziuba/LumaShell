@@ -17,6 +17,7 @@ import {
   type HostVerifyRequest,
   type SessionSpec,
   type ShellInfo,
+  type SftpEntry,
   type SshConnectRequest,
   type TerminalCreateResult,
   type TerminalDataEvent,
@@ -69,6 +70,17 @@ export const api: LumaApi = {
     respondHostVerify: (requestId: string, accepted: boolean): void => {
       ipcRenderer.send(IpcChannel.SshHostVerifyResponse, { requestId, accepted });
     }
+  },
+
+  sftp: {
+    realpath: (sessionId: string, path: string): Promise<string> =>
+      ipcRenderer.invoke(IpcChannel.SftpRealpath, sessionId, path),
+    list: (sessionId: string, path: string): Promise<SftpEntry[]> =>
+      ipcRenderer.invoke(IpcChannel.SftpList, sessionId, path),
+    download: (sessionId: string, path: string): Promise<boolean> =>
+      ipcRenderer.invoke(IpcChannel.SftpDownload, sessionId, path),
+    upload: (sessionId: string, dir: string): Promise<string | null> =>
+      ipcRenderer.invoke(IpcChannel.SftpUpload, sessionId, dir)
   },
 
   terminal: {
