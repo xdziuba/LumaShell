@@ -7,8 +7,9 @@
  */
 
 const base = 'http://127.0.0.1:9222';
+// Wyklucz stronę plugin-host (też kończy się index.html) — inaczej trafiamy w okno bez zakładek.
 const page = (await (await fetch(`${base}/json`)).json()).find(
-  (t) => t.type === 'page' && t.url.includes('index.html')
+  (t) => t.type === 'page' && t.url.includes('index.html') && !t.url.includes('plugin-host')
 );
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 let id = 0;
