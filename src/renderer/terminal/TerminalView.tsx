@@ -29,6 +29,8 @@ interface TerminalViewProps {
   active: boolean;
   /** Tryb monitora — gdy podany, dane są przetwarzane (hex / znaczniki czasu). */
   monitor?: MonitorMode;
+  /** Kolory terminala z aktywnego motywu (xterm nie czyta CSS). */
+  terminalTheme: { background: string; foreground: string; cursor: string; selection: string };
   onReady: (info: { label: string; sessionId: string }) => void;
   onExit: (exitCode: number | undefined) => void;
   onRenderer: (kind: RendererKind) => void;
@@ -40,6 +42,7 @@ export function TerminalView({
   settings,
   active,
   monitor,
+  terminalTheme,
   onReady,
   onExit,
   onRenderer,
@@ -66,6 +69,8 @@ export function TerminalView({
   // Tryb monitora w refie — zmiana nie może restartować sesji.
   const monitorRef = useRef(monitor);
   const hexRef = useRef<HexFormatter | null>(null);
+  const terminalThemeRef = useRef(terminalTheme);
+  terminalThemeRef.current = terminalTheme;
 
   /**
    * Dopasowanie terminala do kontenera i przekazanie nowego rozmiaru do sesji.
@@ -101,10 +106,10 @@ export function TerminalView({
       scrollback: initial.scrollback,
       allowProposedApi: true,
       theme: {
-        background: '#06100C',
-        foreground: '#DFFFF0',
-        cursor: '#21E68A',
-        selectionBackground: 'rgba(33, 230, 138, 0.25)'
+        background: terminalThemeRef.current.background,
+        foreground: terminalThemeRef.current.foreground,
+        cursor: terminalThemeRef.current.cursor,
+        selectionBackground: terminalThemeRef.current.selection
       }
     });
 
@@ -276,6 +281,18 @@ export function TerminalView({
   useEffect(() => {
     if (active) dopasuj();
   }, [active, dopasuj]);
+
+  // Zmiana motywu na żywo — kolory terminala, bez restartu sesji.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.options.theme = {
+      background: terminalTheme.background,
+      foreground: terminalTheme.foreground,
+      cursor: terminalTheme.cursor,
+      selectionBackground: terminalTheme.selection
+    };
+  }, [terminalTheme]);
 
   // Zmiana trybu monitora: domknij niepełną linię hex i zaznacz przełączenie, żeby
   // dane sprzed i po zmianie się nie zlewały.

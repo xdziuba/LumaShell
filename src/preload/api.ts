@@ -8,6 +8,7 @@
 import { ipcRenderer } from 'electron';
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { Profile } from '@core/profiles/profile';
+import type { Theme } from '@core/theme/theme';
 import type { LumaApi, Unsubscribe } from '@shared/types/api';
 import type { TerminalSettings } from '@shared/types/settings';
 import {
@@ -50,6 +51,16 @@ export const api: LumaApi = {
     save: (profile: Profile): Promise<Profile[]> =>
       ipcRenderer.invoke(IpcChannel.ProfilesSave, profile),
     delete: (id: string): Promise<Profile[]> => ipcRenderer.invoke(IpcChannel.ProfilesDelete, id)
+  },
+
+  themes: {
+    get: (): Promise<{ themes: Theme[]; selectedId: string }> =>
+      ipcRenderer.invoke(IpcChannel.ThemesGet),
+    select: (id: string): Promise<void> => ipcRenderer.invoke(IpcChannel.ThemeSelect, id),
+    save: (theme: Theme): Promise<Theme[]> => ipcRenderer.invoke(IpcChannel.ThemeSave, theme),
+    delete: (id: string): Promise<Theme[]> => ipcRenderer.invoke(IpcChannel.ThemeDelete, id),
+    import: (): Promise<Theme[] | null> => ipcRenderer.invoke(IpcChannel.ThemeImport),
+    export: (theme: Theme): Promise<boolean> => ipcRenderer.invoke(IpcChannel.ThemeExport, theme)
   },
 
   workspace: {

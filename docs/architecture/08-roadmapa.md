@@ -115,14 +115,20 @@ to osobny temat). Podziały międzyokienne i quake mode należą do dalszych eta
 
 ### Etap 5 — system motywów
 
-* motywy JSON,
-* edytor motywów,
-* import i eksport,
-* zmiana akcentu,
-* konfiguracja szkła,
+* ✔ motywy JSON — model w `core`, mapowany na zmienne CSS na żywo,
+* ✔ wbudowane motywy (Dark Green Glass, Midnight Blue, Amber CRT) + przełączanie,
+* ✔ edytor motywów — kolory z podglądem na żywo, promień zaokrągleń, zapis jako własny,
+* ✔ import i eksport (pliki JSON),
+* ✔ zmiana akcentu (część edytora),
+* ✔ ustawienia czcionek (z Etapu 1),
+* konfiguracja szkła (blur/opacity),
 * gradienty,
-* tapety,
-* ustawienia czcionek.
+* tapety.
+
+> Motyw jest stosowany przez zmienne CSS na `:root`, więc zmienia cały interfejs bez
+> przeładowania; kolory terminala idą osobno do xterm (nie czyta CSS). Kolory z importu są
+> **odkażane** przed wstawieniem do CSS (usuwane znaki składni), a motywów wbudowanych nie
+> da się nadpisać. Konfiguracja szkła, gradienty i tapety to możliwe rozszerzenia edytora.
 
 ### Etap 6 — system wtyczek
 

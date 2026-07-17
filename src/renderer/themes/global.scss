@@ -568,6 +568,21 @@ body {
     text-overflow: ellipsis;
   }
 
+  &__select {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font: inherit;
+    font-size: 11px;
+    padding: 1px 4px;
+
+    option {
+      background: var(--bg-panel);
+      color: var(--text);
+    }
+  }
+
   &__button {
     border: 0;
     background: transparent;
@@ -929,6 +944,45 @@ body {
     padding: 10px 14px;
     color: var(--text-muted);
   }
+}
+
+// Wiersz edytora motywu: etykieta, próbnik koloru, pole tekstowe.
+.theme-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  span {
+    flex: 0 0 auto;
+    margin-bottom: 0;
+    min-width: 120px;
+  }
+}
+.theme-swatch {
+  width: 26px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  flex: 0 0 auto;
+}
+.theme-color-text {
+  flex: 1;
+  min-width: 0;
+  background: var(--term-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+}
+.theme-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
 }
 
 .settings {

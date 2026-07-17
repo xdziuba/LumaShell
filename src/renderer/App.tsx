@@ -6,7 +6,9 @@ import { SerialMacros } from './components/SerialMacros';
 import { type RendererKind } from './terminal/TerminalView';
 import { useShortcuts, type ShortcutMap } from './hooks/useShortcuts';
 import { serializeTab, useWorkspace } from './store/workspace';
+import { applyTheme } from './theme/apply-theme';
 import { findLeaf, leaves } from '@core/workspace/pane-tree';
+import { BUILT_IN_THEMES, type Theme } from '@core/theme/theme';
 import type { Command } from './commands/types';
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { Profile } from '@core/profiles/profile';
@@ -37,6 +39,7 @@ const SshConnectDialog = lazy(() => import('./components/SshConnectDialog'));
 const HostVerifyDialog = lazy(() => import('./components/HostVerifyDialog'));
 const SftpPanel = lazy(() => import('./components/SftpPanel'));
 const SerialConnectDialog = lazy(() => import('./components/SerialConnectDialog'));
+const ThemeEditor = lazy(() => import('./components/ThemeEditor'));
 
 export function App(): React.JSX.Element {
   const [capabilities, setCapabilities] = useState<AppCapabilities | null>(null);
@@ -45,6 +48,9 @@ export function App(): React.JSX.Element {
   const [renderer, setRenderer] = useState<RendererKind | null>(null);
   const [settings, setSettings] = useState<TerminalSettings>(DEFAULT_SETTINGS);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [themes, setThemes] = useState<Theme[]>(BUILT_IN_THEMES);
+  const [themeId, setThemeId] = useState<string>(BUILT_IN_THEMES[0]!.id);
+  const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sshOpen, setSshOpen] = useState(false);
@@ -103,6 +109,12 @@ export function App(): React.JSX.Element {
     });
     void window.luma.settings.get().then(setSettings);
     void window.luma.profiles.list().then(setProfiles);
+    void window.luma.themes.get().then(({ themes: list, selectedId }) => {
+      setThemes(list);
+      setThemeId(selectedId);
+      const active = list.find((t) => t.id === selectedId);
+      if (active) applyTheme(active);
+    });
     // Listowanie portów niczego nie otwiera, więc jest bezpieczne przy starcie.
     void window.luma.serial.listPorts().then(setPorts);
 
@@ -152,6 +164,50 @@ export function App(): React.JSX.Element {
     // więc to one są ostatecznie prawdą.
     setSettings(next);
     void window.luma.settings.save(next).then(setSettings);
+  };
+
+  const activeTheme = themes.find((t) => t.id === themeId) ?? BUILT_IN_THEMES[0]!;
+  const terminalTheme = {
+    background: activeTheme.terminal.background,
+    foreground: activeTheme.terminal.foreground,
+    cursor: activeTheme.terminal.cursor,
+    selection: activeTheme.terminal.selection
+  };
+
+  const wybierzMotyw = (id: string): void => {
+    setThemeId(id);
+    const t = themes.find((x) => x.id === id);
+    if (t) applyTheme(t);
+    void window.luma.themes.select(id);
+  };
+
+  // Podgląd motywu na żywo w edytorze — stosuje bez zapisu.
+  const podgladMotywu = (t: Theme): void => applyTheme(t);
+
+  const zapiszMotyw = (t: Theme): void => {
+    void window.luma.themes.save(t).then((list) => {
+      setThemes(list);
+      wybierzMotyw(t.id);
+    });
+  };
+
+  const importujMotyw = (): void => {
+    void window.luma.themes.import().then((list) => {
+      if (!list) return;
+      setThemes(list);
+      // Zaimportowany motyw to ostatni na liście własnych — wybierz go.
+      const last = list.at(-1);
+      if (last) wybierzMotyw(last.id);
+    });
+  };
+
+  const usunMotyw = (id: string): void => {
+    void window.luma.themes.delete(id).then((list) => {
+      setThemes(list);
+      // Po usunięciu wróć do domyślnego i zastosuj go.
+      wybierzMotyw(BUILT_IN_THEMES[0]!.id);
+      setThemeEditorOpen(false);
+    });
   };
 
   const otworzPowloke = (shell: ShellInfo): void =>
@@ -451,6 +507,7 @@ export function App(): React.JSX.Element {
           {tabs.map((tab) => {
             const cb: PaneCallbacks = {
               settings,
+              terminalTheme,
               tabActive: tab.id === activeId,
               activePaneId: tab.activePaneId,
               onReady: (paneId, label, sessionId) =>
@@ -489,6 +546,23 @@ export function App(): React.JSX.Element {
         {sftpOpen && sshSessionId && (
           <Suspense fallback={<aside className="sftp sftp--loading">ładowanie…</aside>}>
             <SftpPanel sessionId={sshSessionId} onClose={() => setSftpOpen(false)} />
+          </Suspense>
+        )}
+
+        {themeEditorOpen && (
+          <Suspense fallback={<aside className="settings settings--loading">ładowanie…</aside>}>
+            <ThemeEditor
+              base={activeTheme}
+              onPreview={podgladMotywu}
+              onSave={zapiszMotyw}
+              onImport={importujMotyw}
+              onExport={(t) => void window.luma.themes.export(t)}
+              onDelete={usunMotyw}
+              onClose={() => {
+                setThemeEditorOpen(false);
+                applyTheme(activeTheme); // cofnij ewentualny podgląd do zapisanego
+              }}
+            />
           </Suspense>
         )}
       </div>
@@ -584,6 +658,24 @@ export function App(): React.JSX.Element {
             {isLogging ? '● Zapis' : 'Zapis do pliku'}
           </button>
         )}
+        <select
+          className="statusbar__select"
+          value={themeId}
+          onChange={(e) => wybierzMotyw(e.target.value)}
+          title="Motyw"
+        >
+          {themes.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+        <button
+          className={`statusbar__button${themeEditorOpen ? ' is-active' : ''}`}
+          onClick={() => setThemeEditorOpen((v) => !v)}
+        >
+          Motyw…
+        </button>
         <button
           className={`statusbar__button${settingsOpen ? ' is-active' : ''}`}
           onClick={() => setSettingsOpen((isOpen) => !isOpen)}

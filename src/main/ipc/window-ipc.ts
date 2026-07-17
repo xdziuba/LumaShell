@@ -6,14 +6,22 @@
  * Snap Layouts (docs/architecture/10-decyzje.md).
  */
 
-import { ipcMain } from 'electron';
+import { readFile, writeFile } from 'node:fs/promises';
+import { dialog, ipcMain, type BrowserWindow } from 'electron';
 import { detectCapabilities } from '../capabilities';
 import { loadSettings, saveSettings } from '../settings-store';
 import { deleteProfile, listProfiles, saveProfile } from '../profiles-store';
 import { loadWorkspace, saveWorkspace } from '../workspace-store';
+import {
+  deleteCustomTheme,
+  getThemeState,
+  saveCustomTheme,
+  selectTheme
+} from '../themes-store';
+import { parseTheme } from '@shared/schemas/theme-validation';
 import { IpcChannel } from '@shared/types/ipc';
 
-export function registerWindowIpc(): void {
+export function registerWindowIpc(window: BrowserWindow): void {
   ipcMain.handle(IpcChannel.AppCapabilities, () => detectCapabilities());
 
   ipcMain.handle(IpcChannel.SettingsGet, () => loadSettings());
@@ -27,4 +35,29 @@ export function registerWindowIpc(): void {
 
   ipcMain.handle(IpcChannel.WorkspaceGet, () => loadWorkspace());
   ipcMain.handle(IpcChannel.WorkspaceSave, (_event, payload) => saveWorkspace(payload));
+
+  ipcMain.handle(IpcChannel.ThemesGet, () => getThemeState());
+  ipcMain.handle(IpcChannel.ThemeSelect, (_event, id) => selectTheme(id));
+  ipcMain.handle(IpcChannel.ThemeSave, (_event, payload) => saveCustomTheme(payload));
+  ipcMain.handle(IpcChannel.ThemeDelete, (_event, id) => deleteCustomTheme(id));
+
+  // Import: wczytaj plik JSON, zwaliduj (dane niezaufane) i zapisz jako własny.
+  ipcMain.handle(IpcChannel.ThemeImport, async () => {
+    const result = await dialog.showOpenDialog(window, {
+      properties: ['openFile'],
+      filters: [{ name: 'Motyw LumaShell', extensions: ['json'] }]
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const theme = parseTheme(JSON.parse(await readFile(result.filePaths[0]!, 'utf8')));
+    return saveCustomTheme(theme);
+  });
+
+  // Eksport: zapisz wskazany motyw do pliku JSON.
+  ipcMain.handle(IpcChannel.ThemeExport, async (_event, payload): Promise<boolean> => {
+    const theme = parseTheme(payload);
+    const result = await dialog.showSaveDialog(window, { defaultPath: `${theme.id}.json` });
+    if (result.canceled || !result.filePath) return false;
+    await writeFile(result.filePath, JSON.stringify(theme, null, 2), 'utf8');
+    return true;
+  });
 }

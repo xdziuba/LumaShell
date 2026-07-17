@@ -12,6 +12,8 @@ import type { TerminalSettings } from '@shared/types/settings';
 
 export interface PaneCallbacks {
   settings: TerminalSettings;
+  /** Kolory terminala z aktywnego motywu. */
+  terminalTheme: { background: string; foreground: string; cursor: string; selection: string };
   /** Czy zakładka tego drzewa jest na wierzchu — steruje widocznością i dopasowaniem. */
   tabActive: boolean;
   activePaneId: string;
@@ -37,6 +39,7 @@ export function PaneView({ node, cb }: { node: Pane; cb: PaneCallbacks }): React
           settings={cb.settings}
           active={cb.tabActive}
           monitor={node.monitor}
+          terminalTheme={cb.terminalTheme}
           onReady={(info) => cb.onReady(node.id, info.label, info.sessionId)}
           onExit={(code) => cb.onExit(node.id, code)}
           onRenderer={cb.onRenderer}

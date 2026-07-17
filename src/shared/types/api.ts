@@ -19,6 +19,7 @@ import type {
 } from './ipc';
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { Profile } from '@core/profiles/profile';
+import type { Theme } from '@core/theme/theme';
 import type { TerminalSettings } from './settings';
 
 /** Każdy nasłuch zwraca funkcję wypisującą. */
@@ -41,6 +42,18 @@ export interface LumaApi {
     /** Wstawia lub nadpisuje profil po id; zwraca pełną listę. */
     save(profile: Profile): Promise<Profile[]>;
     delete(id: string): Promise<Profile[]>;
+  };
+
+  themes: {
+    /** Lista motywów (wbudowane + własne) oraz id aktywnego. */
+    get(): Promise<{ themes: Theme[]; selectedId: string }>;
+    select(id: string): Promise<void>;
+    save(theme: Theme): Promise<Theme[]>;
+    delete(id: string): Promise<Theme[]>;
+    /** Import z pliku (dialog); zwraca nową listę albo null przy anulowaniu. */
+    import(): Promise<Theme[] | null>;
+    /** Eksport motywu do pliku (dialog); `true`, gdy zapisano. */
+    export(theme: Theme): Promise<boolean>;
   };
 
   workspace: {
