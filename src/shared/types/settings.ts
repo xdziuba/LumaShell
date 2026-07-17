@@ -14,6 +14,8 @@ export interface TerminalSettings {
   cursorBlink: boolean;
   /** Liczba linii historii przewijania trzymanych w buforze. */
   scrollback: number;
+  /** Zapamiętane makra portu szeregowego (gotowe komendy). */
+  serialMacros: string[];
 }
 
 export const DEFAULT_SETTINGS: TerminalSettings = {
@@ -22,7 +24,8 @@ export const DEFAULT_SETTINGS: TerminalSettings = {
   lineHeight: 1.2,
   letterSpacing: 0,
   cursorBlink: true,
-  scrollback: 5000
+  scrollback: 5000,
+  serialMacros: []
 };
 
 /**
@@ -36,5 +39,7 @@ export const SETTINGS_LIMITS = {
   lineHeight: { min: 1, max: 3 },
   letterSpacing: { min: -2, max: 8 },
   scrollback: { min: 0, max: 200_000 },
-  fontFamilyMaxLength: 120
+  fontFamilyMaxLength: 120,
+  macroMaxLength: 512,
+  macroMaxCount: 100
 } as const;

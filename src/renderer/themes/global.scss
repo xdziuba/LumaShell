@@ -452,6 +452,97 @@ body {
   }
 }
 
+.macros {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  @include glass(rgba(20, 55, 40, 0.4), rgba(5, 18, 13, 0.28), var(--bg-panel));
+
+  &__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  &__item {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  &__send {
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    font-size: 11px;
+    padding: 3px 8px;
+    cursor: default;
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &:hover {
+      background: rgba(90, 255, 170, 0.1);
+    }
+  }
+
+  &__del {
+    border: 0;
+    border-left: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 9px;
+    padding: 0 5px;
+    cursor: default;
+
+    &:hover {
+      background: rgba(255, 95, 86, 0.25);
+      color: #fff;
+    }
+  }
+
+  &__form {
+    display: flex;
+    gap: 6px;
+  }
+
+  &__input {
+    flex: 1;
+    min-width: 0;
+    background: var(--term-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font: inherit;
+    font-size: 12px;
+  }
+
+  &__ending,
+  &__submit {
+    background: var(--term-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font: inherit;
+    font-size: 11px;
+    cursor: default;
+  }
+
+  &__submit:hover {
+    background: rgba(90, 255, 170, 0.1);
+  }
+}
+
 .statusbar {
   flex: 0 0 auto;
   height: 24px;

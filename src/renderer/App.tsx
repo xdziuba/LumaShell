@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { TabBar, type TabView } from './components/TabBar';
 import { TitleBar } from './components/TitleBar';
 import { PaneView, type PaneCallbacks } from './components/PaneView';
+import { SerialMacros } from './components/SerialMacros';
 import { type RendererKind } from './terminal/TerminalView';
 import { useShortcuts, type ShortcutMap } from './hooks/useShortcuts';
 import { serializeTab, useWorkspace } from './store/workspace';
@@ -186,6 +187,14 @@ export function App(): React.JSX.Element {
     if (!activeTab || !activeLeaf) return;
     updatePane(activeTab.id, activeLeaf.id, { monitor: { ...monitor, ...patch } });
   };
+
+  const wyslijDoPortu = (text: string): void => {
+    if (activeSessionId) void window.luma.terminal.write(activeSessionId, text);
+  };
+  const dodajMakro = (m: string): void =>
+    zmienUstawienia({ ...settings, serialMacros: [...settings.serialMacros, m] });
+  const usunMakro = (m: string): void =>
+    zmienUstawienia({ ...settings, serialMacros: settings.serialMacros.filter((x) => x !== m) });
 
   const przelaczZapis = (): void => {
     if (!activeSessionId) return;
@@ -483,6 +492,15 @@ export function App(): React.JSX.Element {
           </Suspense>
         )}
       </div>
+
+      {isSerial && activeSessionId && (
+        <SerialMacros
+          macros={settings.serialMacros}
+          onSend={wyslijDoPortu}
+          onAddMacro={dodajMakro}
+          onRemoveMacro={usunMakro}
+        />
+      )}
 
       {paletteOpen && (
         <Suspense fallback={null}>

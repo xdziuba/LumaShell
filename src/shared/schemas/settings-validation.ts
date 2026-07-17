@@ -71,6 +71,16 @@ export function parseSettings(payload: unknown): TerminalSettings {
         SETTINGS_LIMITS.scrollback.min,
         SETTINGS_LIMITS.scrollback.max
       )
-    )
+    ),
+    serialMacros: makra(source['serialMacros'])
   };
+}
+
+/** Makra: tablica niepustych tekstów, przycięta co do długości i liczby. */
+function makra(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((m): m is string => typeof m === 'string' && m.length > 0)
+    .map((m) => m.slice(0, SETTINGS_LIMITS.macroMaxLength))
+    .slice(0, SETTINGS_LIMITS.macroMaxCount);
 }
