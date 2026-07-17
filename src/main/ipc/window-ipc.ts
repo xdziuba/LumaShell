@@ -1,9 +1,9 @@
 /**
- * IPC okna: możliwości środowiska.
+ * IPC okna: możliwości środowiska, ustawienia, profile, motywy oraz sterowanie oknem.
  *
- * Minimalizacja, maksymalizacja i zamykanie okna nie mają tu swoich kanałów —
- * obsługują je natywne przyciski Window Controls Overlay, dzięki czemu działa
- * Snap Layouts (docs/architecture/10-decyzje.md).
+ * Minimalizacja, maksymalizacja i zamykanie mają własne kanały — okno ma teraz własne
+ * przyciski (kółka), nie natywne Window Controls Overlay. To świadoma rezygnacja ze Snap
+ * Layouts na rzecz spójnego wyglądu (aktualizacja decyzji D1, docs/architecture/10-decyzje.md).
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
@@ -19,10 +19,29 @@ import {
   selectTheme
 } from '../themes-store';
 import { parseTheme } from '@shared/schemas/theme-validation';
-import { IpcChannel } from '@shared/types/ipc';
+import { IpcChannel, IpcEvent } from '@shared/types/ipc';
 
 export function registerWindowIpc(window: BrowserWindow): void {
   ipcMain.handle(IpcChannel.AppCapabilities, () => detectCapabilities());
+
+  // Sterowanie oknem obsługują teraz własne przyciski (kółka), nie natywne WCO — świadoma
+  // rezygnacja ze Snap Layouts na rzecz spójnej estetyki (docs/architecture/10-decyzje.md).
+  ipcMain.handle(IpcChannel.WindowMinimize, () => window.minimize());
+  ipcMain.handle(IpcChannel.WindowMaximizeToggle, () => {
+    if (window.isMaximized()) window.unmaximize();
+    else window.maximize();
+  });
+  ipcMain.handle(IpcChannel.WindowClose, () => window.close());
+  ipcMain.handle(IpcChannel.WindowIsMaximized, () => window.isMaximized());
+
+  // Renderer aktualizuje ikonę maksymalizacji po zmianie stanu okna (także przez Win+strzałki).
+  const emitMaximized = (): void => {
+    if (!window.isDestroyed()) {
+      window.webContents.send(IpcEvent.WindowMaximizedChanged, window.isMaximized());
+    }
+  };
+  window.on('maximize', emitMaximized);
+  window.on('unmaximize', emitMaximized);
 
   ipcMain.handle(IpcChannel.SettingsGet, () => loadSettings());
   // Ładunek jest niezaufany — saveSettings przepuszcza go przez walidację i przycina

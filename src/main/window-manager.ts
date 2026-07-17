@@ -11,8 +11,6 @@ import { detectCapabilities } from './capabilities';
 
 /** Tło przy wyłączonym acrylicu — jednolite, nigdy przezroczyste. */
 const OPAQUE_BACKGROUND = '#07110D';
-/** Musi odpowiadać --titlebar-height w src/renderer/themes/_tokens.scss. */
-const TITLEBAR_HEIGHT = 38;
 
 export function createMainWindow(): BrowserWindow {
   const capabilities = detectCapabilities();
@@ -26,20 +24,12 @@ export function createMainWindow(): BrowserWindow {
     // Ikona aplikacji (pasek zadań, Alt+Tab). Źródło w resources/ — poza bundlem renderera.
     // W spakowanej wersji (Etap 8) ikonę exe ustawi electron-builder osobno.
     icon: join(__dirname, '../../resources/icon.png'),
-    // `titleBarStyle: 'hidden'` + `titleBarOverlay` zamiast `frame: false`.
+    // `titleBarStyle: 'hidden'` bez `titleBarOverlay`: brak natywnych przycisków, rysujemy
+    // własne (kolorowe kółka) w pasku tytułu. Sterowanie oknem idzie przez IPC (window-ipc).
     //
-    // Przy `frame: false` przyciski okna są zwykłymi elementami HTML, więc Windows nie
-    // wie, gdzie jest przycisk maksymalizacji, i Snap Layouts nie działa. Window Controls
-    // Overlay daje natywne przyciski (a z nimi Snap Layouts, poprawny hover i
-    // dostępność), zostawiając nam pełną kontrolę nad resztą paska.
+    // To aktualizacja decyzji D1: rezygnujemy z natywnego WCO (a z nim ze Snap Layouts) na
+    // rzecz spójnej estetyki. Okno pozostaje przesuwalne (region drag) i skalowalne.
     titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      // Zerowa alfa — acrylic przebija także pod przyciskami. Bez rozmycia strip
-      // przycisków musi mieć kolor panelu, inaczej byłby przezroczysty na pulpit.
-      color: capabilities.acrylic ? '#00000000' : '#0B1913',
-      symbolColor: '#8CB8A3',
-      height: TITLEBAR_HEIGHT
-    },
     // Zerowa alfa tylko wtedy, gdy system faktycznie dorysuje rozmycie.
     // Bez acrylicu zerowa alfa dałaby okno przezroczyste na ostry pulpit —
     // efekt gorszy niż jego brak.

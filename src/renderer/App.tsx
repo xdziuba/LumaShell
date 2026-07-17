@@ -3,7 +3,7 @@ import { TabBar, type TabView } from './components/TabBar';
 import { TitleBar } from './components/TitleBar';
 import { PaneView, type PaneCallbacks } from './components/PaneView';
 import { SerialMacros } from './components/SerialMacros';
-import { type RendererKind } from './terminal/TerminalView';
+import { Dropup } from './components/Dropup';
 import { useShortcuts, type ShortcutMap } from './hooks/useShortcuts';
 import { serializeTab, useWorkspace } from './store/workspace';
 import { applyTheme } from './theme/apply-theme';
@@ -22,7 +22,6 @@ import type { Command } from './commands/types';
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { Profile } from '@core/profiles/profile';
 import type {
-  AppCapabilities,
   HostVerifyRequest,
   PluginCommand,
   PluginNotification,
@@ -55,10 +54,8 @@ const ContainerConnectDialog = lazy(() => import('./components/ContainerConnectD
 const ThemeEditor = lazy(() => import('./components/ThemeEditor'));
 
 export function App(): React.JSX.Element {
-  const [capabilities, setCapabilities] = useState<AppCapabilities | null>(null);
   const [shells, setShells] = useState<ShellInfo[]>([]);
   const [ports, setPorts] = useState<SerialPortInfo[]>([]);
-  const [renderer, setRenderer] = useState<RendererKind | null>(null);
   const [settings, setSettings] = useState<TerminalSettings>(DEFAULT_SETTINGS);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [themes, setThemes] = useState<Theme[]>(BUILT_IN_THEMES);
@@ -90,7 +87,7 @@ export function App(): React.JSX.Element {
     closePane,
     focusPane,
     resizeSplit,
-    reorderTab
+    setTabOrder
   } = useWorkspace();
 
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
@@ -120,7 +117,6 @@ export function App(): React.JSX.Element {
     wystartowano.current = true;
 
     void window.luma.getCapabilities().then((value) => {
-      setCapabilities(value);
       // Renderer nie wykrywa systemu sam — dostaje gotową flagę i tylko przełącza styl
       // (docs/architecture/03-interfejs-i-motywy.md#degradacja-na-windows-10).
       document.documentElement.dataset.acrylic = String(value.acrylic);
@@ -488,7 +484,7 @@ export function App(): React.JSX.Element {
         onSelect={activate}
         onClose={closeTab}
         onNew={nowaZakladka}
-        onReorder={reorderTab}
+        onReorder={setTabOrder}
       />
 
       <div className="body">
@@ -594,7 +590,8 @@ export function App(): React.JSX.Element {
                   detail: code === undefined ? 'Sesja zamknięta' : `Zakończona (kod ${code})`
                 }),
               onError: (paneId, message) => updatePane(tab.id, paneId, { status: 'error', detail: message }),
-              onRenderer: setRenderer,
+              // Renderer (webgl/canvas) nie jest już pokazywany w UI; PaneView i tak go wymaga.
+              onRenderer: () => {},
               onFocus: (paneId) => focusPane(tab.id, paneId),
               onResize: (splitId, ratio) => resizeSplit(tab.id, splitId, ratio)
             };
@@ -607,40 +604,47 @@ export function App(): React.JSX.Element {
               </div>
             );
           })}
+
+          {/* Panele otwierają się jako karta na całym polu terminala (nie boczne). */}
+          {settingsOpen && (
+            <div className="panel-card">
+              <Suspense fallback={<div className="panel-card__loading">ładowanie…</div>}>
+                <SettingsPanel
+                  settings={settings}
+                  onChange={zmienUstawienia}
+                  onClose={() => setSettingsOpen(false)}
+                />
+              </Suspense>
+            </div>
+          )}
+
+          {sftpOpen && sshSessionId && (
+            <div className="panel-card">
+              <Suspense fallback={<div className="panel-card__loading">ładowanie…</div>}>
+                <SftpPanel sessionId={sshSessionId} onClose={() => setSftpOpen(false)} />
+              </Suspense>
+            </div>
+          )}
+
+          {themeEditorOpen && (
+            <div className="panel-card">
+              <Suspense fallback={<div className="panel-card__loading">ładowanie…</div>}>
+                <ThemeEditor
+                  base={activeTheme}
+                  onPreview={podgladMotywu}
+                  onSave={zapiszMotyw}
+                  onImport={importujMotyw}
+                  onExport={(t) => void window.luma.themes.export(t)}
+                  onDelete={usunMotyw}
+                  onClose={() => {
+                    setThemeEditorOpen(false);
+                    applyTheme(activeTheme); // cofnij ewentualny podgląd do zapisanego
+                  }}
+                />
+              </Suspense>
+            </div>
+          )}
         </div>
-
-        {settingsOpen && (
-          <Suspense fallback={<aside className="settings settings--loading">ładowanie…</aside>}>
-            <SettingsPanel
-              settings={settings}
-              onChange={zmienUstawienia}
-              onClose={() => setSettingsOpen(false)}
-            />
-          </Suspense>
-        )}
-
-        {sftpOpen && sshSessionId && (
-          <Suspense fallback={<aside className="sftp sftp--loading">ładowanie…</aside>}>
-            <SftpPanel sessionId={sshSessionId} onClose={() => setSftpOpen(false)} />
-          </Suspense>
-        )}
-
-        {themeEditorOpen && (
-          <Suspense fallback={<aside className="settings settings--loading">ładowanie…</aside>}>
-            <ThemeEditor
-              base={activeTheme}
-              onPreview={podgladMotywu}
-              onSave={zapiszMotyw}
-              onImport={importujMotyw}
-              onExport={(t) => void window.luma.themes.export(t)}
-              onDelete={usunMotyw}
-              onClose={() => {
-                setThemeEditorOpen(false);
-                applyTheme(activeTheme); // cofnij ewentualny podgląd do zapisanego
-              }}
-            />
-          </Suspense>
-        )}
       </div>
 
       {isSerial && activeSessionId && (
@@ -708,76 +712,88 @@ export function App(): React.JSX.Element {
         </div>
       )}
 
+      {/* Dolny pasek jako szybki toolbar: po lewej info, po prawej akcje (część urośnie w dropupy). */}
       <footer className="statusbar">
-        <span>
-          Szkło: <span className="statusbar__accent">{capabilities?.acrylic ? 'acrylic' : 'wyłączone'}</span>
-        </span>
-        <span>
-          Renderer: <span className="statusbar__accent">{renderer ?? '—'}</span>
-        </span>
-        <span>
-          Sesje: <span className="statusbar__accent">{tabs.length}</span>
-        </span>
-        {sshSessionId && (
-          <button
-            className={`statusbar__button${sftpOpen ? ' is-active' : ''}`}
-            onClick={() => setSftpOpen((isOpen) => !isOpen)}
-          >
-            Pliki (SFTP)
-          </button>
-        )}
-        {isSerial && (
-          <>
+        <div className="statusbar__group">
+          <span className="statusbar__info">
+            Sesje <span className="statusbar__accent">{tabs.length}</span>
+          </span>
+          {activeLeaf?.detail && <span className="statusbar__status">{activeLeaf.detail}</span>}
+        </div>
+
+        <div className="statusbar__group statusbar__group--end">
+          {sshSessionId && (
             <button
-              className={`statusbar__button${monitor.hex ? ' is-active' : ''}`}
-              onClick={() => setMonitor({ hex: !monitor.hex })}
-              title="Widok szesnastkowy"
+              className={`statusbar__button${sftpOpen ? ' is-active' : ''}`}
+              onClick={() => setSftpOpen((isOpen) => !isOpen)}
             >
-              HEX
+              Pliki (SFTP)
             </button>
+          )}
+          {isSerial && (
+            <>
+              <button
+                className={`statusbar__button${monitor.hex ? ' is-active' : ''}`}
+                onClick={() => setMonitor({ hex: !monitor.hex })}
+                title="Widok szesnastkowy"
+              >
+                HEX
+              </button>
+              <button
+                className={`statusbar__button${monitor.timestamps ? ' is-active' : ''}`}
+                onClick={() => setMonitor({ timestamps: !monitor.timestamps })}
+                title="Znaczniki czasu"
+              >
+                Czas
+              </button>
+            </>
+          )}
+          {activeSessionId && (
             <button
-              className={`statusbar__button${monitor.timestamps ? ' is-active' : ''}`}
-              onClick={() => setMonitor({ timestamps: !monitor.timestamps })}
-              title="Znaczniki czasu"
+              className={`statusbar__button${isLogging ? ' is-active' : ''}`}
+              onClick={przelaczZapis}
+              title="Zapis surowych danych sesji do pliku"
             >
-              Czas
+              {isLogging ? '● Zapis' : 'Zapis do pliku'}
             </button>
-          </>
-        )}
-        {activeSessionId && (
+          )}
+
+          <Dropup label={`Motyw: ${activeTheme.name}`} title="Wybór i edycja motywu">
+            {(close) => (
+              <>
+                {themes.map((t) => (
+                  <button
+                    key={t.id}
+                    className={`dropup__item${t.id === themeId ? ' is-active' : ''}`}
+                    onClick={() => {
+                      wybierzMotyw(t.id);
+                      close();
+                    }}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+                <div className="dropup__sep" />
+                <button
+                  className="dropup__item"
+                  onClick={() => {
+                    setThemeEditorOpen(true);
+                    close();
+                  }}
+                >
+                  Edytuj motyw…
+                </button>
+              </>
+            )}
+          </Dropup>
+
           <button
-            className={`statusbar__button${isLogging ? ' is-active' : ''}`}
-            onClick={przelaczZapis}
-            title="Zapis surowych danych sesji do pliku"
+            className={`statusbar__button${settingsOpen ? ' is-active' : ''}`}
+            onClick={() => setSettingsOpen((isOpen) => !isOpen)}
           >
-            {isLogging ? '● Zapis' : 'Zapis do pliku'}
+            Ustawienia
           </button>
-        )}
-        <select
-          className="statusbar__select"
-          value={themeId}
-          onChange={(e) => wybierzMotyw(e.target.value)}
-          title="Motyw"
-        >
-          {themes.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-        <button
-          className={`statusbar__button${themeEditorOpen ? ' is-active' : ''}`}
-          onClick={() => setThemeEditorOpen((v) => !v)}
-        >
-          Motyw…
-        </button>
-        <button
-          className={`statusbar__button${settingsOpen ? ' is-active' : ''}`}
-          onClick={() => setSettingsOpen((isOpen) => !isOpen)}
-        >
-          Ustawienia
-        </button>
-        {activeLeaf?.detail && <span className="statusbar__status">{activeLeaf.detail}</span>}
+        </div>
       </footer>
     </div>
   );

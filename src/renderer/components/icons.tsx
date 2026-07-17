@@ -93,6 +93,53 @@ export function IconPlus({ className }: IconProps): React.JSX.Element {
   );
 }
 
+// --- Glify sterowania oknem (małe, na kolorowych kółkach) ---
+
+const win = {
+  width: 8,
+  height: 8,
+  viewBox: '0 0 8 8',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.2,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true
+};
+
+export function IconWinMinimize(): React.JSX.Element {
+  return (
+    <svg {...win}>
+      <path d="M1.5 4h5" />
+    </svg>
+  );
+}
+
+export function IconWinMaximize(): React.JSX.Element {
+  return (
+    <svg {...win}>
+      <rect x="1.6" y="1.6" width="4.8" height="4.8" rx="1" />
+    </svg>
+  );
+}
+
+export function IconWinRestore(): React.JSX.Element {
+  return (
+    <svg {...win}>
+      <rect x="1.4" y="2.6" width="4" height="4" rx="0.8" />
+      <path d="M3 2.6V1.4h4v4H5.4" />
+    </svg>
+  );
+}
+
+export function IconWinClose(): React.JSX.Element {
+  return (
+    <svg {...win}>
+      <path d="M2 2l4 4M6 2l-4 4" />
+    </svg>
+  );
+}
+
 /** Ikona pasująca do rodzaju sesji — używana w tabach i na pasku bocznym. */
 export function SessionIcon({ kind, className }: { kind: SessionSpec['kind']; className?: string }): React.JSX.Element {
   switch (kind) {

@@ -43,7 +43,12 @@ export const IpcChannel = {
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
   TerminalResize: 'terminal:resize',
-  TerminalDispose: 'terminal:dispose'
+  TerminalDispose: 'terminal:dispose',
+  // Sterowanie oknem — własne przyciski (kółka) zamiast natywnego Window Controls Overlay.
+  WindowMinimize: 'window:minimize',
+  WindowMaximizeToggle: 'window:maximizeToggle',
+  WindowClose: 'window:close',
+  WindowIsMaximized: 'window:isMaximized'
 } as const;
 
 /** Kanały wypychane z main do renderera (zdarzenia). */
@@ -52,7 +57,9 @@ export const IpcEvent = {
   TerminalExit: 'terminal:exit',
   SshHostVerify: 'ssh:hostVerify',
   PluginCommandsChanged: 'plugin:commandsChanged',
-  PluginNotification: 'plugin:notification'
+  PluginNotification: 'plugin:notification',
+  /** Zmiana stanu maksymalizacji — przycisk zmienia wtedy ikonę. */
+  WindowMaximizedChanged: 'window:maximizedChanged'
 } as const;
 
 /** Komenda wystawiona przez wtyczkę, widoczna w palecie. */

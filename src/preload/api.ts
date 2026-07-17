@@ -41,6 +41,15 @@ function subscribe<T>(channel: string, callback: (payload: T) => void): Unsubscr
 export const api: LumaApi = {
   getCapabilities: (): Promise<AppCapabilities> => ipcRenderer.invoke(IpcChannel.AppCapabilities),
 
+  window: {
+    minimize: (): void => void ipcRenderer.invoke(IpcChannel.WindowMinimize),
+    maximizeToggle: (): void => void ipcRenderer.invoke(IpcChannel.WindowMaximizeToggle),
+    close: (): void => void ipcRenderer.invoke(IpcChannel.WindowClose),
+    isMaximized: (): Promise<boolean> => ipcRenderer.invoke(IpcChannel.WindowIsMaximized),
+    onMaximizedChanged: (callback: (maximized: boolean) => void): Unsubscribe =>
+      subscribe(IpcEvent.WindowMaximizedChanged, callback)
+  },
+
   listShells: (): Promise<ShellInfo[]> => ipcRenderer.invoke(IpcChannel.ShellList),
 
   settings: {
