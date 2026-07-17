@@ -12,6 +12,27 @@ import type {
   TerminalTransport
 } from '@core/transports/transport';
 
+/**
+ * Zamienia surowy błąd otwarcia portu na czytelny komunikat po polsku.
+ *
+ * Najczęstszy przypadek na Windows to „Access denied" — port jest wyłączny, więc trzyma go
+ * inna aplikacja (PuTTY, inna konsola, monitor UART). Bez tej podpowiedzi użytkownik widzi
+ * tylko techniczny komunikat i nie wie, że wystarczy zamknąć drugie połączenie.
+ */
+function friendlySerialError(error: Error, path: string): Error {
+  const message = error.message.toLowerCase();
+  if (message.includes('access denied') || message.includes('eacces') || message.includes('ebusy')) {
+    return new Error(
+      `Port ${path} jest zajęty lub niedostępny — najpewniej trzyma go inna aplikacja ` +
+        `(np. PuTTY albo inny monitor portu). Zamknij tamto połączenie i spróbuj ponownie.`
+    );
+  }
+  if (message.includes('file not found') || message.includes('enoent') || message.includes('cannot find')) {
+    return new Error(`Nie znaleziono portu ${path} — sprawdź, czy urządzenie jest podłączone.`);
+  }
+  return new Error(`Nie udało się otworzyć portu ${path}: ${error.message}`);
+}
+
 /** Lista portów widocznych w systemie. Operacja tylko do odczytu, bez otwierania. */
 export async function listSerialPorts(): Promise<SerialPortInfo[]> {
   const ports = await SerialPort.list();
@@ -62,7 +83,8 @@ export class SerialTransport implements TerminalTransport {
       port.open((error) => {
         if (error) {
           this.#setState('error');
-          reject(error);
+          // Czytelny komunikat zamiast surowego „Access denied" — patrz friendlySerialError.
+          reject(friendlySerialError(error, this.options.path));
           return;
         }
         this.#port = port;
