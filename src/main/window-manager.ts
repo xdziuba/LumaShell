@@ -23,6 +23,9 @@ export function createMainWindow(): BrowserWindow {
     minWidth: 620,
     minHeight: 380,
     show: false,
+    // Ikona aplikacji (pasek zadań, Alt+Tab). Źródło w resources/ — poza bundlem renderera.
+    // W spakowanej wersji (Etap 8) ikonę exe ustawi electron-builder osobno.
+    icon: join(__dirname, '../../resources/icon.png'),
     // `titleBarStyle: 'hidden'` + `titleBarOverlay` zamiast `frame: false`.
     //
     // Przy `frame: false` przyciski okna są zwykłymi elementami HTML, więc Windows nie

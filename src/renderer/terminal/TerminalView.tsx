@@ -16,6 +16,35 @@ import type { TerminalSettings } from '@shared/types/settings';
 
 export type RendererKind = 'webgl' | 'canvas';
 
+/**
+ * Alfa tła terminala.
+ *
+ * Terminal jest teraz powierzchnią glass: tło xterm jest półprzezroczyste, więc prześwituje
+ * przez nie tapeta i panele (allowTransparency). Wartość dobrana tak, by tekst zachował
+ * kontrast ≥4.5:1 na przyciemnionej tapecie — patrz docs/architecture/03-interfejs-i-motywy.md.
+ */
+const TERM_ALPHA = 0.32;
+
+/** Nakłada alfę na kolor motywu (hex lub rgb/rgba). Zwraca rgba; nierozpoznany kolor bez zmian. */
+function withAlpha(color: string, alpha: number): string {
+  const c = color.trim();
+  const hex = c.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    let h = hex[1]!;
+    if (h.length === 3) h = h.split('').map((x) => x + x).join('');
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  const rgb = c.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgb) {
+    const [r, g, b] = rgb[1]!.split(',').map((x) => x.trim());
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return c;
+}
+
 interface TerminalViewProps {
   /** Zmiana specyfikacji zamyka poprzednią sesję i otwiera nową. */
   spec: SessionSpec;
@@ -105,8 +134,10 @@ export function TerminalView({
       cursorBlink: initial.cursorBlink,
       scrollback: initial.scrollback,
       allowProposedApi: true,
+      // Terminal jako powierzchnia glass: tło półprzezroczyste, tapeta prześwituje.
+      allowTransparency: true,
       theme: {
-        background: terminalThemeRef.current.background,
+        background: withAlpha(terminalThemeRef.current.background, TERM_ALPHA),
         foreground: terminalThemeRef.current.foreground,
         cursor: terminalThemeRef.current.cursor,
         selectionBackground: terminalThemeRef.current.selection
@@ -282,7 +313,7 @@ export function TerminalView({
     const term = termRef.current;
     if (!term) return;
     term.options.theme = {
-      background: terminalTheme.background,
+      background: withAlpha(terminalTheme.background, TERM_ALPHA),
       foreground: terminalTheme.foreground,
       cursor: terminalTheme.cursor,
       selectionBackground: terminalTheme.selection

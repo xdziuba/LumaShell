@@ -7,6 +7,15 @@ import { type RendererKind } from './terminal/TerminalView';
 import { useShortcuts, type ShortcutMap } from './hooks/useShortcuts';
 import { serializeTab, useWorkspace } from './store/workspace';
 import { applyTheme } from './theme/apply-theme';
+import {
+  IconContainer,
+  IconNetwork,
+  IconPlus,
+  IconProfile,
+  IconSerial,
+  IconSsh,
+  IconTerminal
+} from './components/icons';
 import { findLeaf, leaves } from '@core/workspace/pane-tree';
 import { BUILT_IN_THEMES, type Theme } from '@core/theme/theme';
 import type { Command } from './commands/types';
@@ -94,6 +103,7 @@ export function App(): React.JSX.Element {
       id: tab.id,
       label: leaf?.label ?? 'sesja',
       status: leaf?.status ?? 'starting',
+      kind: leaf?.spec.kind ?? 'pty',
       paneCount: leaves(tab.root).length
     };
   });
@@ -491,19 +501,23 @@ export function App(): React.JSX.Element {
               className="sidebar__item sidebar__item--action"
               onClick={() => otworzPowloke(shell)}
             >
-              + {shell.label}
+              <IconTerminal className="sidebar__ico" />
+              <span className="sidebar__item-label">{shell.label}</span>
             </button>
           ))}
 
           <div className="sidebar__heading sidebar__heading--spaced">ZDALNE</div>
           <button className="sidebar__item sidebar__item--action" onClick={() => setSshOpen(true)}>
-            + Połączenie SSH…
+            <IconSsh className="sidebar__ico" />
+            <span className="sidebar__item-label">Połączenie SSH…</span>
           </button>
           <button className="sidebar__item sidebar__item--action" onClick={() => setNetworkOpen(true)}>
-            + Połączenie sieciowe…
+            <IconNetwork className="sidebar__ico" />
+            <span className="sidebar__item-label">Połączenie sieciowe…</span>
           </button>
           <button className="sidebar__item sidebar__item--action" onClick={() => setContainerOpen(true)}>
-            + Kontener (Docker/K8s)…
+            <IconContainer className="sidebar__ico" />
+            <span className="sidebar__item-label">Kontener (Docker/K8s)…</span>
           </button>
 
           <div className="sidebar__heading sidebar__heading--spaced">PORTY COM</div>
@@ -515,7 +529,8 @@ export function App(): React.JSX.Element {
               onClick={() => otworzPort(port)}
               title={port.friendlyName ?? port.path}
             >
-              + {port.path}
+              <IconSerial className="sidebar__ico" />
+              <span className="sidebar__item-label">{port.path}</span>
             </button>
           ))}
 
@@ -526,8 +541,9 @@ export function App(): React.JSX.Element {
               onClick={zapiszAktywnyJakoProfil}
               disabled={!canSaveProfile}
               title="Zapisz aktywną sesję jako profil"
+              aria-label="Zapisz aktywną sesję jako profil"
             >
-              +
+              <IconPlus className="sidebar__ico-sm" />
             </button>
           </div>
           {profiles.length === 0 && <div className="sidebar__item">brak profili</div>}
@@ -542,7 +558,8 @@ export function App(): React.JSX.Element {
                     : 'powłoka lokalna'
                 }
               >
-                ▸ {profile.name}
+                <IconProfile className="sidebar__ico" />
+                <span className="sidebar__item-label">{profile.name}</span>
               </button>
               <button
                 className="sidebar__profile-del"
