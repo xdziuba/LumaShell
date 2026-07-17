@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      Strona Plugin Hosta. Ładowana w ukrytym oknie z sandbox:true i bez integracji Node.
+      Nie renderuje UI — wyłącznie uruchamia runtime wtyczek.
+
+      'unsafe-eval' jest tu POTRZEBNE i BEZPIECZNE: host uruchamia kod wtyczek przez
+      new Function, ale sam nie ma dostępu do Node (sandbox, brak require/process). Kod
+      wtyczki może więc wykonać JS, lecz nie wyjdzie z piaskownicy — to istota izolacji D2.
+      Reszta źródeł zablokowana: brak sieci, brak zewnętrznych skryptów.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'unsafe-eval';"
+    />
+    <title>LumaShell Plugin Host</title>
+  </head>
+  <body>
+    <script type="module" src="./host.ts"></script>
+  </body>
+</html>

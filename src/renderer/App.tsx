@@ -15,6 +15,8 @@ import type { Profile } from '@core/profiles/profile';
 import type {
   AppCapabilities,
   HostVerifyRequest,
+  PluginCommand,
+  PluginNotification,
   SessionSpec,
   ShellInfo,
   SshConnectRequest
@@ -60,6 +62,8 @@ export function App(): React.JSX.Element {
   const [serialDialogPath, setSerialDialogPath] = useState<string | null>(null);
   // Identyfikatory sesji z aktywnym zapisem do pliku.
   const [loggingSessions, setLoggingSessions] = useState<Set<string>>(new Set());
+  const [pluginCommands, setPluginCommands] = useState<PluginCommand[]>([]);
+  const [notification, setNotification] = useState<PluginNotification | null>(null);
 
   const {
     tabs,
@@ -151,6 +155,21 @@ export function App(): React.JSX.Element {
 
   // Nasłuch próśb o weryfikację klucza hosta — niezależny od cyklu startowego.
   useEffect(() => window.luma.ssh.onHostVerify(setHostVerify), []);
+
+  // Komendy wtyczek i ich powiadomienia. Wtyczki ładują się po starcie, więc lista
+  // przychodzi zdarzeniem; toast znika po chwili.
+  useEffect(() => {
+    void window.luma.plugins.commands().then(setPluginCommands);
+    const offCommands = window.luma.plugins.onCommandsChanged(setPluginCommands);
+    const offNotify = window.luma.plugins.onNotification((n) => {
+      setNotification(n);
+      setTimeout(() => setNotification(null), 4000);
+    });
+    return () => {
+      offCommands();
+      offNotify();
+    };
+  }, []);
 
   const polaczSsh = (request: SshConnectRequest): void => {
     setSshOpen(false);
@@ -393,10 +412,18 @@ export function App(): React.JSX.Element {
         run: () => setSettingsOpen((isOpen) => !isOpen)
       }
     );
+    // Komendy wtyczek — uruchamiane przez RPC do izolowanego hosta.
+    for (const cmd of pluginCommands) {
+      list.push({
+        id: `plugin:${cmd.pluginId}:${cmd.id}`,
+        title: cmd.title,
+        keywords: 'wtyczka plugin',
+        run: () => window.luma.plugins.runCommand(cmd.pluginId, cmd.id)
+      });
+    }
     return list;
-    // Zależymy od danych (shells, ports, profiles, tabs, activeId). Funkcje-akcje domykają
-    // się nad tym samym stanem, więc lista zależności obejmuje faktyczne wejścia.
-  }, [shells, ports, profiles, tabs, activeId]);
+    // Zależymy od danych (shells, ports, profiles, tabs, activeId, komendy wtyczek).
+  }, [shells, ports, profiles, tabs, activeId, pluginCommands]);
 
   const shortcuts = useMemo<ShortcutMap>(() => {
     const map: ShortcutMap = {
@@ -611,6 +638,13 @@ export function App(): React.JSX.Element {
             }}
           />
         </Suspense>
+      )}
+
+      {notification && (
+        <div className={`toast toast--${notification.level}`}>
+          <span className="toast__source">{notification.pluginName}</span>
+          <span className="toast__message">{notification.message}</span>
+        </div>
       )}
 
       <footer className="statusbar">

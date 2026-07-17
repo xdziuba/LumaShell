@@ -16,6 +16,8 @@ import {
   IpcEvent,
   type AppCapabilities,
   type HostVerifyRequest,
+  type PluginCommand,
+  type PluginNotification,
   type SessionSpec,
   type ShellInfo,
   type SftpEntry,
@@ -89,6 +91,17 @@ export const api: LumaApi = {
       ipcRenderer.invoke(IpcChannel.SessionLogStart, sessionId),
     stop: (sessionId: string): Promise<boolean> =>
       ipcRenderer.invoke(IpcChannel.SessionLogStop, sessionId)
+  },
+
+  plugins: {
+    commands: (): Promise<PluginCommand[]> => ipcRenderer.invoke(IpcChannel.PluginCommands),
+    runCommand: (pluginId: string, commandId: string): void => {
+      void ipcRenderer.invoke(IpcChannel.PluginRunCommand, pluginId, commandId);
+    },
+    onCommandsChanged: (callback: (commands: PluginCommand[]) => void): Unsubscribe =>
+      subscribe(IpcEvent.PluginCommandsChanged, callback),
+    onNotification: (callback: (n: PluginNotification) => void): Unsubscribe =>
+      subscribe(IpcEvent.PluginNotification, callback)
   },
 
   sftp: {

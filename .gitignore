@@ -1,6 +1,9 @@
 node_modules/
 out/
 dist/
+# Kod dostarczanych wtyczek (nie build aplikacji) — musi być w repo mimo reguły dist/.
+!resources/plugins/*/dist/
+!resources/plugins/*/dist/**
 release/
 *.log
 .DS_Store

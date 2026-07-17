@@ -635,6 +635,43 @@ body {
   }
 }
 
+// Toast powiadomień (m.in. od wtyczek).
+.toast {
+  position: fixed;
+  bottom: 34px;
+  right: 16px;
+  z-index: 60;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: linear-gradient(160deg, rgba(20, 55, 40, 0.95), rgba(5, 18, 13, 0.96));
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  animation: toast-in 160ms ease;
+
+  &__source {
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  &__message {
+    color: var(--text);
+    font-size: 12px;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
 .palette-overlay {
   position: fixed;
   inset: 0;

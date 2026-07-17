@@ -8,6 +8,8 @@
 import type {
   AppCapabilities,
   HostVerifyRequest,
+  PluginCommand,
+  PluginNotification,
   SessionSpec,
   ShellInfo,
   SftpEntry,
@@ -82,6 +84,14 @@ export interface LumaApi {
     /** Pokazuje dialog zapisu i zaczyna log; `true`, gdy uruchomiono. */
     start(sessionId: string): Promise<boolean>;
     stop(sessionId: string): Promise<boolean>;
+  };
+
+  plugins: {
+    /** Komendy wystawione przez wtyczki (do palety). */
+    commands(): Promise<PluginCommand[]>;
+    runCommand(pluginId: string, commandId: string): void;
+    onCommandsChanged(callback: (commands: PluginCommand[]) => void): Unsubscribe;
+    onNotification(callback: (n: PluginNotification) => void): Unsubscribe;
   };
 
   /** SFTP działa na istniejącej sesji SSH (po jej sessionId). */

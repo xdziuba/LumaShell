@@ -132,15 +132,28 @@ to osobny temat). Podziały międzyokienne i quake mode należą do dalszych eta
 
 ### Etap 6 — system wtyczek
 
-* Plugin API v1,
-* Plugin Host,
-* manifest,
-* system uprawnień,
+* ✔ Plugin API v1 — komendy i powiadomienia przez most RPC,
+* ✔ Plugin Host — izolowane, ukryte okno `sandbox:true` bez integracji Node (decyzja D2),
+* ✔ manifest — walidacja niezaufanego manifestu, odsiewanie nieznanych uprawnień,
+  ochrona ścieżki `main` przed wyjściem z katalogu wtyczki,
+* ✔ system uprawnień — egzekwowany na granicy RPC w procesie głównym, nie w hoście,
+* ✔ przykładowe rozszerzenia — wtyczka `hello` ładowana z `resources/plugins`,
+* ✔ dokumentacja SDK — `docs/plugin-api/` (przegląd, uprawnienia i izolacja, narzędzia),
 * instalowanie z pliku,
 * włączanie i wyłączanie,
-* automatyczne aktualizacje wtyczek,
-* przykładowe rozszerzenia,
-* dokumentacja SDK.
+* automatyczne aktualizacje wtyczek.
+
+**Etap 6 zamknięty w zakresie rdzenia.** Świadomie poza zakresem na teraz: menedżer wtyczek
+(instalacja z pliku, włączanie/wyłączanie, aktualizacje) — to warstwa UI nad działającym już
+runtime'em, dochodzi razem z resztą menedżera. Uprawnienia `terminal.read`/`terminal.write`
+są w modelu i walidacji, a ich realne wpięcie w sesje przyjdzie z narzędziami agenta (ścieżka AI).
+
+> **Izolacja D2 udowodniona end-to-end.** Test E2E przez DevTools Protocol sprawdza na
+> żywym oknie hosta, że `require`, `module` i `process` są **niedostępne**, a jedynym oknem
+> na świat jest most `window.pluginHost`. Kod wtyczki uruchamia się przez `new Function`
+> (stąd `unsafe-eval` w CSP hosta), ale bez Node nie wyjdzie z piaskownicy. Każdą realną
+> zdolność host deleguje przez RPC do procesu głównego, który dopiero tam sprawdza, czy
+> wtyczka zadeklarowała stosowne uprawnienie i czy komenda jest w `contributes.commands`.
 
 ### Etap 7 — dodatkowe protokoły
 
