@@ -65,10 +65,20 @@ export interface SshOptions {
   password?: string;
   privateKey?: string;
   passphrase?: string;
+  /** Ścieżka do gniazda/pipe agenta SSH (np. pipe OpenSSH na Windows). */
+  agent?: string;
   columns?: number;
   rows?: number;
   /** Odstęp keep-alive w ms; 0 wyłącza. */
   keepAliveInterval?: number;
+  /**
+   * Weryfikacja klucza hosta. Dostaje surowy klucz publiczny; zwraca `true`, gdy połączyć.
+   *
+   * Transport jest tylko mechanizmem — polityka (known_hosts, pytanie użytkownika) należy
+   * do wołającego (docs/security). Gdy brak, klucz jest akceptowany bez weryfikacji, więc
+   * proces główny zawsze go dostarcza; pomijają go jedynie kontrolowane testy.
+   */
+  verifyHost?: (hostKey: Uint8Array) => Promise<boolean>;
 }
 
 /** Port szeregowy wykryty w systemie. */

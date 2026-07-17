@@ -15,6 +15,7 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test:unit": "node --experimental-transform-types --no-warnings tests/unit/pane-tree.test.ts",
     "test:integration": "node --experimental-transform-types --no-warnings tests/integration/ssh-transport.test.ts",
+    "test:known-hosts": "node --experimental-transform-types --no-warnings tests/integration/known-hosts.test.ts",
     "test:serial": "node --experimental-transform-types --no-warnings tests/integration/serial-transport.test.ts",
     "test:perf": "node tests/performance/pty-throughput.mjs"
   },

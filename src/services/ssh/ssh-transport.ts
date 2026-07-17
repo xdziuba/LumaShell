@@ -1,8 +1,8 @@
 /**
  * Implementacja `TerminalTransport` dla SSH (ssh2).
  *
- * Prototyp Etapu 0: uwierzytelnianie hasłem lub kluczem, interaktywna powłoka,
- * keep-alive. Known hosts, agent, jump host i forwarding wchodzą w Etapie 3
+ * Uwierzytelnianie hasłem, kluczem lub agentem, interaktywna powłoka, keep-alive,
+ * weryfikacja klucza hosta (Etap 3). Jump host, forwarding i SFTP wchodzą później
  * (docs/architecture/08-roadmapa.md).
  */
 
@@ -51,8 +51,16 @@ export class SshTransport implements TerminalTransport {
           password: this.options.password,
           privateKey: this.options.privateKey,
           passphrase: this.options.passphrase,
+          agent: this.options.agent,
           // Keep-alive utrzymuje sesję przy życiu za NAT-em i na kapryśnych łączach.
-          keepaliveInterval: this.options.keepAliveInterval ?? 15_000
+          keepaliveInterval: this.options.keepAliveInterval ?? 15_000,
+          // Weryfikacja klucza hosta. Odrzucenie tutaj zrywa handshake, zanim polecą
+          // jakiekolwiek dane uwierzytelniające — chroni przed MITM.
+          hostVerifier: (key: Buffer, accept: (ok: boolean) => void) => {
+            const verify = this.options.verifyHost;
+            if (!verify) return accept(true);
+            verify(key).then(accept).catch(() => accept(false));
+          }
         });
       });
 
