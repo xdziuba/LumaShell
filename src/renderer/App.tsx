@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { TabBar } from './components/TabBar';
+import { TabBar, type TabView } from './components/TabBar';
 import { TitleBar } from './components/TitleBar';
-import { TerminalView, type RendererKind } from './terminal/TerminalView';
+import { PaneView, type PaneCallbacks } from './components/PaneView';
+import { type RendererKind } from './terminal/TerminalView';
 import { useShortcuts, type ShortcutMap } from './hooks/useShortcuts';
-import { useWorkspace } from './store/workspace';
+import { serializeTab, useWorkspace } from './store/workspace';
+import { findLeaf, leaves } from '@core/workspace/pane-tree';
 import type { Command } from './commands/types';
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { Profile } from '@core/profiles/profile';
@@ -38,8 +40,33 @@ export function App(): React.JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  const { tabs, activeId, open, close, activate, update, restore } = useWorkspace();
+  const {
+    tabs,
+    activeId,
+    open,
+    closeTab,
+    activate,
+    restore,
+    updatePane,
+    splitActivePane,
+    closePane,
+    focusPane,
+    resizeSplit
+  } = useWorkspace();
+
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
+  // Etykieta i status paska/zakładki pochodzą z aktywnego panelu danej zakładki.
+  const activeLeaf = activeTab ? findLeaf(activeTab.root, activeTab.activePaneId) : undefined;
+
+  const tabViews: TabView[] = tabs.map((tab) => {
+    const leaf = findLeaf(tab.root, tab.activePaneId) ?? leaves(tab.root)[0];
+    return {
+      id: tab.id,
+      label: leaf?.label ?? 'sesja',
+      status: leaf?.status ?? 'starting',
+      paneCount: leaves(tab.root).length
+    };
+  });
 
   // `StrictMode` uruchamia efekty dwukrotnie w trybie deweloperskim. Bez tego strażnika
   // `npm run dev` odtwarzałby układ dwa razy.
@@ -81,7 +108,7 @@ export function App(): React.JSX.Element {
   }, [open, restore]);
 
   // Zapamiętywanie układu przy każdej zmianie zakładek, z opóźnieniem, żeby nie zapisywać
-  // przy każdym drgnięciu. Serializujemy wszystkie zakładki — proces główny odsieje porty.
+  // przy każdym drgnięciu. Serializujemy całe drzewa — proces główny przytnie porty COM.
   useEffect(() => {
     if (!odtworzono.current) return;
     const timer = setTimeout(() => {
@@ -89,10 +116,7 @@ export function App(): React.JSX.Element {
         0,
         tabs.findIndex((tab) => tab.id === activeId)
       );
-      void window.luma.workspace.save({
-        tabs: tabs.map((tab) => ({ spec: tab.spec, label: tab.label })),
-        activeIndex
-      });
+      void window.luma.workspace.save({ tabs: tabs.map(serializeTab), activeIndex });
     }, 500);
     return () => clearTimeout(timer);
   }, [tabs, activeId]);
@@ -119,16 +143,16 @@ export function App(): React.JSX.Element {
     void open(specFromProfile(profile), profile.name);
 
   const zapiszAktywnyJakoProfil = (): void => {
-    if (!activeTab) return;
-    // Profil dostaje nazwę aktywnej zakładki. Electron nie ma window.prompt, a edytor
+    if (!activeLeaf) return;
+    // Profil dostaje nazwę aktywnego panelu. Electron nie ma window.prompt, a edytor
     // profili z nazywaniem wchodzi w Etapie 5 — tu liczy się sam zapis i odtwarzanie.
-    const spec = activeTab.spec;
+    const spec = activeLeaf.spec;
     const target: Profile['target'] =
       spec.kind === 'serial'
         ? { kind: 'serial', path: spec.path, baudRate: spec.baudRate }
         : { kind: 'pty', shellId: spec.shellId, cwd: spec.cwd };
 
-    void window.luma.profiles.save({ id: newId(), name: activeTab.label, target }).then(setProfiles);
+    void window.luma.profiles.save({ id: newId(), name: activeLeaf.label, target }).then(setProfiles);
   };
 
   const usunProfil = (id: string): void => void window.luma.profiles.delete(id).then(setProfiles);
@@ -146,8 +170,9 @@ export function App(): React.JSX.Element {
     if (tab) activate(tab.id);
   };
 
-  const zamknijAktywna = (): void => {
-    if (activeId) close(activeId);
+  // Ctrl+W zamyka aktywny panel; gdy to ostatni panel zakładki, zamyka całą zakładkę.
+  const zamknijAktywny = (): void => {
+    if (activeTab) closePane(activeTab.id, activeTab.activePaneId);
   };
 
   // Komendy zależą od bieżącego stanu, więc paleta i skróty korzystają z tej samej listy.
@@ -178,20 +203,36 @@ export function App(): React.JSX.Element {
       });
     }
     if (activeTab) {
-      list.push({
-        id: 'profile.save',
-        title: 'Zapisz aktywną sesję jako profil',
-        keywords: 'profil zapisz save',
-        run: zapiszAktywnyJakoProfil
-      });
+      list.push(
+        {
+          id: 'profile.save',
+          title: 'Zapisz aktywną sesję jako profil',
+          keywords: 'profil zapisz save',
+          run: zapiszAktywnyJakoProfil
+        },
+        {
+          id: 'pane.split.row',
+          title: 'Podziel panel w pionie',
+          keywords: 'split podziel panel prawo pion',
+          hint: 'Ctrl+Shift+E',
+          run: () => splitActivePane('row')
+        },
+        {
+          id: 'pane.split.column',
+          title: 'Podziel panel w poziomie',
+          keywords: 'split podziel panel dół poziom',
+          hint: 'Ctrl+Shift+O',
+          run: () => splitActivePane('column')
+        }
+      );
     }
     list.push(
       {
         id: 'tab.close',
-        title: 'Zamknij aktywną zakładkę',
-        keywords: 'zamknij close',
+        title: 'Zamknij aktywny panel',
+        keywords: 'zamknij close panel',
         hint: 'Ctrl+W',
-        run: zamknijAktywna
+        run: zamknijAktywny
       },
       {
         id: 'tab.next',
@@ -224,10 +265,12 @@ export function App(): React.JSX.Element {
     const map: ShortcutMap = {
       'ctrl+shift+p': () => setPaletteOpen((open) => !open),
       'ctrl+t': nowaZakladka,
-      'ctrl+w': zamknijAktywna,
+      'ctrl+w': zamknijAktywny,
       'ctrl+comma': () => setSettingsOpen((open) => !open),
       'ctrl+tab': () => przesunZakladke(1),
-      'ctrl+shift+tab': () => przesunZakladke(-1)
+      'ctrl+shift+tab': () => przesunZakladke(-1),
+      'ctrl+shift+e': () => splitActivePane('row'),
+      'ctrl+shift+o': () => splitActivePane('column')
     };
     for (let n = 1; n <= 9; n += 1) map[`ctrl+${n}`] = () => zakladkaNr(n);
     return map;
@@ -237,13 +280,13 @@ export function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      <TitleBar subtitle={activeTab?.label ?? 'brak sesji'} />
+      <TitleBar subtitle={activeLeaf?.label ?? 'brak sesji'} />
 
       <TabBar
-        tabs={tabs}
+        tabs={tabViews}
         activeId={activeId}
         onSelect={activate}
-        onClose={close}
+        onClose={closeTab}
         onNew={nowaZakladka}
       />
 
@@ -314,27 +357,35 @@ export function App(): React.JSX.Element {
           {tabs.length === 0 && <div className="stack__empty">Brak otwartych sesji</div>}
 
           {/*
-            Wszystkie zakładki zostają zamontowane — ich powłoki mają działać w tle.
-            Widoczna jest tylko aktywna. `key` trzyma instancję przy życiu, więc
-            przełączanie zakładek nie dotyka sesji.
+            Każda zakładka to drzewo paneli. Wszystkie zostają zamontowane — powłoki
+            działają w tle; widoczna jest tylko aktywna. `key` na zakładce trzyma jej
+            sesje przy życiu przy przełączaniu.
           */}
-          {tabs.map((tab) => (
-            <TerminalView
-              key={tab.id}
-              spec={tab.spec}
-              settings={settings}
-              active={tab.id === activeId}
-              onReady={(info) => update(tab.id, { label: info.label, status: 'running' })}
-              onExit={(code) =>
-                update(tab.id, {
+          {tabs.map((tab) => {
+            const cb: PaneCallbacks = {
+              settings,
+              tabActive: tab.id === activeId,
+              activePaneId: tab.activePaneId,
+              onReady: (paneId, label) => updatePane(tab.id, paneId, { label, status: 'running' }),
+              onExit: (paneId, code) =>
+                updatePane(tab.id, paneId, {
                   status: 'closed',
                   detail: code === undefined ? 'Sesja zamknięta' : `Zakończona (kod ${code})`
-                })
-              }
-              onRenderer={setRenderer}
-              onError={(message) => update(tab.id, { status: 'error', detail: message })}
-            />
-          ))}
+                }),
+              onError: (paneId, message) => updatePane(tab.id, paneId, { status: 'error', detail: message }),
+              onRenderer: setRenderer,
+              onFocus: (paneId) => focusPane(tab.id, paneId),
+              onResize: (splitId, ratio) => resizeSplit(tab.id, splitId, ratio)
+            };
+            return (
+              <div
+                key={tab.id}
+                className={`pane-root${tab.id === activeId ? '' : ' pane-root--hidden'}`}
+              >
+                <PaneView node={tab.root} cb={cb} />
+              </div>
+            );
+          })}
         </div>
 
         {settingsOpen && (
@@ -370,7 +421,7 @@ export function App(): React.JSX.Element {
         >
           Ustawienia
         </button>
-        {activeTab?.detail && <span className="statusbar__status">{activeTab.detail}</span>}
+        {activeLeaf?.detail && <span className="statusbar__status">{activeLeaf.detail}</span>}
       </footer>
     </div>
   );

@@ -1,10 +1,11 @@
 /**
  * Pasek zakładek (Etap 2).
  *
- * Sam pasek nic nie wie o sesjach — czyta stan z workspace'u i zgłasza intencje.
+ * Sam pasek nic nie wie o drzewie paneli — dostaje gotową etykietę i status z aktywnego
+ * panelu każdej zakładki i zgłasza intencje.
  */
 
-import type { Tab, TabStatus } from '../store/workspace';
+import type { TabStatus } from '../store/workspace';
 
 /** Kropka statusu zamiast tekstu: pasek musi zostać czytelny przy wielu zakładkach. */
 const STATUS_TITLE: Record<TabStatus, string> = {
@@ -14,8 +15,16 @@ const STATUS_TITLE: Record<TabStatus, string> = {
   error: 'błąd'
 };
 
+export interface TabView {
+  id: string;
+  label: string;
+  status: TabStatus;
+  /** Ile paneli ma zakładka — pokazujemy licznik przy podziale. */
+  paneCount: number;
+}
+
 interface TabBarProps {
-  tabs: Tab[];
+  tabs: TabView[];
   activeId: string | null;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
@@ -41,6 +50,7 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onNew }: TabBarProps
         >
           <span className={`tabs__dot tabs__dot--${tab.status}`} />
           <span className="tabs__label">{tab.label}</span>
+          {tab.paneCount > 1 && <span className="tabs__count">{tab.paneCount}</span>}
           <button
             className="tabs__close"
             onClick={(event) => {

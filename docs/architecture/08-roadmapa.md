@@ -47,9 +47,10 @@ Celem jest sprawdzenie, czy aplikacja zachowuje płynność przy dużej ilości 
 * ✔ wiele sesji — powłoki lokalne i porty COM równolegle,
 * ✔ profile — zapis i odtwarzanie sparametryzowanej sesji, trwałe w `profiles.json`,
 * ✔ command palette (Ctrl+Shift+P) z wyszukiwaniem,
-* ✔ skróty — Ctrl+T/W, Ctrl+Tab, Ctrl+1..9, Ctrl+,
+* ✔ skróty — Ctrl+T/W, Ctrl+Tab, Ctrl+1..9, Ctrl+, oraz Ctrl+Shift+E/O (podział),
 * ✔ przywracanie sesji po restarcie — **tylko powłoki**, patrz niżej,
-* podziały (pionowe/poziome),
+* ✔ podziały (pionowe/poziome) — pełne drzewo binarne, dowolne zagnieżdżenie,
+  przeciągane granice, fokus panelu; logika drzewa w `core`, przetestowana jednostkowo,
 * przeciąganie zakładek.
 
 > Profile Etapu 2 to podzbiór modelu z sekcji 10: powłoka + katalog roboczy albo port COM

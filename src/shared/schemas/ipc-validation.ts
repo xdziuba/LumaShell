@@ -9,6 +9,7 @@
 
 import type {
   SessionSpec,
+  StoredPane,
   TerminalCreateRequest,
   TerminalDisposeRequest,
   TerminalResizeRequest,
@@ -123,11 +124,55 @@ export function parseTerminalDispose(payload: unknown): TerminalDisposeRequest {
   return { sessionId: requireString(source, 'sessionId', MAX_SESSION_ID) };
 }
 
+/** Waliduje drzewo paneli z niezaufanego JSON. Rzuca przy błędzie struktury. */
+function parseStoredPane(value: unknown, depth = 0): StoredPane {
+  // Ogranicznik głębokości chroni przed spreparowanym, głęboko zagnieżdżonym drzewem.
+  if (depth > 32) throw new IpcValidationError('drzewo paneli zbyt głębokie');
+  const source = asRecord(value);
+
+  if (source['kind'] === 'leaf') {
+    return {
+      kind: 'leaf',
+      spec: parseSessionSpec(source['spec']),
+      label: requireString(source, 'label', 120)
+    };
+  }
+  if (source['kind'] === 'split') {
+    const direction = source['direction'];
+    if (direction !== 'row' && direction !== 'column') {
+      throw new IpcValidationError(`zły kierunek splitu: ${String(direction)}`);
+    }
+    const ratio = source['ratio'];
+    return {
+      kind: 'split',
+      direction,
+      ratio: typeof ratio === 'number' && ratio > 0 && ratio < 1 ? ratio : 0.5,
+      a: parseStoredPane(source['a'], depth + 1),
+      b: parseStoredPane(source['b'], depth + 1)
+    };
+  }
+  throw new IpcValidationError(`nieznany rodzaj panelu: ${String(source['kind'])}`);
+}
+
+/** Przycina drzewo do liści powłok, zwijając osierocone splity. `null` = całość odpadła. */
+function pruneSerial(node: StoredPane): StoredPane | null {
+  if (node.kind === 'leaf') return node.spec.kind === 'pty' ? node : null;
+  const a = pruneSerial(node.a);
+  const b = pruneSerial(node.b);
+  if (a && b) return { ...node, a, b };
+  return a ?? b;
+}
+
+/** Liczba liści w drzewie — do przycięcia zapisanego indeksu aktywnego liścia. */
+function countLeaves(node: StoredPane): number {
+  return node.kind === 'leaf' ? 1 : countLeaves(node.a) + countLeaves(node.b);
+}
+
 /**
  * Waliduje snapshot workspace'u.
  *
- * Zachowuje **wyłącznie zakładki powłok** — port szeregowy nie jest przywracany
- * automatycznie (patrz WorkspaceSnapshot). Uszkodzone zakładki są pomijane, nie
+ * Zachowuje **wyłącznie liście powłok** — porty COM są przycinane z drzewa, bo nie wolno
+ * ich auto-otwierać (patrz WorkspaceSnapshot). Uszkodzone zakładki są pomijane, nie
  * wywracają całości. Nigdy nie rzuca: zły plik daje pusty workspace.
  */
 export function parseWorkspaceSnapshot(payload: unknown): WorkspaceSnapshot {
@@ -143,9 +188,15 @@ export function parseWorkspaceSnapshot(payload: unknown): WorkspaceSnapshot {
   for (const raw of rawTabs) {
     try {
       const record = asRecord(raw);
-      const spec = parseSessionSpec(record['spec']);
-      if (spec.kind !== 'pty') continue; // porty COM nie są przywracane
-      tabs.push({ spec, label: requireString(record, 'label', 120) });
+      const root = pruneSerial(parseStoredPane(record['root']));
+      if (!root) continue; // cała zakładka była portami COM
+
+      const rawLeafIndex = record['activeLeafIndex'];
+      const activeLeafIndex =
+        typeof rawLeafIndex === 'number' && Number.isInteger(rawLeafIndex) && rawLeafIndex >= 0
+          ? Math.min(rawLeafIndex, countLeaves(root) - 1)
+          : 0;
+      tabs.push({ root, activeLeafIndex });
     } catch {
       // pomiń uszkodzoną zakładkę
     }

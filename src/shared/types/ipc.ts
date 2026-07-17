@@ -84,10 +84,21 @@ export interface ShellInfo {
   label: string;
 }
 
-/** Pojedyncza zakładka w zapisanym workspace. */
+/**
+ * Zapisany panel w drzewie zakładki.
+ *
+ * Rekurencyjna struktura odpowiada `Pane` z core: liść niesie `spec` i `label`, split ma
+ * kierunek, udział i dwoje dzieci. Trzymana w `shared`, bo przechodzi przez IPC.
+ */
+export type StoredPane =
+  | { kind: 'leaf'; spec: SessionSpec; label: string }
+  | { kind: 'split'; direction: 'row' | 'column'; ratio: number; a: StoredPane; b: StoredPane };
+
+/** Pojedyncza zakładka w zapisanym workspace — całe drzewo paneli. */
 export interface WorkspaceTab {
-  spec: SessionSpec;
-  label: string;
+  root: StoredPane;
+  /** Indeks aktywnego liścia w kolejności od lewej/góry. */
+  activeLeafIndex: number;
 }
 
 /**
@@ -95,7 +106,7 @@ export interface WorkspaceTab {
  *
  * Przywracane są wyłącznie sesje powłok — port szeregowy jest pomijany, bo jego
  * automatyczne otwarcie przestawia linie sterujące i może zresetować urządzenie
- * (docs/security/03-polityka-agenta.md). Filtr robi proces główny przy zapisie.
+ * (docs/security/03-polityka-agenta.md). Serial jest przycinany z drzewa przy zapisie.
  */
 export interface WorkspaceSnapshot {
   tabs: WorkspaceTab[];
