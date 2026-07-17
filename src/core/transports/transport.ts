@@ -108,3 +108,56 @@ export interface SerialPortInfo {
   friendlyName?: string;
   manufacturer?: string;
 }
+
+/** Protokół transportu sieciowego surowego strumienia bajtów. */
+export type NetworkProtocol = 'tcp' | 'tls' | 'telnet' | 'ws' | 'wss' | 'udp';
+
+/**
+ * Opcje transportu sieciowego (Etap 7).
+ *
+ * Wspólny kształt dla TCP, TLS, Telnetu, WebSocketu i UDP. `host`/`port` to zawsze zdalny
+ * cel; przy UDP dodatkowo bindujemy lokalne gniazdo do odbioru datagramów. Transport oddaje
+ * surowe bajty — dekoduje dopiero xterm (patrz kontrakt `TerminalTransport`).
+ */
+export interface NetworkOptions {
+  protocol: NetworkProtocol;
+  host: string;
+  port: number;
+  /** Ścieżka URL dla WebSocketu (ws/wss); ignorowana przez pozostałe protokoły. */
+  path?: string;
+  /** TLS/WSS: nie zrywaj przy niezaufanym certyfikacie (self-signed). Domyślnie weryfikuj. */
+  insecureTls?: boolean;
+  /** Limit czasu nawiązania połączenia w ms; 0 pozostawia domyślny systemowy. */
+  connectTimeoutMs?: number;
+}
+
+/** Środowisko uruchomieniowe kontenera, do którego dołączamy przez CLI. */
+export type ContainerRuntime = 'docker' | 'kubernetes';
+
+/**
+ * Opcje dołączenia do kontenera (Etap 7).
+ *
+ * Realizowane jako sesja PTY owijająca `docker exec -it` / `kubectl exec -it` — bez nowych
+ * zależności, korzystając z zainstalowanego CLI. Nazwy celu są walidowane, a proces jest
+ * uruchamiany z tablicą argumentów (nie przez powłokę), więc nie ma wstrzyknięcia komend.
+ */
+export interface ContainerExecOptions {
+  runtime: ContainerRuntime;
+  /** Nazwa/identyfikator kontenera (docker) albo poda (kubernetes). */
+  target: string;
+  /** Powłoka uruchamiana w kontenerze; domyślnie `/bin/sh`. */
+  shell?: string;
+  /** Przestrzeń nazw Kubernetesa; ignorowana przez Dockera. */
+  namespace?: string;
+  columns?: number;
+  rows?: number;
+}
+
+/** Kontener/pod wykryty przez CLI — do wyboru w interfejsie. */
+export interface ContainerInfo {
+  runtime: ContainerRuntime;
+  /** Nazwa/identyfikator używany przez `exec`. */
+  target: string;
+  /** Opis do pokazania użytkownikowi (obraz, status, namespace). */
+  detail?: string;
+}

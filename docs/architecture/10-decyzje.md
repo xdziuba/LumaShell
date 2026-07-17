@@ -238,3 +238,55 @@ zachowany i port szeregowy oraz SSH są naprawdę binarne.
 | SSH: handshake, powitanie, echo, resize, rozłączenie, ścieżka błędu | serwer ssh2 w pamięci procesu — `npm run test:integration`, 11/11 |
 | Kontrakt oddaje `Uint8Array`, nie string | jawna asercja w obu testach transportów |
 | Port szeregowy: listowanie, otwarcie, zamknięcie, brak `resize` | `npm run test:serial COM9 115200` na realnym CP210x, 5/5 |
+
+## D5 — Protokoły sieciowe wprost w spec; kontenery jako owijka CLI
+
+### Kontekst
+
+Etap 7 dokłada rodzinę protokołów: TCP, TLS, Telnet, WebSocket, UDP oraz dołączanie do
+kontenerów Docker i podów Kubernetes. Dwa pytania projektowe: (1) czy sesje sieciowe mają iść
+przez deskryptor w procesie głównym jak SSH, (2) jak zrobić Docker/K8s bez ciężkich SDK.
+
+### Decyzja
+
+* **Sesje sieciowe nie niosą sekretów, więc parametry idą wprost w `SessionSpec`** — bez
+  pośrednictwa `connectionId` (to było konieczne tylko dla poświadczeń SSH, patrz
+  docs/security/02-sekrety.md). Wszystko jest walidowane w `ipc-validation`: protokół z
+  listy, host o dozwolonym zestawie znaków, port w zakresie, ścieżka WS bez znaków sterujących.
+* **Jedna klasa `TcpTransport` obsługuje TCP i TLS** (TLS to TCP z warstwą szyfrowania);
+  `TelnetTransport` dziedziczy po niej i wpina stanowy filtr IAC. `WebSocketTransport` używa
+  globalnego `WebSocket` z Node 24 — **żadnej zależności `ws`**. `UdpTransport` działa na
+  gnieździe skojarzonym z peerem (filtruje ruch od obcych nadawców).
+* **Docker/Kubernetes to owijka PTY nad zainstalowanym CLI** (`docker exec -it` /
+  `kubectl exec -it`), a nie dockerode/klient K8s. Pod ConPTY proces dostaje realny TTY.
+  Zero nowych zależności, kosztem wymogu obecności CLI w PATH.
+
+### Konsekwencje
+
+* nowe protokoły to małe klasy spełniające ten sam kontrakt `TerminalTransport` — renderer i
+  IPC nie rozgałęziają się na typ,
+* **granica bezpieczeństwa: nazwa kontenera/poda musi zaczynać się od znaku alfanumerycznego**,
+  co odcina podszycie pod flagę CLI (`--privileged`); proces jest uruchamiany z tablicą
+  argumentów (bez powłoki), a `kubectl` dostaje `--` przed powłoką,
+* sesje sieciowe/kontenerowe nie są przywracane po restarcie (przycinane jak SSH i serial —
+  tylko powłoki wracają, patrz `parseWorkspaceSnapshot`),
+* wykrywanie kontenerów jest miękkie: brak CLI = pusta lista, nigdy błąd.
+
+### Odrzucone warianty
+
+* **Deskryptor w procesie głównym dla każdej sesji sieciowej** — zbędna warstwa bez sekretów
+  do ukrycia; komplikowałaby przywracanie i profile bez zysku.
+* **Zależność `ws` dla WebSocketu** — niepotrzebna, bo Electron 43 niesie Node 24 z globalnym
+  `WebSocket` (zweryfikowane: `typeof WebSocket === 'function'`).
+* **dockerode / klient Kubernetes** — ciężkie SDK dublujące to, co robi CLI; owijka `exec`
+  daje pełną interaktywną sesję taniej.
+
+### Weryfikacja
+
+| Sprawdzone | Jak |
+| --- | --- |
+| TCP/TLS/Telnet/UDP/WebSocket: pełny obieg bajtów | serwery in-memory (w tym własny serwer WS) — `npm run test:net`, 9/9 |
+| TLS odrzuca self-signed bez `insecureTls`, przyjmuje z flagą | ten sam test, osobne przypadki |
+| Telnet odsiewa IAC i poprawnie negocjuje (DO ECHO, WILL SGA) | asercja na bajtach odpowiedzi do serwera |
+| Walidacja: protokół, host, port, ścieżka, nazwa celu, wstrzyknięcie flagi | `npm run test:net-validation`, 19/19 |
+| Pełny obieg TCP przez prawdziwą aplikację (IPC → transport → zdarzenie) | `tests/e2e/network.e2e.mjs` przez CDP, 5/5 |

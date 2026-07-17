@@ -8,6 +8,8 @@
  */
 
 import type {
+  ContainerRuntime,
+  NetworkProtocol,
   SerialFraming,
   SessionSpec,
   SshConnectRequest,
@@ -65,6 +67,21 @@ const ALLOWED_BAUD_RATES = new Set([
   300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600
 ]);
 
+const NETWORK_PROTOCOLS = new Set(['tcp', 'tls', 'telnet', 'ws', 'wss', 'udp']);
+const CONTAINER_RUNTIMES = new Set(['docker', 'kubernetes']);
+
+/** Host: nazwa DNS albo literał IPv4/IPv6 (dwukropki, kropki, myślniki, nawiasy IPv6). */
+const HOST_PATTERN = /^[a-zA-Z0-9._:\-[\]]+$/;
+/**
+ * Cel kontenera/poda oraz ścieżka powłoki: musi zaczynać się od znaku alfanumerycznego,
+ * co odcina wstrzyknięcie flagi (np. „--privileged") jako nazwy celu.
+ */
+const CONTAINER_TARGET = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/;
+/** Ścieżka powłoki: może zaczynać się od „/" (np. /bin/bash), ale nie od „-" (flaga). */
+const SHELL_PATH = /^[a-zA-Z0-9/][a-zA-Z0-9._/-]*$/;
+/** Namespace Kubernetesa — etykieta DNS-1123. */
+const K8S_NAMESPACE = /^[a-z0-9][a-z0-9-]*$/;
+
 function parseSessionSpec(value: unknown): SessionSpec {
   const source = asRecord(value);
   const kind = source['kind'];
@@ -108,6 +125,67 @@ function parseSessionSpec(value: unknown): SessionSpec {
       connectionId: requireString(source, 'connectionId', 64),
       label: requireString(source, 'label', 120)
     };
+  }
+
+  if (kind === 'network') {
+    const protocol = source['protocol'];
+    if (typeof protocol !== 'string' || !NETWORK_PROTOCOLS.has(protocol)) {
+      throw new IpcValidationError(`nieznany protokół sieciowy: ${String(protocol)}`);
+    }
+    const host = requireString(source, 'host', 255);
+    if (!HOST_PATTERN.test(host)) {
+      throw new IpcValidationError(`"host" zawiera niedozwolone znaki: "${host}"`);
+    }
+    const spec: SessionSpec & { kind: 'network' } = {
+      kind: 'network',
+      protocol: protocol as NetworkProtocol,
+      host,
+      port: requirePort(source, 'port'),
+      label: requireString(source, 'label', 120)
+    };
+    // Ścieżka dotyczy tylko WebSocketu; ograniczamy długość i wycinamy spacje oraz bajty
+    // sterujące (kod ≤ 0x20 oraz 0x7F), które nie mają prawa wystąpić w części URL.
+    if (source['path'] !== undefined) {
+      const path = requireString(source, 'path', 1024);
+      if ([...path].some((ch) => ch.charCodeAt(0) <= 0x20 || ch.charCodeAt(0) === 0x7f)) {
+        throw new IpcValidationError('"path" nie może zawierać spacji ani znaków sterujących');
+      }
+      spec.path = path;
+    }
+    if (typeof source['insecureTls'] === 'boolean') spec.insecureTls = source['insecureTls'];
+    return spec;
+  }
+
+  if (kind === 'container') {
+    const runtime = source['runtime'];
+    if (typeof runtime !== 'string' || !CONTAINER_RUNTIMES.has(runtime)) {
+      throw new IpcValidationError(`nieznane środowisko kontenera: ${String(runtime)}`);
+    }
+    const target = requireString(source, 'target', 128);
+    if (!CONTAINER_TARGET.test(target)) {
+      throw new IpcValidationError(`"target" ma niedozwolony format: "${target}"`);
+    }
+    const spec: SessionSpec & { kind: 'container' } = {
+      kind: 'container',
+      runtime: runtime as ContainerRuntime,
+      target,
+      label: requireString(source, 'label', 120)
+    };
+    if (source['shell'] !== undefined) {
+      const shell = requireString(source, 'shell', 128);
+      if (!SHELL_PATH.test(shell)) {
+        throw new IpcValidationError(`"shell" ma niedozwolony format: "${shell}"`);
+      }
+      spec.shell = shell;
+    }
+    if (source['namespace'] !== undefined) {
+      const namespace = requireString(source, 'namespace', 63);
+      if (!K8S_NAMESPACE.test(namespace)) {
+        throw new IpcValidationError(`"namespace" ma niedozwolony format: "${namespace}"`);
+      }
+      spec.namespace = namespace;
+    }
+    return spec;
   }
 
   throw new IpcValidationError(`nieznany rodzaj sesji: ${String(kind)}`);

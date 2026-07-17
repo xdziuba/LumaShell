@@ -41,6 +41,8 @@ const SshConnectDialog = lazy(() => import('./components/SshConnectDialog'));
 const HostVerifyDialog = lazy(() => import('./components/HostVerifyDialog'));
 const SftpPanel = lazy(() => import('./components/SftpPanel'));
 const SerialConnectDialog = lazy(() => import('./components/SerialConnectDialog'));
+const NetworkConnectDialog = lazy(() => import('./components/NetworkConnectDialog'));
+const ContainerConnectDialog = lazy(() => import('./components/ContainerConnectDialog'));
 const ThemeEditor = lazy(() => import('./components/ThemeEditor'));
 
 export function App(): React.JSX.Element {
@@ -56,6 +58,8 @@ export function App(): React.JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sshOpen, setSshOpen] = useState(false);
+  const [networkOpen, setNetworkOpen] = useState(false);
+  const [containerOpen, setContainerOpen] = useState(false);
   const [hostVerify, setHostVerify] = useState<HostVerifyRequest | null>(null);
   const [sftpOpen, setSftpOpen] = useState(false);
   // Ścieżka portu, dla którego otwarty jest dialog konfiguracji (null = zamknięty).
@@ -176,6 +180,16 @@ export function App(): React.JSX.Element {
     void window.luma.ssh.connect(request).then(({ connectionId, label }) => {
       open({ kind: 'ssh', connectionId, label }, label);
     });
+  };
+
+  // Sesje sieciowe i kontenerowe nie mają sekretów — spec idzie wprost do workspace'u.
+  const polaczSiec = (spec: Extract<SessionSpec, { kind: 'network' }>): void => {
+    setNetworkOpen(false);
+    void open(spec, spec.label);
+  };
+  const polaczKontener = (spec: Extract<SessionSpec, { kind: 'container' }>): void => {
+    setContainerOpen(false);
+    void open(spec, spec.label);
   };
 
   const zmienUstawienia = (next: TerminalSettings): void => {
@@ -348,6 +362,18 @@ export function App(): React.JSX.Element {
       keywords: 'ssh zdalny remote połączenie',
       run: () => setSshOpen(true)
     });
+    list.push({
+      id: 'network.connect',
+      title: 'Połącz przez sieć…',
+      keywords: 'tcp tls telnet websocket ws udp sieć network połączenie',
+      run: () => setNetworkOpen(true)
+    });
+    list.push({
+      id: 'container.connect',
+      title: 'Dołącz do kontenera…',
+      keywords: 'docker kubernetes k8s kontener pod exec',
+      run: () => setContainerOpen(true)
+    });
     for (const profile of profiles) {
       list.push({
         id: `profile:${profile.id}`,
@@ -472,6 +498,12 @@ export function App(): React.JSX.Element {
           <div className="sidebar__heading sidebar__heading--spaced">ZDALNE</div>
           <button className="sidebar__item sidebar__item--action" onClick={() => setSshOpen(true)}>
             + Połączenie SSH…
+          </button>
+          <button className="sidebar__item sidebar__item--action" onClick={() => setNetworkOpen(true)}>
+            + Połączenie sieciowe…
+          </button>
+          <button className="sidebar__item sidebar__item--action" onClick={() => setContainerOpen(true)}>
+            + Kontener (Docker/K8s)…
           </button>
 
           <div className="sidebar__heading sidebar__heading--spaced">PORTY COM</div>
@@ -625,6 +657,18 @@ export function App(): React.JSX.Element {
             }}
             onClose={() => setSerialDialogPath(null)}
           />
+        </Suspense>
+      )}
+
+      {networkOpen && (
+        <Suspense fallback={null}>
+          <NetworkConnectDialog onOpen={polaczSiec} onClose={() => setNetworkOpen(false)} />
+        </Suspense>
+      )}
+
+      {containerOpen && (
+        <Suspense fallback={null}>
+          <ContainerConnectDialog onOpen={polaczKontener} onClose={() => setContainerOpen(false)} />
         </Suspense>
       )}
 

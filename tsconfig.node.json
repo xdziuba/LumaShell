@@ -6,6 +6,11 @@
     "moduleResolution": "bundler",
     "lib": ["ES2023"],
     "types": ["node"],
+    // Rozszerzenia `.ts` w importach względnych — pozwalają uruchomić transporty sieciowe
+    // wprost pod `node --experimental-transform-types` w testach (Node wymaga jawnego
+    // rozszerzenia). Flaga tylko dopuszcza tę formę, nie wymusza jej; esbuild/electron-vite
+    // rozwiązuje `.ts` przy budowaniu. Wymaga noEmit (spełnione).
+    "allowImportingTsExtensions": true,
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,

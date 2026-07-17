@@ -15,6 +15,7 @@ import {
   IpcChannel,
   IpcEvent,
   type AppCapabilities,
+  type ContainerInfo,
   type HostVerifyRequest,
   type PluginCommand,
   type PluginNotification,
@@ -74,6 +75,10 @@ export const api: LumaApi = {
 
   serial: {
     listPorts: (): Promise<SerialPortInfo[]> => ipcRenderer.invoke(IpcChannel.SerialListPorts)
+  },
+
+  containers: {
+    list: (): Promise<ContainerInfo[]> => ipcRenderer.invoke(IpcChannel.ContainerList)
   },
 
   ssh: {

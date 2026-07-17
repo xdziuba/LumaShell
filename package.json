@@ -17,6 +17,8 @@
     "test:integration": "node --experimental-transform-types --no-warnings tests/integration/ssh-transport.test.ts",
     "test:known-hosts": "node --experimental-transform-types --no-warnings tests/integration/known-hosts.test.ts",
     "test:serial": "node --experimental-transform-types --no-warnings tests/integration/serial-transport.test.ts",
+    "test:net": "node --experimental-transform-types --no-warnings tests/integration/net-transport.test.ts",
+    "test:net-validation": "node --experimental-transform-types --no-warnings tests/unit/network-validation.test.ts",
     "test:perf": "node tests/performance/pty-throughput.mjs"
   },
   "dependencies": {

@@ -15,6 +15,8 @@ import { LocalPtyTransport } from '@services/pty/local-pty-transport';
 import { discoverShells, type ShellDefinition } from '@services/pty/shell-detection';
 import { SerialTransport, listSerialPorts } from '@services/serial/serial-transport';
 import { SshTransport } from '@services/ssh/ssh-transport';
+import { createNetworkTransport } from '@services/net/network-transport';
+import { createContainerTransport, listContainers } from '@services/container/container-exec';
 import { dropConnection, registerConnection, resolveOptions } from '../ssh/ssh-connections';
 import { registerHostVerifyIpc } from '../ssh/host-verify';
 import {
@@ -125,6 +127,33 @@ async function createTransport(
     return { transport: new SshTransport(sessionId, options), label: spec.label };
   }
 
+  if (spec.kind === 'network') {
+    return {
+      transport: createNetworkTransport(sessionId, {
+        protocol: spec.protocol,
+        host: spec.host,
+        port: spec.port,
+        path: spec.path,
+        insecureTls: spec.insecureTls
+      }),
+      label: spec.label
+    };
+  }
+
+  if (spec.kind === 'container') {
+    return {
+      transport: createContainerTransport(sessionId, {
+        runtime: spec.runtime,
+        target: spec.target,
+        shell: spec.shell,
+        namespace: spec.namespace,
+        columns,
+        rows
+      }),
+      label: spec.label
+    };
+  }
+
   const shells = await getShells();
   // Identyfikator z renderera jest kluczem do listy wykrytych powłok, nigdy ścieżką.
   // Nieznany identyfikator schodzi na powłokę domyślną zamiast wywracać sesję.
@@ -151,6 +180,9 @@ export function registerTerminalIpc(window: BrowserWindow): void {
   );
 
   ipcMain.handle(IpcChannel.SerialListPorts, () => listSerialPorts());
+
+  // Wykrywanie kontenerów/podów jest leniwe i odporne — puste, gdy brak docker/kubectl.
+  ipcMain.handle(IpcChannel.ContainerList, () => listContainers());
 
   // Rejestracja połączenia SSH: sekrety zostają w procesie głównym, renderer dostaje
   // tylko connectionId, którym potem otwiera sesję.
