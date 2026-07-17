@@ -104,7 +104,14 @@ async function createTransport(
 ): Promise<{ transport: TerminalTransport; label: string }> {
   if (spec.kind === 'serial') {
     return {
-      transport: new SerialTransport(sessionId, { path: spec.path, baudRate: spec.baudRate }),
+      transport: new SerialTransport(sessionId, {
+        path: spec.path,
+        baudRate: spec.baudRate,
+        dataBits: spec.dataBits,
+        stopBits: spec.stopBits,
+        parity: spec.parity,
+        rtscts: spec.rtscts
+      }),
       label: `${spec.path} @ ${spec.baudRate}`
     };
   }

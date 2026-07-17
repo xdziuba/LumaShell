@@ -8,6 +8,7 @@
  */
 
 import type {
+  SerialFraming,
   SessionSpec,
   SshConnectRequest,
   StoredPane,
@@ -88,7 +89,16 @@ function parseSessionSpec(value: unknown): SessionSpec {
     if (typeof baudRate !== 'number' || !ALLOWED_BAUD_RATES.has(baudRate)) {
       throw new IpcValidationError(`"baudRate" spoza dozwolonych wartości: ${String(baudRate)}`);
     }
-    return { kind: 'serial', path, baudRate };
+    const spec: SessionSpec & { kind: 'serial' } = { kind: 'serial', path, baudRate };
+    // Parametry ramki: przyjmujemy tylko wartości z dozwolonych zbiorów, resztę pomijamy
+    // (transport użyje wtedy 8N1 bez kontroli przepływu).
+    if ([5, 6, 7, 8].includes(source['dataBits'] as number)) spec.dataBits = source['dataBits'] as 5 | 6 | 7 | 8;
+    if ([1, 1.5, 2].includes(source['stopBits'] as number)) spec.stopBits = source['stopBits'] as 1 | 1.5 | 2;
+    if (['none', 'even', 'odd', 'mark', 'space'].includes(source['parity'] as string)) {
+      spec.parity = source['parity'] as SerialFraming['parity'];
+    }
+    if (typeof source['rtscts'] === 'boolean') spec.rtscts = source['rtscts'];
+    return spec;
   }
 
   if (kind === 'ssh') {

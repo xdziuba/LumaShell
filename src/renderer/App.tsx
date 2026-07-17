@@ -35,9 +35,7 @@ const CommandPalette = lazy(() => import('./components/CommandPalette'));
 const SshConnectDialog = lazy(() => import('./components/SshConnectDialog'));
 const HostVerifyDialog = lazy(() => import('./components/HostVerifyDialog'));
 const SftpPanel = lazy(() => import('./components/SftpPanel'));
-
-/** Etap 2 nie ma jeszcze ustawień portu — prędkość na sztywno. */
-const PROTOTYPE_BAUD_RATE = 115200;
+const SerialConnectDialog = lazy(() => import('./components/SerialConnectDialog'));
 
 export function App(): React.JSX.Element {
   const [capabilities, setCapabilities] = useState<AppCapabilities | null>(null);
@@ -51,6 +49,8 @@ export function App(): React.JSX.Element {
   const [sshOpen, setSshOpen] = useState(false);
   const [hostVerify, setHostVerify] = useState<HostVerifyRequest | null>(null);
   const [sftpOpen, setSftpOpen] = useState(false);
+  // Ścieżka portu, dla którego otwarty jest dialog konfiguracji (null = zamknięty).
+  const [serialDialogPath, setSerialDialogPath] = useState<string | null>(null);
 
   const {
     tabs,
@@ -154,8 +154,8 @@ export function App(): React.JSX.Element {
   const otworzPowloke = (shell: ShellInfo): void =>
     void open({ kind: 'pty', shellId: shell.id }, shell.label);
 
-  const otworzPort = (port: SerialPortInfo): void =>
-    void open({ kind: 'serial', path: port.path, baudRate: PROTOTYPE_BAUD_RATE }, port.path);
+  // Klik portu otwiera dialog konfiguracji; właściwe otwarcie po zatwierdzeniu.
+  const otworzPort = (port: SerialPortInfo): void => setSerialDialogPath(port.path);
 
   const nowaZakladka = (): void => {
     const first = shells[0];
@@ -462,6 +462,19 @@ export function App(): React.JSX.Element {
       {sshOpen && (
         <Suspense fallback={null}>
           <SshConnectDialog onConnect={polaczSsh} onClose={() => setSshOpen(false)} />
+        </Suspense>
+      )}
+
+      {serialDialogPath && (
+        <Suspense fallback={null}>
+          <SerialConnectDialog
+            path={serialDialogPath}
+            onOpen={(spec) => {
+              setSerialDialogPath(null);
+              void open(spec, `${spec.path} @ ${spec.baudRate}`);
+            }}
+            onClose={() => setSerialDialogPath(null)}
+          />
         </Suspense>
       )}
 

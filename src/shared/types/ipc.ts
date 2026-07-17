@@ -80,10 +80,19 @@ export interface AppCapabilities {
  * Renderer prosi o rodzaj połączenia, nie o konkretną bibliotekę — po drugiej stronie
  * stoi odpowiedni `TerminalTransport` (docs/architecture/02-warstwy-i-transporty.md).
  */
+/** Parametry ramki portu szeregowego. */
+export interface SerialFraming {
+  dataBits?: 5 | 6 | 7 | 8;
+  stopBits?: 1 | 1.5 | 2;
+  parity?: 'none' | 'even' | 'odd' | 'mark' | 'space';
+  /** Sprzętowa kontrola przepływu RTS/CTS. */
+  rtscts?: boolean;
+}
+
 export type SessionSpec =
   /** `shellId` pochodzi z listy wykrytych powłok; brak = powłoka domyślna. */
   | { kind: 'pty'; shellId?: string; cwd?: string }
-  | { kind: 'serial'; path: string; baudRate: number }
+  | ({ kind: 'serial'; path: string; baudRate: number } & SerialFraming)
   /**
    * `connectionId` wskazuje deskryptor SSH żyjący w procesie głównym — poświadczenia
    * NIGDY nie przechodzą przez SessionSpec ani snapshot (docs/security/02-sekrety.md).
