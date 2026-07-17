@@ -1,0 +1,11 @@
+{
+  "id": "com.lumashell.hello",
+  "name": "Hello",
+  "version": "1.0.0",
+  "apiVersion": "1",
+  "main": "dist/index.js",
+  "permissions": ["commands.register", "notifications.show"],
+  "contributes": {
+    "commands": [{ "id": "hello.sayHello", "title": "Hello: Przywitaj się" }]
+  }
+}

@@ -21,7 +21,14 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     resolve: { alias },
     build: {
-      rollupOptions: { input: { index: resolve('src/preload/index.ts') } }
+      rollupOptions: {
+        input: {
+          index: resolve('src/preload/index.ts'),
+          // Osobny preload dla Plugin Hosta — wystawia wąski most RPC, bez Node
+          // (docs/architecture/10-decyzje.md#d2--izolacja-wtyczek-rpc-bez-node).
+          'plugin-host': resolve('src/plugin-host/preload.ts')
+        }
+      }
     }
   },
   renderer: {
@@ -31,7 +38,14 @@ export default defineConfig({
       alias: { ...alias, '@renderer': resolve('src/renderer') }
     },
     build: {
-      rollupOptions: { input: { index: resolve('src/renderer/index.html') } }
+      rollupOptions: {
+        input: {
+          index: resolve('src/renderer/index.html'),
+          // Strona Plugin Hosta — ładowana w ukrytym, sandboxowanym oknie. Musi leżeć
+          // wewnątrz roota renderera (src/renderer), stąd podkatalog.
+          'plugin-host': resolve('src/renderer/plugin-host/index.html')
+        }
+      }
     }
   }
 });

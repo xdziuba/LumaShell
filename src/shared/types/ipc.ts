@@ -37,6 +37,8 @@ export const IpcChannel = {
   SftpUpload: 'sftp:upload',
   SessionLogStart: 'sessionLog:start',
   SessionLogStop: 'sessionLog:stop',
+  PluginCommands: 'plugin:commands',
+  PluginRunCommand: 'plugin:runCommand',
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
   TerminalResize: 'terminal:resize',
@@ -47,8 +49,24 @@ export const IpcChannel = {
 export const IpcEvent = {
   TerminalData: 'terminal:data',
   TerminalExit: 'terminal:exit',
-  SshHostVerify: 'ssh:hostVerify'
+  SshHostVerify: 'ssh:hostVerify',
+  PluginCommandsChanged: 'plugin:commandsChanged',
+  PluginNotification: 'plugin:notification'
 } as const;
+
+/** Komenda wystawiona przez wtyczkę, widoczna w palecie. */
+export interface PluginCommand {
+  pluginId: string;
+  id: string;
+  title: string;
+}
+
+/** Powiadomienie od wtyczki (po sprawdzeniu uprawnienia notifications.show). */
+export interface PluginNotification {
+  pluginName: string;
+  level: string;
+  message: string;
+}
 
 /**
  * Możliwości środowiska ustalane w procesie głównym.
