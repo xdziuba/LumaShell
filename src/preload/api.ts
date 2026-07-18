@@ -9,6 +9,7 @@ import { ipcRenderer } from 'electron';
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { Profile } from '@core/profiles/profile';
 import type { Theme } from '@core/theme/theme';
+import type { AiConfig, AiModel } from '@core/ai/provider';
 import type { LumaApi, Unsubscribe } from '@shared/types/api';
 import type { TerminalSettings } from '@shared/types/settings';
 import {
@@ -126,6 +127,15 @@ export const api: LumaApi = {
   },
 
   whatsNew: (): Promise<WhatsNewEntry[]> => ipcRenderer.invoke(IpcChannel.AppWhatsNew),
+
+  ai: {
+    getConfig: (): Promise<AiConfig> => ipcRenderer.invoke(IpcChannel.AiGetConfig),
+    saveConfig: (config: Pick<AiConfig, 'provider' | 'baseUrl' | 'model'>, apiKey?: string): Promise<AiConfig> =>
+      ipcRenderer.invoke(IpcChannel.AiSaveConfig, { config, apiKey }),
+    listModels: (): Promise<AiModel[]> => ipcRenderer.invoke(IpcChannel.AiListModels),
+    testConnection: (): Promise<{ ok: true; models: number }> =>
+      ipcRenderer.invoke(IpcChannel.AiTestConnection)
+  },
 
   diagnostics: {
     openLogs: (): void => void ipcRenderer.invoke(IpcChannel.AppOpenLogs),

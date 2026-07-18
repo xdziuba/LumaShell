@@ -9,6 +9,7 @@ import { app, BrowserWindow } from 'electron';
 import { createMainWindow } from './window-manager';
 import { registerWindowIpc } from './ipc/window-ipc';
 import { disposeAllSessions, registerTerminalIpc } from './ipc/terminal-ipc';
+import { registerAiIpc } from './ipc/ai-ipc';
 import { initPlugins } from './plugins/plugin-manager';
 import { initAutoUpdater } from './updater/auto-updater';
 import { initErrorReporter } from './error-reporter';
@@ -23,6 +24,7 @@ function bootstrap(): void {
   const window = createMainWindow();
   registerWindowIpc(window);
   registerTerminalIpc(window);
+  registerAiIpc();
 
   window.once('ready-to-show', () => {
     console.log(`[start] okno gotowe po ${Date.now() - startedAt} ms`);
