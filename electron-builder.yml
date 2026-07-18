@@ -12,6 +12,10 @@ appId: io.adbuzz.lumashell
 productName: LumaShell
 copyright: Copyright © 2026 xdziuba
 
+# node-pty / serialport / ssh2 dostarczają prebuildy N-API działające pod Electronem — NIE
+# przebudowujemy ich (electron-rebuild przez node-gyp i tak padał na spacji w ścieżce/winpty).
+npmRebuild: false
+
 directories:
   output: release
   buildResources: resources

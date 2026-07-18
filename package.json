@@ -21,6 +21,8 @@
     "test:serial": "node --experimental-transform-types --no-warnings tests/integration/serial-transport.test.ts",
     "test:net": "node --experimental-transform-types --no-warnings tests/integration/net-transport.test.ts",
     "test:net-validation": "node --experimental-transform-types --no-warnings tests/unit/network-validation.test.ts",
+    "test:security": "node --experimental-transform-types --no-warnings tests/security/security.test.ts",
+    "test:soak": "node --experimental-transform-types --no-warnings tests/performance/net-soak.test.ts",
     "test:perf": "node tests/performance/pty-throughput.mjs"
   },
   "dependencies": {
