@@ -68,10 +68,18 @@ export interface ChatRequest {
   tools?: AiToolSpec[];
 }
 
+/** Zużycie tokenów tury (do limitu kosztów AI-7). Może brakować, gdy dostawca go nie poda. */
+export interface AiUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 /** Wynik jednej tury czatu: tekst (już wystrumieniowany deltami) i ewentualne wywołania narzędzi. */
 export interface ChatResult {
   text: string;
   toolCalls: AiToolCall[];
+  /** Zużycie tokenów w tej turze — gdy dostawca je zwrócił. */
+  usage?: AiUsage;
 }
 
 /**

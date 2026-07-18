@@ -11,6 +11,7 @@ import type {
   AiChatRequest,
   AiChatResult,
   AiCliAvailability,
+  AiPolicy,
   AppCapabilities,
   ContainerInfo,
   HostVerifyRequest,
@@ -155,8 +156,12 @@ export interface LumaApi {
     pickTextFile(): Promise<{ name: string; content: string } | null>;
     /** Zapisuje plik (akcja AI-3 — już zatwierdzona w UI); zwraca skutek. */
     writeFile(path: string, content: string): Promise<{ ok: boolean; message: string }>;
-    /** Dopisuje wpis do dziennika audytowego akcji AI. */
+    /** Dopisuje wpis do dziennika audytowego działań AI. */
     logAction(entry: AiActionLog): void;
+    /** Polityka autonomii agenta (AI-7) — limity biegu. */
+    getPolicy(): Promise<AiPolicy>;
+    /** Zapisuje politykę po walidacji; zwraca wartości faktycznie utrwalone. */
+    savePolicy(policy: AiPolicy): Promise<AiPolicy>;
   };
 
   /** Diagnostyka i zgłaszanie problemów (lokalny log, bez telemetrii). */

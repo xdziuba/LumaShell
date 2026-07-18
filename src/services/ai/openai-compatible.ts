@@ -12,6 +12,7 @@ import type {
   AiProvider,
   AiProviderKind,
   AiToolCall,
+  AiUsage,
   ChatMessage,
   ChatRequest,
   ChatResult
@@ -86,6 +87,7 @@ async function readStream(
   let buffer = '';
   let full = '';
   const tools = new Map<number, ToolAcc>();
+  let usage: AiUsage | undefined;
 
   for (;;) {
     const { done, value } = await reader.read();
@@ -98,9 +100,10 @@ async function readStream(
       buffer = buffer.slice(newline + 1);
       if (!line.startsWith('data:')) continue;
       const data = line.slice(5).trim();
-      if (data === '[DONE]') return finalize(full, tools);
+      if (data === '[DONE]') return finalize(full, tools, usage);
       try {
         const json = JSON.parse(data) as {
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
           choices?: Array<{
             delta?: {
               content?: string;
@@ -108,6 +111,10 @@ async function readStream(
             };
           }>;
         };
+        // Z include_usage ostatnia porcja niesie zużycie tokenów (puste choices).
+        if (json.usage) {
+          usage = { inputTokens: json.usage.prompt_tokens ?? 0, outputTokens: json.usage.completion_tokens ?? 0 };
+        }
         const delta = json.choices?.[0]?.delta;
         const content = delta?.content;
         if (typeof content === 'string' && content.length > 0) {
@@ -127,14 +134,14 @@ async function readStream(
       }
     }
   }
-  return finalize(full, tools);
+  return finalize(full, tools, usage);
 }
 
-function finalize(text: string, tools: Map<number, ToolAcc>): ChatResult {
+function finalize(text: string, tools: Map<number, ToolAcc>, usage: AiUsage | undefined): ChatResult {
   const toolCalls: AiToolCall[] = [...tools.values()]
     .filter((t) => t.name.length > 0)
     .map((t) => ({ id: t.id || t.name, name: t.name, arguments: parseArgs(t.args) }));
-  return { text, toolCalls };
+  return usage ? { text, toolCalls, usage } : { text, toolCalls };
 }
 
 export class OpenAiCompatibleProvider implements AiProvider {
@@ -187,7 +194,10 @@ export class OpenAiCompatibleProvider implements AiProvider {
               }))
             }
           : {}),
-        stream: true
+        stream: true,
+        // Prosi o zużycie tokenów w ostatniej porcji (do limitu kosztów AI-7). Serwery,
+        // które tego nie znają, pomijają pole; wtedy usage po prostu pozostaje nieznane.
+        stream_options: { include_usage: true }
       }),
       signal
     });

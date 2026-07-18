@@ -15,6 +15,7 @@ import type {
   AiModel,
   AiProvider,
   AiToolCall,
+  AiUsage,
   ChatMessage,
   ChatRequest,
   ChatResult
@@ -113,6 +114,8 @@ async function readStream(
   let buffer = '';
   let full = '';
   const blocks = new Map<number, ToolBlock>();
+  let inputTokens = 0;
+  let outputTokens = 0;
 
   for (;;) {
     const { done, value } = await reader.read();
@@ -131,7 +134,16 @@ async function readStream(
           index?: number;
           content_block?: { type?: string; id?: string; name?: string };
           delta?: { type?: string; text?: string; partial_json?: string };
+          message?: { usage?: { input_tokens?: number } };
+          usage?: { output_tokens?: number };
         };
+        // Zużycie tokenów: wejście z message_start, wyjście (kumulatywne) z message_delta.
+        if (json.type === 'message_start' && json.message?.usage?.input_tokens !== undefined) {
+          inputTokens = json.message.usage.input_tokens;
+        }
+        if (json.type === 'message_delta' && json.usage?.output_tokens !== undefined) {
+          outputTokens = json.usage.output_tokens;
+        }
         if (json.type === 'content_block_start' && json.content_block?.type === 'tool_use') {
           blocks.set(json.index ?? 0, {
             id: json.content_block.id ?? '',
@@ -159,7 +171,9 @@ async function readStream(
   const toolCalls: AiToolCall[] = [...blocks.values()]
     .filter((b) => b.name.length > 0)
     .map((b) => ({ id: b.id, name: b.name, arguments: parseArgs(b.input) }));
-  return { text: full, toolCalls };
+  const usage: AiUsage | undefined =
+    inputTokens > 0 || outputTokens > 0 ? { inputTokens, outputTokens } : undefined;
+  return usage ? { text: full, toolCalls, usage } : { text: full, toolCalls };
 }
 
 export class AnthropicProvider implements AiProvider {

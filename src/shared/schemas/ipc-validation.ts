@@ -396,7 +396,7 @@ export function parseAiWriteFile(payload: unknown): { path: string; content: str
 export function parseAiLogAction(payload: unknown): AiActionLog {
   const source = asRecord(payload);
   const decision = source['decision'];
-  if (decision !== 'approved' && decision !== 'denied') {
+  if (decision !== 'approved' && decision !== 'denied' && decision !== 'auto') {
     throw new IpcValidationError(`nieznana decyzja audytu: ${String(decision)}`);
   }
   const entry: AiActionLog = {

@@ -8,11 +8,11 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { AiChatMessage, PluginToolInfo } from '@shared/types/ipc';
+import type { AiChatMessage, AiPolicy, PluginToolInfo } from '@shared/types/ipc';
 import type { AiConfig } from '@core/ai/provider';
 import { activeTerminal, terminalWithSelection } from '../terminal/terminal-context';
 import { createToolset } from '../ai/tools';
-import { DEFAULT_LIMITS, runAgent, type AgentDeps, type AgentHandlers } from '../ai/agent';
+import { DEFAULT_LIMITS, runAgent, type AgentDeps, type AgentHandlers, type AgentUsage } from '../ai/agent';
 
 /** Ile ostatnich wierszy bufora dołączamy ręcznie jako „wyjście terminala". */
 const RECENT_LINES = 60;
@@ -111,9 +111,13 @@ export default function AiChatPanel({
   // Narzędzia AI wystawione przez wtyczki (AI-6) — scalane z wbudowanymi w toolset.
   const [pluginTools, setPluginTools] = useState<PluginToolInfo[]>([]);
   const toolset = useMemo(() => createToolset(pluginTools), [pluginTools]);
+  // Polityka autonomii (AI-7) i bieżące zużycie tokenów biegu.
+  const [policy, setPolicy] = useState<AiPolicy | null>(null);
+  const [usage, setUsage] = useState<AgentUsage | null>(null);
 
   useEffect(() => {
     void window.luma.ai.getConfig().then(setCfg);
+    void window.luma.ai.getPolicy().then(setPolicy);
     void window.luma.plugins.listTools().then(setPluginTools);
     return window.luma.plugins.onToolsChanged(setPluginTools);
   }, []);
@@ -207,18 +211,20 @@ export default function AiChatPanel({
           setApproval(null);
           return ok;
         }),
-      onAudit: (entry) => window.luma.ai.logAction(entry)
+      onAudit: (entry) => window.luma.ai.logAction(entry),
+      onUsage: setUsage
     };
 
+    // Limity biegu z polityki (AI-7); maxRetries zostaje wewnętrzne.
+    const limits = { ...DEFAULT_LIMITS, ...(policy ?? {}), signal: controller.signal };
+
     try {
-      const { status, error } = await runAgent(convoRef.current, toolset.specs, deps, handlers, {
-        ...DEFAULT_LIMITS,
-        signal: controller.signal
-      });
+      const { status, error } = await runAgent(convoRef.current, toolset.specs, deps, handlers, limits);
       if (status === 'error') markError(error ?? 'Błąd połączenia', false);
       else if (status === 'aborted') markError('', true);
       else if (status === 'timeout') addStep('Przerwano — przekroczono budżet czasu.');
       else if (status === 'step-limit') addStep('Przerwano — przekroczono limit kroków.');
+      else if (status === 'budget') addStep('Przerwano — przekroczono budżet tokenów.');
     } finally {
       setStreaming(false);
       requestIdRef.current = null;
@@ -236,6 +242,7 @@ export default function AiChatPanel({
 
   const clearChat = (): void => {
     setMessages([]);
+    setUsage(null);
     convoRef.current = [{ role: 'system', content: SYSTEM_PROMPT }];
   };
 
@@ -265,7 +272,19 @@ export default function AiChatPanel({
       <header className="panel__header">
         <span className="panel__title">CZAT AI</span>
         <div className="panel__header-actions">
-          <button className="panel__link" onClick={onOpenConfig} title="Konfiguracja dostawcy AI">
+          {usage && (usage.inputTokens > 0 || usage.outputTokens > 0) && (
+            <span
+              className="chat__usage"
+              title={`Wejście ${usage.inputTokens} + wyjście ${usage.outputTokens} tokenów, ${usage.requests} zapytań`}
+            >
+              {usage.inputTokens + usage.outputTokens} tok
+              {policy && policy.tokenBudget > 0 ? ` / ${policy.tokenBudget}` : ''}
+            </span>
+          )}
+          <button className="panel__link" onClick={() => window.luma.diagnostics.openLogs()} title="Otwórz dziennik działań (ai-audit.log)">
+            Dziennik
+          </button>
+          <button className="panel__link" onClick={onOpenConfig} title="Konfiguracja dostawcy AI i polityki">
             Konfiguracja
           </button>
           <button className="panel__link" onClick={clearChat} disabled={messages.length === 0}>

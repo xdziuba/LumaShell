@@ -18,6 +18,7 @@ import {
   parseAiWriteFile
 } from '@shared/schemas/ipc-validation';
 import { getAiConfig, getAiProvider, saveAiConfig } from '../ai/ai-config-store';
+import { getAiPolicy, saveAiPolicy } from '../ai/ai-policy-store';
 import { logsDir } from '../error-reporter';
 
 /** Górny limit dołączanego pliku — kontekst modelu i tak jest skończony. */
@@ -106,7 +107,7 @@ export function registerAiIpc(window: BrowserWindow): void {
     }
   );
 
-  // Dziennik audytowy akcji AI: każda propozycja akcji i decyzja użytkownika trafia do
+  // Dziennik audytowy działań AI: każde wywołanie narzędzia i decyzja użytkownika trafia do
   // logs/ai-audit.log. Audyt nie może wywrócić akcji, więc błąd zapisu jest połykany.
   ipcMain.handle(IpcChannel.AiLogAction, (_event, payload) => {
     const entry = parseAiLogAction(payload);
@@ -117,4 +118,8 @@ export function registerAiIpc(window: BrowserWindow): void {
       // brak audytu nie może zablokować pracy
     }
   });
+
+  // Polityka autonomii agenta (AI-7) — konfigurowalne limity biegu.
+  ipcMain.handle(IpcChannel.AiGetPolicy, () => getAiPolicy());
+  ipcMain.handle(IpcChannel.AiSavePolicy, (_event, payload: unknown) => saveAiPolicy(payload));
 }

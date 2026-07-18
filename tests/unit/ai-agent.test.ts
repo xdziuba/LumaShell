@@ -22,7 +22,14 @@ interface ChatReq {
 
 /** Buduje atrapy zależności; `chat` sterujemy funkcją per test. */
 function makeDeps(
-  chat: (req: ChatReq, call: number) => Promise<{ text: string; toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }> }>,
+  chat: (
+    req: ChatReq,
+    call: number
+  ) => Promise<{
+    text: string;
+    toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
+    usage?: { inputTokens: number; outputTokens: number };
+  }>,
   overrides: Partial<AgentDeps> = {}
 ): { deps: AgentDeps; calls: () => number; toolRuns: string[] } {
   let calls = 0;
@@ -44,22 +51,31 @@ function makeDeps(
   return { deps, calls: () => calls, toolRuns };
 }
 
-function makeHandlers(): { handlers: AgentHandlers; steps: string[]; texts: string[]; audits: Array<{ decision: string }>; approve: (v: boolean) => void } {
+function makeHandlers(): {
+  handlers: AgentHandlers;
+  steps: string[];
+  texts: string[];
+  audits: Array<{ decision: string }>;
+  usages: number[];
+  approve: (v: boolean) => void;
+} {
   const steps: string[] = [];
   const texts: string[] = [];
   const audits: Array<{ decision: string }> = [];
+  const usages: number[] = [];
   let approveValue = true;
   const handlers: AgentHandlers = {
     onTurnStart: () => {},
     onText: (t) => texts.push(t),
     onStep: (s) => steps.push(s),
     requestApproval: async () => approveValue,
-    onAudit: (e) => audits.push(e)
+    onAudit: (e) => audits.push(e),
+    onUsage: (u) => usages.push(u.inputTokens + u.outputTokens)
   };
-  return { handlers, steps, texts, audits, approve: (v) => (approveValue = v) };
+  return { handlers, steps, texts, audits, usages, approve: (v) => (approveValue = v) };
 }
 
-const LIMITS: AgentLimits = { maxSteps: 5, maxActions: 3, timeoutMs: 10_000, maxRetries: 2 };
+const LIMITS: AgentLimits = { maxSteps: 5, maxActions: 3, timeoutMs: 10_000, maxRetries: 2, tokenBudget: 0 };
 
 async function main(): Promise<void> {
   // 1. Pętla wieloetapowa: tura z narzędziem read-only, potem odpowiedź końcowa.
@@ -69,13 +85,15 @@ async function main(): Promise<void> {
         ? { text: 'czytam', toolCalls: [{ id: 't1', name: 'read', arguments: {} }] }
         : { text: 'gotowe', toolCalls: [] }
     );
-    const { handlers, texts } = makeHandlers();
+    const { handlers, texts, audits } = makeHandlers();
     const convo = [{ role: 'user' as const, content: 'zrób' }];
     const r = await runAgent(convo, [], deps, handlers, LIMITS);
     sprawdz('multi-step kończy się completed', r.status === 'completed', r.status);
     sprawdz('narzędzie read wykonane', toolRuns.join(',') === 'read', toolRuns.join(','));
     sprawdz('tekst końcowy zebrany', texts.includes('gotowe'));
     sprawdz('wynik narzędzia dopięty do rozmowy', convo.some((m) => m.role === 'tool'));
+    // Pełny rejestr (AI-7): odczyt też trafia do audytu jako 'auto'.
+    sprawdz('odczyt zalogowany jako auto', audits.some((a) => a.decision === 'auto'));
   }
 
   // 2. Limit kroków: model wiecznie prosi o narzędzie.
@@ -150,6 +168,20 @@ async function main(): Promise<void> {
     const r = await runAgent([{ role: 'user', content: 'x' }], [], deps, handlers, LIMITS);
     sprawdz('4xx nie jest ponawiane', attempts === 1, String(attempts));
     sprawdz('status error z komunikatem 401', r.status === 'error' && (r.error ?? '').includes('401'), `${r.status}/${r.error}`);
+  }
+
+  // 8a. Budżet tokenów: każda tura zużywa tokeny; po przekroczeniu → status 'budget'.
+  {
+    const { deps } = makeDeps(async () => ({
+      text: '',
+      toolCalls: [{ id: 'x', name: 'read', arguments: {} }],
+      usage: { inputTokens: 100, outputTokens: 100 }
+    }));
+    const { handlers, usages } = makeHandlers();
+    const r = await runAgent([{ role: 'user', content: 'x' }], [], deps, handlers, { ...LIMITS, maxSteps: 20, tokenBudget: 500 });
+    sprawdz('przekroczony budżet tokenów → budget', r.status === 'budget', r.status);
+    sprawdz('zużycie raportowane po turach', usages.length > 0 && usages.at(-1)! >= 500, String(usages.at(-1)));
+    sprawdz('bieg zliczył zużycie w wyniku', r.usage.inputTokens + r.usage.outputTokens >= 500, String(r.usage.inputTokens + r.usage.outputTokens));
   }
 
   // 8. Budżet czasu: zegar przeskakuje ponad limit → timeout przed wołaniem modelu.

@@ -58,6 +58,8 @@ export const IpcChannel = {
   AiPickTextFile: 'ai:pickTextFile',
   AiWriteFile: 'ai:writeFile',
   AiLogAction: 'ai:logAction',
+  AiGetPolicy: 'ai:getPolicy',
+  AiSavePolicy: 'ai:savePolicy',
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
   TerminalResize: 'terminal:resize',
@@ -121,19 +123,35 @@ export interface AiChatRequest {
   tools?: AiChatToolSpec[];
 }
 
-/** Wynik tury czatu: tekst (już wystrumieniowany) + ewentualne wywołania narzędzi. */
+/** Zużycie tokenów tury (limit kosztów AI-7); brak, gdy dostawca go nie zwrócił. */
+export interface AiChatUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/** Polityka autonomii agenta (AI-7) — konfigurowalne limity biegu; 0 = bez limitu (dla budżetu). */
+export interface AiPolicy {
+  maxSteps: number;
+  maxActions: number;
+  timeoutMs: number;
+  tokenBudget: number;
+}
+
+/** Wynik tury czatu: tekst (już wystrumieniowany) + ewentualne wywołania narzędzi + zużycie. */
 export interface AiChatResult {
   text: string;
   toolCalls: AiChatToolCall[];
+  usage?: AiChatUsage;
 }
 
-/** Wpis do dziennika audytowego akcji AI (AI-3): co, decyzja, skutek. */
+/** Wpis do dziennika audytowego działań AI (AI-3, pełny rejestr AI-7): co, decyzja, skutek. */
 export interface AiActionLog {
-  /** Nazwa narzędzia akcji (np. send_to_terminal, write_file). */
+  /** Nazwa narzędzia (np. send_to_terminal, read_active_terminal). */
   tool: string;
   /** Krótki, czytelny opis celu (np. treść komendy albo ścieżka pliku). */
   summary: string;
-  decision: 'approved' | 'denied';
+  /** approved/denied — akcja za zgodą; 'auto' — narzędzie tylko-do-odczytu (bez pytania). */
+  decision: 'approved' | 'denied' | 'auto';
   /** Wynik po wykonaniu (albo komunikat błędu); brak przy odrzuceniu. */
   outcome?: string;
 }

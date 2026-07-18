@@ -111,6 +111,7 @@ const rzuca = (fn: () => unknown): boolean => {
   sprawdz('zapis pliku poprawny przechodzi', !rzuca(() => parseAiWriteFile({ path: 'C:/tmp/a.txt', content: 'x' })));
   sprawdz('audyt ze złą decyzją odrzucony', rzuca(() => parseAiLogAction({ tool: 'send_to_terminal', summary: 's', decision: 'maybe' })));
   sprawdz('audyt poprawny przechodzi', !rzuca(() => parseAiLogAction({ tool: 'write_file', summary: 's', decision: 'approved', outcome: 'ok' })));
+  sprawdz('audyt decyzji „auto" (pełny rejestr) przechodzi', !rzuca(() => parseAiLogAction({ tool: 'read_active_terminal', summary: 's', decision: 'auto', outcome: 'x' })));
   // SSH: port poza zakresem.
   sprawdz(
     'SSH port 0 odrzucony',

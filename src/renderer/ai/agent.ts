@@ -18,10 +18,18 @@ import type {
   AiChatToolSpec
 } from '@shared/types/ipc';
 
-export type AgentStatus = 'completed' | 'aborted' | 'step-limit' | 'timeout' | 'error';
+export type AgentStatus = 'completed' | 'aborted' | 'step-limit' | 'timeout' | 'budget' | 'error';
+
+/** Bieżące zużycie zasobów biegu (limit kosztów AI-7). */
+export interface AgentUsage {
+  inputTokens: number;
+  outputTokens: number;
+  requests: number;
+}
 
 export interface AgentResult {
   status: AgentStatus;
+  usage: AgentUsage;
   /** Ustawione przy statusie 'error' — czytelny komunikat. */
   error?: string;
 }
@@ -40,13 +48,15 @@ export interface AgentDeps {
   genId(): string;
 }
 
-/** Wywołania zwrotne do UI (strumień, kroki, zgoda, audyt). */
+/** Wywołania zwrotne do UI (strumień, kroki, zgoda, audyt, zużycie). */
 export interface AgentHandlers {
   onTurnStart(requestId: string): void;
   onText(text: string): void;
   onStep(text: string): void;
   requestApproval(summary: string): Promise<boolean>;
   onAudit(entry: AiActionLog): void;
+  /** Bieżące zużycie po każdej turze — do licznika w UI. */
+  onUsage(usage: AgentUsage): void;
 }
 
 export interface AgentLimits {
@@ -54,6 +64,8 @@ export interface AgentLimits {
   maxActions: number;
   timeoutMs: number;
   maxRetries: number;
+  /** Budżet tokenów na bieg (0 = bez limitu). Po przekroczeniu bieg kończy się statusem 'budget'. */
+  tokenBudget: number;
   signal?: AbortSignal;
 }
 
@@ -61,7 +73,8 @@ export const DEFAULT_LIMITS: Omit<AgentLimits, 'signal'> = {
   maxSteps: 12,
   maxActions: 10,
   timeoutMs: 180_000,
-  maxRetries: 2
+  maxRetries: 2,
+  tokenBudget: 0
 };
 
 /** Błąd przejściowy (sieć, 5xx) — wart ponowienia. 4xx i abort — nie. */
@@ -85,6 +98,8 @@ export async function runAgent(
 ): Promise<AgentResult> {
   const start = deps.now();
   let actions = 0;
+  const usage: AgentUsage = { inputTokens: 0, outputTokens: 0, requests: 0 };
+  const tokensUsed = (): number => usage.inputTokens + usage.outputTokens;
 
   const callChat = async (requestId: string): Promise<AiChatResult> => {
     for (let attempt = 0; ; attempt++) {
@@ -101,8 +116,9 @@ export async function runAgent(
   };
 
   for (let step = 0; step < limits.maxSteps; step++) {
-    if (limits.signal?.aborted) return { status: 'aborted' };
-    if (deps.now() - start > limits.timeoutMs) return { status: 'timeout' };
+    if (limits.signal?.aborted) return { status: 'aborted', usage };
+    if (deps.now() - start > limits.timeoutMs) return { status: 'timeout', usage };
+    if (limits.tokenBudget > 0 && tokensUsed() >= limits.tokenBudget) return { status: 'budget', usage };
 
     const requestId = deps.genId();
     handlers.onTurnStart(requestId);
@@ -111,30 +127,41 @@ export async function runAgent(
     try {
       result = await callChat(requestId);
     } catch (error) {
-      if (limits.signal?.aborted) return { status: 'aborted' };
-      return { status: 'error', error: (error as Error).message || 'Błąd połączenia' };
+      if (limits.signal?.aborted) return { status: 'aborted', usage };
+      return { status: 'error', usage, error: (error as Error).message || 'Błąd połączenia' };
     }
+
+    usage.requests++;
+    if (result.usage) {
+      usage.inputTokens += result.usage.inputTokens;
+      usage.outputTokens += result.usage.outputTokens;
+    }
+    handlers.onUsage({ ...usage });
 
     handlers.onText(result.text);
     if (result.toolCalls.length === 0) {
       convo.push({ role: 'assistant', content: result.text });
-      return { status: 'completed' };
+      return { status: 'completed', usage };
     }
 
     convo.push({ role: 'assistant', content: result.text, toolCalls: result.toolCalls });
     for (const call of result.toolCalls) {
-      if (limits.signal?.aborted) return { status: 'aborted' };
+      if (limits.signal?.aborted) return { status: 'aborted', usage };
       const output = await handleCall(call);
       convo.push({ role: 'tool', toolCallId: call.id, content: output });
     }
   }
-  return { status: 'step-limit' };
+  return { status: 'step-limit', usage };
 
   /** Jedno wywołanie narzędzia: read-only od razu, akcja przez bramkę zgody + audyt + limit akcji. */
   async function handleCall(call: AiChatToolCall): Promise<string> {
     if (!deps.requiresApproval(call.name)) {
-      handlers.onStep(deps.toolLabel(call.name));
-      return deps.runTool(call.name, call.arguments);
+      const label = deps.toolLabel(call.name);
+      handlers.onStep(label);
+      const output = await deps.runTool(call.name, call.arguments);
+      // Pełny rejestr działań (AI-7): także odczyty trafiają do dziennika (decyzja 'auto').
+      handlers.onAudit({ tool: call.name, summary: label, decision: 'auto', outcome: output });
+      return output;
     }
     if (actions >= limits.maxActions) {
       handlers.onStep('Osiągnięto limit akcji — pomijam.');

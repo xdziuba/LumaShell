@@ -20,6 +20,7 @@ import {
   type AiChatRequest,
   type AiChatResult,
   type AiCliAvailability,
+  type AiPolicy,
   type AppCapabilities,
   type ContainerInfo,
   type HostVerifyRequest,
@@ -157,7 +158,9 @@ export const api: LumaApi = {
       ipcRenderer.invoke(IpcChannel.AiPickTextFile),
     writeFile: (path: string, content: string): Promise<{ ok: boolean; message: string }> =>
       ipcRenderer.invoke(IpcChannel.AiWriteFile, { path, content }),
-    logAction: (entry: AiActionLog): void => void ipcRenderer.invoke(IpcChannel.AiLogAction, entry)
+    logAction: (entry: AiActionLog): void => void ipcRenderer.invoke(IpcChannel.AiLogAction, entry),
+    getPolicy: (): Promise<AiPolicy> => ipcRenderer.invoke(IpcChannel.AiGetPolicy),
+    savePolicy: (policy: AiPolicy): Promise<AiPolicy> => ipcRenderer.invoke(IpcChannel.AiSavePolicy, policy)
   },
 
   diagnostics: {

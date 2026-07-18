@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import type { AiConfig, AiModel } from '@core/ai/provider';
 import { ANTHROPIC_DEFAULT_BASE_URL, OPENAI_DEFAULT_BASE_URL } from '@core/ai/provider';
+import type { AiPolicy } from '@shared/types/ipc';
 
 const LOCAL_DEFAULT_BASE_URL = 'http://localhost:11434/v1';
 
@@ -28,10 +29,26 @@ export default function AiPanel({ onClose }: { onClose: () => void }): React.JSX
   const [apiKey, setApiKey] = useState('');
   const [models, setModels] = useState<AiModel[]>([]);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
+  // Polityka autonomii agenta (AI-7).
+  const [policy, setPolicy] = useState<AiPolicy | null>(null);
+  const [policySaved, setPolicySaved] = useState(false);
 
   useEffect(() => {
     void window.luma.ai.getConfig().then(setCfg);
+    void window.luma.ai.getPolicy().then(setPolicy);
   }, []);
+
+  const updatePolicy = (patch: Partial<AiPolicy>): void => {
+    setPolicy((prev) => (prev ? { ...prev, ...patch } : prev));
+    setPolicySaved(false);
+  };
+  const savePolicy = (): void => {
+    if (!policy) return;
+    void window.luma.ai.savePolicy(policy).then((saved) => {
+      setPolicy(saved); // proces główny mógł przyciąć do zakresu
+      setPolicySaved(true);
+    });
+  };
 
   if (!cfg) {
     return (
@@ -171,10 +188,69 @@ export default function AiPanel({ onClose }: { onClose: () => void }): React.JSX
 
           <p className="panel__hint">
             Klucz jest szyfrowany lokalnie (DPAPI) i nie opuszcza tego komputera. Modele woła
-            proces główny — renderer nie zna klucza. Czat i narzędzia agenta dojdą w kolejnych
-            etapach.
+            proces główny — renderer nie zna klucza.
           </p>
         </section>
+
+        {policy && (
+          <section className="aiCfg aiCfg--policy">
+            <div className="aiCfg__section-title">Polityka agenta (limity biegu)</div>
+
+            <label className="aiCfg__row">
+              <span>Maks. kroków</span>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={policy.maxSteps}
+                onChange={(e) => updatePolicy({ maxSteps: Number(e.target.value) })}
+              />
+            </label>
+            <label className="aiCfg__row">
+              <span>Maks. akcji</span>
+              <input
+                type="number"
+                min={0}
+                max={50}
+                value={policy.maxActions}
+                onChange={(e) => updatePolicy({ maxActions: Number(e.target.value) })}
+              />
+            </label>
+            <label className="aiCfg__row">
+              <span>Budżet czasu (s)</span>
+              <input
+                type="number"
+                min={10}
+                max={1800}
+                value={Math.round(policy.timeoutMs / 1000)}
+                onChange={(e) => updatePolicy({ timeoutMs: Number(e.target.value) * 1000 })}
+              />
+            </label>
+            <label className="aiCfg__row">
+              <span>Budżet tokenów</span>
+              <input
+                type="number"
+                min={0}
+                max={10_000_000}
+                step={1000}
+                value={policy.tokenBudget}
+                onChange={(e) => updatePolicy({ tokenBudget: Number(e.target.value) })}
+              />
+            </label>
+
+            <div className="aiCfg__actions">
+              <button className="dialog__button dialog__button--primary" onClick={savePolicy}>
+                Zapisz politykę
+              </button>
+              {policySaved && <span className="aiCfg__status aiCfg__status--ok">Zapisano.</span>}
+            </div>
+            <p className="panel__hint">
+              Limity pilnują biegu agenta: liczba tur z modelem, liczba zatwierdzanych akcji,
+              maksymalny czas i budżet tokenów (0 = bez limitu kosztów). Każde wywołanie
+              narzędzia trafia do dziennika (przycisk „Dziennik" w czacie).
+            </p>
+          </section>
+        )}
       </div>
     </div>
   );

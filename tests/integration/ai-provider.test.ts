@@ -90,6 +90,8 @@ async function main(): Promise<void> {
         send({ choices: [{ delta: { content: 'Hel' } }] });
         send({ choices: [{ delta: { content: 'lo' } }] });
         send({ choices: [{ delta: {} }] }); // porcja bez treści — ignorowana
+        // Porcja z include_usage: puste choices + zużycie tokenów.
+        send({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 2 } });
         res.write('data: [DONE]\n\n');
         res.end();
       });
@@ -111,10 +113,12 @@ async function main(): Promise<void> {
           res.end();
           return;
         }
+        evt('message_start', { type: 'message_start', message: { usage: { input_tokens: 7 } } });
         evt('content_block_delta', { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hel' } });
         evt('content_block_delta', { type: 'content_block_delta', delta: { type: 'text_delta', text: 'lo' } });
         // Zdarzenie bez text_delta — ignorowane przez parser.
         evt('content_block_stop', { type: 'content_block_stop' });
+        evt('message_delta', { type: 'message_delta', usage: { output_tokens: 3 } });
         evt('message_stop', { type: 'message_stop' });
         res.end();
       });
@@ -146,6 +150,7 @@ async function main(): Promise<void> {
     sprawdz('chat sklejył pełny tekst', result.text === 'Hello', result.text);
     sprawdz('chat wywołał onDelta dla każdej porcji', deltas.join('|') === 'Hel|lo', deltas.join('|'));
     sprawdz('chat bez narzędzi zwraca pustą listę toolCalls', result.toolCalls.length === 0);
+    sprawdz('chat odczytał zużycie tokenów (include_usage)', result.usage?.inputTokens === 5 && result.usage?.outputTokens === 2, JSON.stringify(result.usage));
   }
 
   // --- Zły klucz → czytelny błąd ---
@@ -191,6 +196,7 @@ async function main(): Promise<void> {
     );
     sprawdz('Anthropic chat sklejył pełny tekst', result.text === 'Hello', result.text);
     sprawdz('Anthropic chat wywołał onDelta dla każdej porcji', deltas.join('|') === 'Hel|lo', deltas.join('|'));
+    sprawdz('Anthropic odczytał zużycie tokenów', result.usage?.inputTokens === 7 && result.usage?.outputTokens === 3, JSON.stringify(result.usage));
     sprawdz('Anthropic wydzielił prompt systemowy do pola system', lastAnthropicBody['system'] === 'jesteś pomocny');
     sprawdz(
       'Anthropic wysyła tylko user/assistant w messages',
