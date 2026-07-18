@@ -6,7 +6,8 @@ import { SerialMacros } from './components/SerialMacros';
 import { Dropup } from './components/Dropup';
 import { useShortcuts, type ShortcutMap } from './hooks/useShortcuts';
 import { serializeTab, useWorkspace, type SessionTab } from './store/workspace';
-import { PANEL_TITLES, type PanelKind } from './panels/kinds';
+import { PANEL_TITLES } from './panels/kinds';
+import { GITHUB_URL } from './panels/app-meta';
 import { applyTheme } from './theme/apply-theme';
 import {
   IconContainer,
@@ -98,10 +99,6 @@ export function App(): React.JSX.Element {
   // Etykieta i status paska/zakładki pochodzą z aktywnego panelu — tylko dla zakładek-sesji.
   const activeLeaf =
     activeTab?.kind === 'session' ? findLeaf(activeTab.root, activeTab.activePaneId) : undefined;
-
-  /** Czy aktywna jest zakładka-panel danego rodzaju (podświetlenie przycisku w toolbarze). */
-  const panelActive = (kind: PanelKind): boolean =>
-    activeTab?.kind === 'panel' && activeTab.panel === kind;
 
   const tabViews: TabView[] = tabs.map((tab) => {
     if (tab.kind === 'panel') {
@@ -734,16 +731,95 @@ export function App(): React.JSX.Element {
         </div>
       )}
 
-      {/* Dolny pasek jako szybki toolbar: po lewej info, po prawej akcje (część urośnie w dropupy). */}
+      {/* Dolny pasek jako pasek menu: po lewej kategorie (Plik/Widok/…), po prawej akcje sesji. */}
       <footer className="statusbar">
-        <div className="statusbar__group">
-          <span className="statusbar__info">
-            Sesje <span className="statusbar__accent">{tabs.length}</span>
-          </span>
-          {activeLeaf?.detail && <span className="statusbar__status">{activeLeaf.detail}</span>}
+        <div className="statusbar__group statusbar__menus">
+          <Dropup label="Plik" align="left" variant="category">
+            {(close) => (
+              <>
+                <button className="dropup__item" onClick={() => { nowaZakladka(); close(); }}>
+                  <span>Nowa zakładka</span>
+                  <span className="dropup__hint">Ctrl+T</span>
+                </button>
+                <div className="dropup__sep" />
+                <button className="dropup__item" onClick={() => { setSshOpen(true); close(); }}>
+                  <span>Połączenie SSH…</span>
+                </button>
+                <button className="dropup__item" onClick={() => { setNetworkOpen(true); close(); }}>
+                  <span>Połączenie sieciowe…</span>
+                </button>
+                <button className="dropup__item" onClick={() => { setContainerOpen(true); close(); }}>
+                  <span>Kontener (Docker/K8s)…</span>
+                </button>
+                <div className="dropup__sep" />
+                <button className="dropup__item" onClick={() => { zamknijAktywny(); close(); }}>
+                  <span>Zamknij zakładkę</span>
+                  <span className="dropup__hint">Ctrl+W</span>
+                </button>
+              </>
+            )}
+          </Dropup>
+
+          <Dropup label="Widok" align="left" variant="category">
+            {(close) => (
+              <>
+                <button className="dropup__item" onClick={() => { openPanel('settings'); close(); }}>
+                  <span>Ustawienia</span>
+                  <span className="dropup__hint">Ctrl+,</span>
+                </button>
+                <button className="dropup__item" onClick={() => { openPanel('themes'); close(); }}>
+                  <span>Motywy</span>
+                </button>
+                <div className="dropup__sep" />
+                <button className="dropup__item" onClick={() => { splitActivePane('row'); close(); }}>
+                  <span>Podziel w pionie</span>
+                  <span className="dropup__hint">Ctrl+Shift+E</span>
+                </button>
+                <button className="dropup__item" onClick={() => { splitActivePane('column'); close(); }}>
+                  <span>Podziel w poziomie</span>
+                  <span className="dropup__hint">Ctrl+Shift+O</span>
+                </button>
+              </>
+            )}
+          </Dropup>
+
+          <Dropup label="Narzędzia" align="left" variant="category">
+            {(close) => (
+              <>
+                <button className="dropup__item" onClick={() => { openPanel('plugins'); close(); }}>
+                  <span>Wtyczki</span>
+                </button>
+                <button className="dropup__item" onClick={() => { setPaletteOpen(true); close(); }}>
+                  <span>Paleta komend</span>
+                  <span className="dropup__hint">Ctrl+Shift+P</span>
+                </button>
+              </>
+            )}
+          </Dropup>
+
+          <Dropup label="Pomoc" align="left" variant="category">
+            {(close) => (
+              <>
+                <button className="dropup__item" onClick={() => { openPanel('shortcuts'); close(); }}>
+                  <span>Skróty klawiszowe</span>
+                </button>
+                <button className="dropup__item" onClick={() => { openPanel('whatsnew'); close(); }}>
+                  <span>Nowości</span>
+                </button>
+                <button className="dropup__item" onClick={() => { openPanel('about'); close(); }}>
+                  <span>O aplikacji</span>
+                </button>
+                <div className="dropup__sep" />
+                <button className="dropup__item" onClick={() => { window.open(GITHUB_URL, '_blank'); close(); }}>
+                  <span>GitHub ↗</span>
+                </button>
+              </>
+            )}
+          </Dropup>
         </div>
 
         <div className="statusbar__group statusbar__group--end">
+          {activeLeaf?.detail && <span className="statusbar__status">{activeLeaf.detail}</span>}
           {sshSessionId && (
             <button
               className={`statusbar__button${sftpOpen ? ' is-active' : ''}`}
@@ -808,13 +884,6 @@ export function App(): React.JSX.Element {
               </>
             )}
           </Dropup>
-
-          <button
-            className={`statusbar__button${panelActive('settings') ? ' is-active' : ''}`}
-            onClick={() => openPanel('settings')}
-          >
-            Ustawienia
-          </button>
         </div>
       </footer>
     </div>
