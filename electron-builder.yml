@@ -1,0 +1,61 @@
+# Konfiguracja pakowania (Etap 8).
+#
+# Instalator NSIS + wersja portable dla Windows x64. Moduły natywne (node-pty, serialport,
+# ssh2) MUSZĄ być rozpakowane z asara — ładują pliki .node / uruchamiają procesy pomocnicze,
+# których nie da się wczytać z wnętrza archiwum asar.
+#
+# Podpisywanie kodu celowo NIE jest skonfigurowane — wymaga certyfikatu. Bez podpisu Windows
+# SmartScreen pokaże ostrzeżenie przy pierwszym uruchomieniu. Aby dodać podpis: pola
+# `win.certificateFile` + `win.certificatePassword` (albo zmienne CSC_LINK / CSC_KEY_PASSWORD).
+
+appId: io.adbuzz.lumashell
+productName: LumaShell
+copyright: Copyright © 2026 xdziuba
+
+# node-pty / serialport / ssh2 dostarczają prebuildy N-API działające pod Electronem — NIE
+# przebudowujemy ich (electron-rebuild przez node-gyp i tak padał na spacji w ścieżce/winpty).
+npmRebuild: false
+
+directories:
+  output: release
+  buildResources: resources
+
+# Do paczki trafiają tylko zbudowana aplikacja i zasoby — nie źródła/testy/docs.
+# Produkcyjne node_modules electron-builder dołącza automatycznie.
+files:
+  - out/**/*
+  - resources/**/*
+  - package.json
+
+asarUnpack:
+  - '**/node_modules/node-pty/**'
+  - '**/node_modules/serialport/**'
+  - '**/node_modules/@serialport/**'
+  - '**/node_modules/ssh2/**'
+  - '**/node_modules/cpu-features/**'
+
+win:
+  icon: resources/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: LumaShell
+
+portable:
+  artifactName: ${productName}-${version}-portable.exe
+
+# Auto-aktualizacje przez GitHub Releases (patrz updater w main). Publikacja wymaga wydań
+# na GitHubie; do pełnej pracy aktualizacji zalecany podpis kodu.
+publish:
+  provider: github
+  owner: xdziuba
+  repo: LumaShell

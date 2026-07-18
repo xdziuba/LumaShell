@@ -1,6 +1,6 @@
 {
   "name": "lumashell",
-  "version": "0.0.0",
+  "version": "0.9.0",
   "description": "Szybki, konfigurowalny terminal dla Windows oparty na Electronie",
   "main": "./out/main/index.js",
   "author": "xdziuba",
@@ -10,6 +10,8 @@
     "dev": "electron-vite dev",
     "start": "electron-vite preview",
     "build": "electron-vite build",
+    "dist": "npm run build && electron-builder",
+    "dist:dir": "npm run build && electron-builder --dir",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
@@ -19,9 +21,12 @@
     "test:serial": "node --experimental-transform-types --no-warnings tests/integration/serial-transport.test.ts",
     "test:net": "node --experimental-transform-types --no-warnings tests/integration/net-transport.test.ts",
     "test:net-validation": "node --experimental-transform-types --no-warnings tests/unit/network-validation.test.ts",
+    "test:security": "node --experimental-transform-types --no-warnings tests/security/security.test.ts",
+    "test:soak": "node --experimental-transform-types --no-warnings tests/performance/net-soak.test.ts",
     "test:perf": "node tests/performance/pty-throughput.mjs"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "node-pty": "^1.1.0",
     "serialport": "^13.0.0",
     "ssh2": "^1.17.0"
@@ -36,6 +41,7 @@
     "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
     "electron": "^43.1.1",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^5.0.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

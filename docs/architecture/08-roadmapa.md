@@ -189,15 +189,29 @@ istniejącym już kontraktem transportu, dochodzi z dojrzewaniem Plugin API (Eta
 
 ### Etap 8 — przygotowanie wersji 1.0
 
-* testy bezpieczeństwa,
-* testy wydajnościowe,
-* testy długich sesji,
-* podpisywanie aplikacji,
-* instalator,
-* wersja portable,
-* automatyczne aktualizacje,
-* dokumentacja,
-* system raportowania błędów.
+* ✔ testy bezpieczeństwa — inwarianty izolacji (contextIsolation/nodeIntegration/sandbox),
+  CSP, sekrety nieobecne w snapshot'cie, odrzucanie wstrzyknięć/przerostów (`npm run test:security`),
+* ✔ testy wydajnościowe i długich sesji — soak transportu (`npm run test:soak`) i przepustowość PTY,
+* ✔ instalator — electron-builder, NSIS z wyborem katalogu i skrótami,
+* ✔ wersja portable — pojedynczy plik `.exe`,
+* ✔ automatyczne aktualizacje — electron-updater przez GitHub Releases (tylko w spakowanej wersji),
+* ✔ system raportowania błędów — globalne handlery + log w userData, ErrorBoundary renderera,
+  „Zgłoś problem"/„Otwórz logi" w menu Pomoc,
+* ✔ dokumentacja — docs/architecture/09-pakowanie.md,
+* podpisywanie aplikacji — **wymaga certyfikatu** (patrz niżej), świadomie odłożone.
+
+**Etap 8 zamknięty w zakresie autonomicznym.** Paczka jest zweryfikowana: `npm run dist:dir`
+buduje działającą aplikację, a spakowany `LumaShell.exe` uruchamia się i tworzy sesję PTY
+(node-pty ładuje się z `app.asar.unpacked`). Do pełnego wydania 1.0 pozostają dwie rzeczy
+wymagające Twojej infrastruktury/decyzji:
+
+> **Podpisywanie kodu** — bez certyfikatu Windows SmartScreen ostrzega przy pierwszym
+> uruchomieniu, a ciche auto-aktualizacje bywają blokowane. Dodanie: `win.certificateFile` +
+> hasło (lub zmienne `CSC_LINK`/`CSC_KEY_PASSWORD`) w electron-builder.yml.
+>
+> **Publikacja wydań** — auto-aktualizacje ciągną z GitHub Releases (`publish: github` w
+> konfiguracji). Trzeba opublikować wydanie: `electron-builder --publish always` z tokenem
+> `GH_TOKEN`. Dopóki nie ma wydań, updater po prostu nic nie znajduje (bez błędu dla użytkownika).
 
 ## Ścieżka integracji AI
 
