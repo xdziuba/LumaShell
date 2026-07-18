@@ -30,6 +30,7 @@ export const IpcChannel = {
   ShellList: 'shell:list',
   SerialListPorts: 'serial:listPorts',
   ContainerList: 'container:list',
+  AiDetectClis: 'ai:detectClis',
   SshConnect: 'ssh:connect',
   SshHostVerifyResponse: 'ssh:hostVerifyResponse',
   SftpRealpath: 'sftp:realpath',
@@ -196,7 +197,22 @@ export type SessionSpec =
       shell?: string;
       namespace?: string;
       label: string;
-    };
+    }
+  /**
+   * Oficjalne CLI AI (Codex / Claude Code) uruchomione w panelu terminala. Loguje się
+   * kontem użytkownika (subskrypcja), samo trzyma tokeny — my ich nie dotykamy
+   * (docs/architecture/09-agent-ai.md, Tryb B).
+   */
+  | { kind: 'ai-cli'; tool: AiCliTool; label: string };
+
+/** Oficjalne narzędzia AI CLI, które umiemy uruchomić w terminalu. */
+export type AiCliTool = 'codex' | 'claude';
+
+/** Które z CLI AI są dostępne w PATH (do włączenia szybkiego startu w UI). */
+export interface AiCliAvailability {
+  codex: boolean;
+  claude: boolean;
+}
 
 /** Metoda uwierzytelniania SSH. */
 export type SshAuthMethod = 'password' | 'key' | 'agent';

@@ -188,6 +188,16 @@ function parseSessionSpec(value: unknown): SessionSpec {
     return spec;
   }
 
+  if (kind === 'ai-cli') {
+    // Narzędzie to zamknięty zbiór — proces główny i tak wybiera plik wykonywalny po nazwie
+    // z własnej mapy, więc renderer nie poda dowolnej komendy do uruchomienia.
+    const tool = source['tool'];
+    if (tool !== 'codex' && tool !== 'claude') {
+      throw new IpcValidationError(`nieznane narzędzie AI CLI: ${String(tool)}`);
+    }
+    return { kind: 'ai-cli', tool, label: requireString(source, 'label', 120) };
+  }
+
   throw new IpcValidationError(`nieznany rodzaj sesji: ${String(kind)}`);
 }
 

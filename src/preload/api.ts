@@ -15,6 +15,7 @@ import type { TerminalSettings } from '@shared/types/settings';
 import {
   IpcChannel,
   IpcEvent,
+  type AiCliAvailability,
   type AppCapabilities,
   type ContainerInfo,
   type HostVerifyRequest,
@@ -134,7 +135,8 @@ export const api: LumaApi = {
       ipcRenderer.invoke(IpcChannel.AiSaveConfig, { config, apiKey }),
     listModels: (): Promise<AiModel[]> => ipcRenderer.invoke(IpcChannel.AiListModels),
     testConnection: (): Promise<{ ok: true; models: number }> =>
-      ipcRenderer.invoke(IpcChannel.AiTestConnection)
+      ipcRenderer.invoke(IpcChannel.AiTestConnection),
+    detectClis: (): Promise<AiCliAvailability> => ipcRenderer.invoke(IpcChannel.AiDetectClis)
   },
 
   diagnostics: {

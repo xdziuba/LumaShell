@@ -93,6 +93,12 @@ const rzuca = (fn: () => unknown): boolean => {
     'host z „;" odrzucony',
     rzuca(() => parseTerminalCreate({ spec: { kind: 'network', protocol: 'tcp', host: 'a;rm -rf', port: 80, label: 'x' }, columns: 80, rows: 24 }))
   );
+  // CLI AI: tylko zamknięty zbiór narzędzi — renderer nie podsunie dowolnej komendy.
+  sprawdz(
+    'ai-cli z obcym narzędziem odrzucone',
+    rzuca(() => parseTerminalCreate({ spec: { kind: 'ai-cli', tool: 'rm -rf', label: 'x' }, columns: 80, rows: 24 }))
+  );
+  sprawdz('ai-cli „claude" przechodzi', !rzuca(() => parseTerminalCreate({ spec: { kind: 'ai-cli', tool: 'claude', label: 'Claude Code' }, columns: 80, rows: 24 })));
   // SSH: port poza zakresem.
   sprawdz(
     'SSH port 0 odrzucony',
