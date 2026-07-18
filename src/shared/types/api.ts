@@ -8,6 +8,7 @@
 import type {
   AiChatDeltaEvent,
   AiChatRequest,
+  AiChatResult,
   AiCliAvailability,
   AppCapabilities,
   ContainerInfo,
@@ -134,14 +135,17 @@ export interface LumaApi {
     /** Które oficjalne CLI AI (Codex/Claude Code) są w PATH — do szybkiego startu w sesji. */
     detectClis(): Promise<AiCliAvailability>;
     /**
-     * Czat strumieniowy. Delty przychodzą przez `onChatDelta` (po requestId), a obietnica
-     * rozwiązuje się pełnym tekstem albo rzuca błędem. Klucz i wybór modelu zostają w main.
+     * Jedna tura czatu. Delty tekstu przychodzą przez `onChatDelta` (po requestId), a
+     * obietnica zwraca tekst + wywołania narzędzi (pętlę narzędzi prowadzi renderer).
+     * Klucz i wybór modelu zostają w main.
      */
-    chat(request: AiChatRequest): Promise<{ full: string }>;
+    chat(request: AiChatRequest): Promise<AiChatResult>;
     /** Przerywa trwające żądanie czatu o danym requestId (przycisk „stop"). */
     cancelChat(requestId: string): void;
     /** Nasłuch porcji strumienia odpowiedzi. */
     onChatDelta(callback: (event: AiChatDeltaEvent) => void): Unsubscribe;
+    /** Dialog wyboru pliku tekstowego do dołączenia jako kontekst; null przy anulowaniu. */
+    pickTextFile(): Promise<{ name: string; content: string } | null>;
   };
 
   /** Diagnostyka i zgłaszanie problemów (lokalny log, bez telemetrii). */

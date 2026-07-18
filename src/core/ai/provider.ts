@@ -30,9 +30,33 @@ export interface AiConfig {
   hasKey: boolean;
 }
 
+/**
+ * Deklaracja narzędzia dostępnego modelowi (AI-2). `parameters` to JSON Schema wejścia.
+ * Format normalizujemy tu — dostawcy tłumaczą go na swoje API (OpenAI „functions",
+ * Anthropic „tools").
+ */
+export interface AiToolSpec {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+/** Żądanie wywołania narzędzia zwrócone przez model. */
+export interface AiToolCall {
+  /** Identyfikator nadany przez dostawcę — potrzebny do dopięcia wyniku. */
+  id: string;
+  name: string;
+  /** Argumenty sparsowane z JSON (puste, gdy model nie podał żadnych). */
+  arguments: Record<string, unknown>;
+}
+
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  /** Tura asystenta, która poprosiła o narzędzia. */
+  toolCalls?: AiToolCall[];
+  /** Wiadomość z wynikiem narzędzia — dowiązanie do konkretnego wywołania. */
+  toolCallId?: string;
 }
 
 export interface ChatRequest {
@@ -40,11 +64,19 @@ export interface ChatRequest {
   messages: ChatMessage[];
   /** 0–2; niższa = bardziej deterministycznie. */
   temperature?: number;
+  /** Narzędzia udostępnione modelowi w tej turze (AI-2). */
+  tools?: AiToolSpec[];
+}
+
+/** Wynik jednej tury czatu: tekst (już wystrumieniowany deltami) i ewentualne wywołania narzędzi. */
+export interface ChatResult {
+  text: string;
+  toolCalls: AiToolCall[];
 }
 
 /**
- * Dostawca AI. Implementacje żyją w `services/ai`. Na tym etapie (AI-0) potrzebujemy
- * listy modeli (test połączenia) i prymitywu czatu (użyty w kolejnych etapach).
+ * Dostawca AI. Implementacje żyją w `services/ai`. Poza listą modeli (test połączenia)
+ * daje prymityw czatu z opcjonalnymi narzędziami — jedna tura pętli agenta (AI-2).
  */
 export interface AiProvider {
   readonly kind: AiProviderKind;
@@ -53,10 +85,11 @@ export interface AiProvider {
   listModels(): Promise<AiModel[]>;
 
   /**
-   * Wysyła zapytanie czatu. Delty odpowiedzi (strumień) idą przez `onDelta`; zwraca pełny
-   * tekst. `signal` pozwala przerwać (przycisk „stop" w kolejnych etapach).
+   * Jedna tura czatu. Delty tekstu (strumień) idą przez `onDelta`; zwraca tekst oraz
+   * wywołania narzędzi, o które poprosił model (pusta tablica = odpowiedź końcowa).
+   * `signal` pozwala przerwać (przycisk „stop"). Pętlę narzędzi prowadzi warstwa wyżej.
    */
-  chat(request: ChatRequest, onDelta?: (delta: string) => void, signal?: AbortSignal): Promise<string>;
+  chat(request: ChatRequest, onDelta?: (delta: string) => void, signal?: AbortSignal): Promise<ChatResult>;
 }
 
 /** Domyślny bazowy URL dla trybu OpenAI API. */

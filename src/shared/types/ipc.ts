@@ -53,6 +53,7 @@ export const IpcChannel = {
   AiTestConnection: 'ai:testConnection',
   AiChat: 'ai:chat',
   AiChatCancel: 'ai:chatCancel',
+  AiPickTextFile: 'ai:pickTextFile',
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
   TerminalResize: 'terminal:resize',
@@ -80,18 +81,44 @@ export const IpcEvent = {
 } as const;
 
 /** Rola wiadomości czatu — zgodna z ChatMessage w core/ai/provider. */
-export type AiChatRole = 'system' | 'user' | 'assistant';
+export type AiChatRole = 'system' | 'user' | 'assistant' | 'tool';
+
+/** Wywołanie narzędzia zwrócone przez model (AI-2). */
+export interface AiChatToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+/** Deklaracja narzędzia udostępnionego modelowi (JSON Schema wejścia w `parameters`). */
+export interface AiChatToolSpec {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
 
 /** Pojedyncza wiadomość wysyłana do modelu (renderer → main). */
 export interface AiChatMessage {
   role: AiChatRole;
   content: string;
+  /** Tura asystenta proszącego o narzędzia. */
+  toolCalls?: AiChatToolCall[];
+  /** Wiadomość z wynikiem narzędzia — dowiązanie do wywołania. */
+  toolCallId?: string;
 }
 
-/** Żądanie czatu: identyfikator (do strumienia i anulowania) + historia rozmowy. */
+/** Żądanie czatu: identyfikator (do strumienia i anulowania) + historia + narzędzia. */
 export interface AiChatRequest {
   requestId: string;
   messages: AiChatMessage[];
+  /** Narzędzia dostępne modelowi w tej turze (pętlę prowadzi renderer). */
+  tools?: AiChatToolSpec[];
+}
+
+/** Wynik tury czatu: tekst (już wystrumieniowany) + ewentualne wywołania narzędzi. */
+export interface AiChatResult {
+  text: string;
+  toolCalls: AiChatToolCall[];
 }
 
 /** Porcja strumienia odpowiedzi. */

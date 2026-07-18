@@ -19,8 +19,35 @@ const sprawdz = (n: string, ok: boolean, d?: string): void => {
 };
 
 async function main(): Promise<void> {
-  // Ostatni ładunek wysłany do /v1/messages — do sprawdzenia rozbicia promptu systemowego.
+  // Ostatnie ładunki żądań — do sprawdzenia tłumaczenia wiadomości i narzędzi.
   let lastAnthropicBody: Record<string, unknown> = {};
+  let lastOpenAiBody: Record<string, unknown> = {};
+
+  /** Czyta całe ciało żądania JSON (mock). */
+  const readBody = (req: import('node:http').IncomingMessage): Promise<Record<string, unknown>> =>
+    new Promise((resolve) => {
+      let raw = '';
+      req.on('data', (chunk) => (raw += chunk));
+      req.on('end', () => {
+        try {
+          resolve(JSON.parse(raw) as Record<string, unknown>);
+        } catch {
+          resolve({});
+        }
+      });
+    });
+
+  /** Czy ostatnia wiadomość to wynik narzędzia (OpenAI: rola 'tool'; Anthropic: blok tool_result). */
+  const lastIsToolResult = (messages: unknown): boolean => {
+    if (!Array.isArray(messages) || messages.length === 0) return false;
+    const last = messages[messages.length - 1] as { role?: string; content?: unknown };
+    if (last?.role === 'tool') return true;
+    return (
+      last?.role === 'user' &&
+      Array.isArray(last.content) &&
+      (last.content as Array<{ type?: string }>).some((b) => b?.type === 'tool_result')
+    );
+  };
 
   const server = createServer((req, res) => {
     const auth = req.headers['authorization'];
@@ -41,28 +68,49 @@ async function main(): Promise<void> {
       return;
     }
     if (req.method === 'POST' && req.url === '/v1/chat/completions') {
-      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
-      const send = (obj: unknown): void => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-      send({ choices: [{ delta: { content: 'Hel' } }] });
-      send({ choices: [{ delta: { content: 'lo' } }] });
-      send({ choices: [{ delta: {} }] }); // porcja bez treści — ignorowana
-      res.write('data: [DONE]\n\n');
-      res.end();
+      void readBody(req).then((body) => {
+        lastOpenAiBody = body;
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        const send = (obj: unknown): void => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+        if (Array.isArray(body['tools']) && !lastIsToolResult(body['messages'])) {
+          // Pierwsza tura z narzędziami: model prosi o wywołanie (argumenty w dwóch porcjach).
+          send({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'read_active_terminal', arguments: '{"maxL' } }] } }] });
+          send({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 'ines":10}' } }] } }] });
+          res.write('data: [DONE]\n\n');
+          res.end();
+          return;
+        }
+        if (lastIsToolResult(body['messages'])) {
+          // Po wyniku narzędzia — odpowiedź końcowa.
+          send({ choices: [{ delta: { content: 'Gotowe' } }] });
+          res.write('data: [DONE]\n\n');
+          res.end();
+          return;
+        }
+        send({ choices: [{ delta: { content: 'Hel' } }] });
+        send({ choices: [{ delta: { content: 'lo' } }] });
+        send({ choices: [{ delta: {} }] }); // porcja bez treści — ignorowana
+        res.write('data: [DONE]\n\n');
+        res.end();
+      });
       return;
     }
     // Anthropic Messages API — inny format strumienia (typowane zdarzenia SSE) i inne pola.
     if (req.method === 'POST' && req.url === '/v1/messages') {
-      let raw = '';
-      req.on('data', (chunk) => (raw += chunk));
-      req.on('end', () => {
-        try {
-          lastAnthropicBody = JSON.parse(raw) as Record<string, unknown>;
-        } catch {
-          lastAnthropicBody = {};
-        }
+      void readBody(req).then((body) => {
+        lastAnthropicBody = body;
         res.writeHead(200, { 'Content-Type': 'text/event-stream' });
         const evt = (name: string, obj: unknown): void =>
           res.write(`event: ${name}\ndata: ${JSON.stringify(obj)}\n\n`);
+        if (Array.isArray(body['tools']) && !lastIsToolResult(body['messages'])) {
+          // Blok tool_use ze strumieniowanym input_json_delta (w dwóch porcjach).
+          evt('content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_1', name: 'list_sessions' } });
+          evt('content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{}' } });
+          evt('content_block_stop', { type: 'content_block_stop', index: 0 });
+          evt('message_stop', { type: 'message_stop' });
+          res.end();
+          return;
+        }
         evt('content_block_delta', { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hel' } });
         evt('content_block_delta', { type: 'content_block_delta', delta: { type: 'text_delta', text: 'lo' } });
         // Zdarzenie bez text_delta — ignorowane przez parser.
@@ -91,12 +139,13 @@ async function main(): Promise<void> {
   {
     const provider = new OpenAiCompatibleProvider({ kind: 'openai', baseUrl, apiKey: 'GOOD' });
     const deltas: string[] = [];
-    const full = await provider.chat(
+    const result = await provider.chat(
       { model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'cześć' }] },
       (d) => deltas.push(d)
     );
-    sprawdz('chat sklejył pełny tekst', full === 'Hello', full);
+    sprawdz('chat sklejył pełny tekst', result.text === 'Hello', result.text);
     sprawdz('chat wywołał onDelta dla każdej porcji', deltas.join('|') === 'Hel|lo', deltas.join('|'));
+    sprawdz('chat bez narzędzi zwraca pustą listę toolCalls', result.toolCalls.length === 0);
   }
 
   // --- Zły klucz → czytelny błąd ---
@@ -130,7 +179,7 @@ async function main(): Promise<void> {
   {
     const provider = new AnthropicProvider({ baseUrl, apiKey: 'GOOD' });
     const deltas: string[] = [];
-    const full = await provider.chat(
+    const result = await provider.chat(
       {
         model: 'claude-sonnet-4',
         messages: [
@@ -140,7 +189,7 @@ async function main(): Promise<void> {
       },
       (d) => deltas.push(d)
     );
-    sprawdz('Anthropic chat sklejył pełny tekst', full === 'Hello', full);
+    sprawdz('Anthropic chat sklejył pełny tekst', result.text === 'Hello', result.text);
     sprawdz('Anthropic chat wywołał onDelta dla każdej porcji', deltas.join('|') === 'Hel|lo', deltas.join('|'));
     sprawdz('Anthropic wydzielił prompt systemowy do pola system', lastAnthropicBody['system'] === 'jesteś pomocny');
     sprawdz(
@@ -162,6 +211,40 @@ async function main(): Promise<void> {
       message = (e as Error).message;
     }
     sprawdz('Anthropic zły klucz daje błąd 401', message.includes('401') && message.includes('Invalid key'), message);
+  }
+
+  // --- OpenAI: pętla narzędzi (tool_calls ze strumienia + tłumaczenie wiadomości) ---
+  {
+    const provider = new OpenAiCompatibleProvider({ kind: 'openai', baseUrl, apiKey: 'GOOD' });
+    const tools = [{ name: 'read_active_terminal', description: 'x', parameters: { type: 'object', properties: {} } }];
+    const round1 = await provider.chat({ model: 'm', messages: [{ role: 'user', content: 'co w terminalu?' }], tools });
+    const call = round1.toolCalls[0];
+    sprawdz('OpenAI zwraca wywołanie narzędzia', round1.toolCalls.length === 1 && call?.name === 'read_active_terminal', JSON.stringify(round1.toolCalls));
+    sprawdz('OpenAI skleił argumenty narzędzia z dwóch porcji', JSON.stringify(call?.arguments) === JSON.stringify({ maxLines: 10 }), JSON.stringify(call?.arguments));
+
+    const round2 = await provider.chat({
+      model: 'm',
+      messages: [
+        { role: 'user', content: 'co w terminalu?' },
+        { role: 'assistant', content: round1.text, toolCalls: round1.toolCalls },
+        { role: 'tool', toolCallId: call?.id ?? '', content: 'user@host:~$' }
+      ],
+      tools
+    });
+    sprawdz('OpenAI po wyniku narzędzia daje odpowiedź końcową', round2.text === 'Gotowe' && round2.toolCalls.length === 0, round2.text);
+    const msgs = lastOpenAiBody['messages'] as Array<Record<string, unknown>>;
+    sprawdz('OpenAI tłumaczy turę asystenta na tool_calls', msgs.some((mm) => mm['role'] === 'assistant' && Array.isArray(mm['tool_calls'])));
+    sprawdz('OpenAI tłumaczy wynik na rolę tool z tool_call_id', msgs.some((mm) => mm['role'] === 'tool' && mm['tool_call_id'] === call?.id));
+  }
+
+  // --- Anthropic: pętla narzędzi (tool_use ze strumienia + tools w input_schema) ---
+  {
+    const provider = new AnthropicProvider({ baseUrl, apiKey: 'GOOD' });
+    const tools = [{ name: 'list_sessions', description: 'x', parameters: { type: 'object', properties: {} } }];
+    const round1 = await provider.chat({ model: 'm', messages: [{ role: 'user', content: 'jakie sesje?' }], tools });
+    const call = round1.toolCalls[0];
+    sprawdz('Anthropic zwraca wywołanie narzędzia', round1.toolCalls.length === 1 && call?.name === 'list_sessions', JSON.stringify(round1.toolCalls));
+    sprawdz('Anthropic wysyła narzędzia jako input_schema', Array.isArray(lastAnthropicBody['tools']) && (lastAnthropicBody['tools'] as Array<Record<string, unknown>>)[0]?.['input_schema'] !== undefined);
   }
 
   server.close();

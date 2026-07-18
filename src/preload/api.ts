@@ -17,6 +17,7 @@ import {
   IpcEvent,
   type AiChatDeltaEvent,
   type AiChatRequest,
+  type AiChatResult,
   type AiCliAvailability,
   type AppCapabilities,
   type ContainerInfo,
@@ -139,12 +140,14 @@ export const api: LumaApi = {
     testConnection: (): Promise<{ ok: true; models: number }> =>
       ipcRenderer.invoke(IpcChannel.AiTestConnection),
     detectClis: (): Promise<AiCliAvailability> => ipcRenderer.invoke(IpcChannel.AiDetectClis),
-    chat: (request: AiChatRequest): Promise<{ full: string }> =>
+    chat: (request: AiChatRequest): Promise<AiChatResult> =>
       ipcRenderer.invoke(IpcChannel.AiChat, request),
     cancelChat: (requestId: string): void =>
       void ipcRenderer.invoke(IpcChannel.AiChatCancel, { requestId }),
     onChatDelta: (callback: (event: AiChatDeltaEvent) => void): Unsubscribe =>
-      subscribe(IpcEvent.AiChatDelta, callback)
+      subscribe(IpcEvent.AiChatDelta, callback),
+    pickTextFile: (): Promise<{ name: string; content: string } | null> =>
+      ipcRenderer.invoke(IpcChannel.AiPickTextFile)
   },
 
   diagnostics: {

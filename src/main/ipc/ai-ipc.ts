@@ -6,10 +6,15 @@
  * połączenie sieciowe (docs/security/01-model-procesow.md).
  */
 
-import { ipcMain, type BrowserWindow } from 'electron';
-import { IpcChannel, IpcEvent } from '@shared/types/ipc';
+import { basename } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { dialog, ipcMain, type BrowserWindow } from 'electron';
+import { IpcChannel, IpcEvent, type AiChatResult } from '@shared/types/ipc';
 import { parseAiChat, parseAiChatCancel } from '@shared/schemas/ipc-validation';
 import { getAiConfig, getAiProvider, saveAiConfig } from '../ai/ai-config-store';
+
+/** Górny limit dołączanego pliku — kontekst modelu i tak jest skończony. */
+const MAX_ATTACH_BYTES = 256 * 1024;
 
 /** Trwające żądania czatu — do anulowania (przycisk „stop"). Klucz = requestId. */
 const inflight = new Map<string, AbortController>();
@@ -34,18 +39,18 @@ export function registerAiIpc(window: BrowserWindow): void {
     return { ok: true, models: models.length };
   });
 
-  // Czat strumieniowy: delty lecą zdarzeniami AiChatDelta, a invoke rozwiązuje się pełnym
-  // tekstem (albo rzuca czytelnym błędem). Model bierzemy z zapisanej konfiguracji — renderer
-  // nie decyduje, którym modelem wołać, i nie widzi klucza.
-  ipcMain.handle(IpcChannel.AiChat, async (_event, payload): Promise<{ full: string }> => {
-    const { requestId, messages } = parseAiChat(payload);
+  // Jedna tura czatu: delty tekstu lecą zdarzeniami AiChatDelta, a invoke zwraca tekst oraz
+  // wywołania narzędzi, o które poprosił model (pętlę narzędzi prowadzi renderer). Model
+  // bierzemy z zapisanej konfiguracji — renderer nie decyduje modelem i nie widzi klucza.
+  ipcMain.handle(IpcChannel.AiChat, async (_event, payload): Promise<AiChatResult> => {
+    const { requestId, messages, tools } = parseAiChat(payload);
     const [provider, config] = await Promise.all([getAiProvider(), getAiConfig()]);
 
     const controller = new AbortController();
     inflight.set(requestId, controller);
     try {
-      const full = await provider.chat(
-        { model: config.model, messages },
+      return await provider.chat(
+        { model: config.model, messages, tools },
         (delta) => {
           if (!window.isDestroyed()) {
             window.webContents.send(IpcEvent.AiChatDelta, { requestId, delta });
@@ -53,7 +58,6 @@ export function registerAiIpc(window: BrowserWindow): void {
         },
         controller.signal
       );
-      return { full };
     } finally {
       inflight.delete(requestId);
     }
@@ -64,4 +68,19 @@ export function registerAiIpc(window: BrowserWindow): void {
     const { requestId } = parseAiChatCancel(payload);
     inflight.get(requestId)?.abort();
   });
+
+  // Dołączenie pliku do czatu: użytkownik SAM wybiera plik (dialog), więc to świadomy odczyt,
+  // a nie autonomiczne czytanie dowolnych ścieżek przez model. Ucinamy do limitu rozmiaru.
+  ipcMain.handle(
+    IpcChannel.AiPickTextFile,
+    async (): Promise<{ name: string; content: string } | null> => {
+      const result = await dialog.showOpenDialog(window, { properties: ['openFile'] });
+      if (result.canceled || result.filePaths.length === 0) return null;
+      const path = result.filePaths[0]!;
+      const buffer = await readFile(path);
+      const clipped = buffer.subarray(0, MAX_ATTACH_BYTES).toString('utf8');
+      const content = buffer.length > MAX_ATTACH_BYTES ? `${clipped}\n…(przycięto)` : clipped;
+      return { name: basename(path), content };
+    }
+  );
 }

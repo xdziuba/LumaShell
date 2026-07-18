@@ -11,6 +11,8 @@ import type {
   AiChatMessage,
   AiChatRequest,
   AiChatRole,
+  AiChatToolCall,
+  AiChatToolSpec,
   ContainerRuntime,
   NetworkProtocol,
   SerialFraming,
@@ -299,12 +301,40 @@ export function parseTerminalDispose(payload: unknown): TerminalDisposeRequest {
   return { sessionId: requireString(source, 'sessionId', MAX_SESSION_ID) };
 }
 
-const AI_CHAT_ROLES = new Set<AiChatRole>(['system', 'user', 'assistant']);
+const AI_CHAT_ROLES = new Set<AiChatRole>(['system', 'user', 'assistant', 'tool']);
 /** Górne granice rozmowy — model i tak ma limit kontekstu, a my chronimy się przed zalaniem. */
 const MAX_CHAT_MESSAGES = 200;
 const MAX_CHAT_CONTENT = 200_000;
+const MAX_TOOLS = 64;
+const MAX_TOOL_CALLS = 64;
 
-/** Waliduje żądanie czatu AI z renderera (id + historia ról user/assistant/system). */
+/** Obiekt (nie tablica) albo pusty — dla argumentów narzędzia i schematu wejścia. */
+function optionalRecord(value: unknown): Record<string, unknown> {
+  if (value === undefined) return {};
+  return asRecord(value);
+}
+
+/** Waliduje wywołanie narzędzia zwrócone wcześniej przez model (echo w historii). */
+function parseToolCall(value: unknown): AiChatToolCall {
+  const r = asRecord(value);
+  return {
+    id: requireString(r, 'id', 128),
+    name: requireString(r, 'name', 64),
+    arguments: optionalRecord(r['arguments'])
+  };
+}
+
+/** Waliduje deklarację narzędzia udostępnianego modelowi. */
+function parseToolSpec(value: unknown): AiChatToolSpec {
+  const r = asRecord(value);
+  return {
+    name: requireString(r, 'name', 64),
+    description: requireString(r, 'description', 4000),
+    parameters: optionalRecord(r['parameters'])
+  };
+}
+
+/** Waliduje żądanie czatu AI z renderera (id + historia + narzędzia; role user/assistant/system/tool). */
 export function parseAiChat(payload: unknown): AiChatRequest {
   const source = asRecord(payload);
   const requestId = requireString(source, 'requestId', 64);
@@ -320,9 +350,28 @@ export function parseAiChat(payload: unknown): AiChatRequest {
     if (typeof role !== 'string' || !AI_CHAT_ROLES.has(role as AiChatRole)) {
       throw new IpcValidationError(`nieznana rola wiadomości: ${String(role)}`);
     }
-    return { role: role as AiChatRole, content: requireString(m, 'content', MAX_CHAT_CONTENT) };
+    const message: AiChatMessage = {
+      role: role as AiChatRole,
+      content: requireString(m, 'content', MAX_CHAT_CONTENT)
+    };
+    if (m['toolCalls'] !== undefined) {
+      if (!Array.isArray(m['toolCalls']) || m['toolCalls'].length > MAX_TOOL_CALLS) {
+        throw new IpcValidationError('nieprawidłowe "toolCalls"');
+      }
+      message.toolCalls = m['toolCalls'].map(parseToolCall);
+    }
+    if (m['toolCallId'] !== undefined) message.toolCallId = requireString(m, 'toolCallId', 128);
+    return message;
   });
-  return { requestId, messages };
+
+  const request: AiChatRequest = { requestId, messages };
+  if (source['tools'] !== undefined) {
+    if (!Array.isArray(source['tools']) || source['tools'].length > MAX_TOOLS) {
+      throw new IpcValidationError('nieprawidłowe "tools"');
+    }
+    request.tools = source['tools'].map(parseToolSpec);
+  }
+  return request;
 }
 
 /** Waliduje żądanie anulowania czatu — sam identyfikator. */
