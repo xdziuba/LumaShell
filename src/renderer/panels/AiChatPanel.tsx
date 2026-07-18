@@ -8,15 +8,14 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import type { AiChatMessage, AiChatToolCall } from '@shared/types/ipc';
+import type { AiChatMessage } from '@shared/types/ipc';
 import type { AiConfig } from '@core/ai/provider';
 import { activeTerminal, terminalWithSelection } from '../terminal/terminal-context';
 import { TOOL_SPECS, actionSummary, requiresApproval, runTool, toolLabel } from '../ai/tools';
+import { DEFAULT_LIMITS, runAgent, type AgentDeps, type AgentHandlers } from '../ai/agent';
 
 /** Ile ostatnich wierszy bufora dołączamy ręcznie jako „wyjście terminala". */
 const RECENT_LINES = 60;
-/** Twardy limit tur pętli agenta — zabezpieczenie przed zapętleniem na narzędziach. */
-const MAX_STEPS = 8;
 
 /** Rola systemowa: asystent czyta swobodnie, a akcje wykonuje dopiero po zgodzie (AI-3). */
 const SYSTEM_PROMPT =
@@ -103,6 +102,8 @@ export default function AiChatPanel({
   // Oczekująca zgoda na akcję (AI-3): pętla agenta czeka na decyzję użytkownika.
   const [approval, setApproval] = useState<{ summary: string; resolve: (ok: boolean) => void } | null>(null);
   const requestIdRef = useRef<string | null>(null);
+  // Sterownik przerwania całego biegu agenta (twardy „stop").
+  const abortRef = useRef<AbortController | null>(null);
   // Rozmowa dla modelu (osobno od widoku): system + tury z narzędziami i ich wynikami.
   const convoRef = useRef<AiChatMessage[]>([{ role: 'system', content: SYSTEM_PROMPT }]);
   const listRef = useRef<HTMLDivElement>(null);
@@ -165,56 +166,16 @@ export default function AiChatPanel({
       return copy;
     });
 
-  /** Pętla agenta: model ↔ narzędzia, aż zwróci odpowiedź bez wywołań narzędzi. */
-  const runAgentLoop = async (): Promise<void> => {
-    for (let step = 0; step < MAX_STEPS; step++) {
-      const requestId = crypto.randomUUID();
-      requestIdRef.current = requestId;
-      const result = await window.luma.ai.chat({
-        requestId,
-        messages: convoRef.current,
-        tools: TOOL_SPECS
-      });
-      finalizeTurn(result.text);
-
-      if (result.toolCalls.length === 0) {
-        convoRef.current.push({ role: 'assistant', content: result.text });
-        return;
-      }
-
-      // Zapisz turę z prośbą o narzędzia, wykonaj każde i dołącz wyniki.
-      convoRef.current.push({ role: 'assistant', content: result.text, toolCalls: result.toolCalls });
-      for (const call of result.toolCalls) {
-        const output = await handleToolCall(call);
-        convoRef.current.push({ role: 'tool', toolCallId: call.id, content: output });
-      }
-    }
-    addStep('Przerwano — przekroczono limit kroków narzędzi.');
-  };
-
-  /**
-   * Wykonuje jedno wywołanie narzędzia. Read-only leci od razu; akcja (AI-3) przechodzi przez
-   * bramkę zatwierdzania i zawsze trafia do dziennika audytowego — niezależnie od decyzji.
-   */
-  const handleToolCall = async (call: AiChatToolCall): Promise<string> => {
-    if (!requiresApproval(call.name)) {
-      addStep(toolLabel(call.name));
-      return runTool(call.name, call.arguments);
-    }
-
-    const summary = actionSummary(call.name, call.arguments);
-    const approved = await new Promise<boolean>((resolve) => setApproval({ summary, resolve }));
-    setApproval(null);
-
-    if (!approved) {
-      window.luma.ai.logAction({ tool: call.name, summary, decision: 'denied' });
-      addStep(`Odrzucono: ${summary}`);
-      return 'Użytkownik odrzucił tę akcję.';
-    }
-    const outcome = await runTool(call.name, call.arguments);
-    window.luma.ai.logAction({ tool: call.name, summary, decision: 'approved', outcome });
-    addStep(`Wykonano: ${summary}`);
-    return outcome;
+  /** Zależności runnera agenta — realne wywołania w rendererze. */
+  const deps: AgentDeps = {
+    chat: (req) => window.luma.ai.chat(req),
+    runTool,
+    requiresApproval,
+    actionSummary,
+    toolLabel,
+    now: () => Date.now(),
+    delay: (ms) => new Promise((r) => setTimeout(r, ms)),
+    genId: () => crypto.randomUUID()
   };
 
   const send = async (): Promise<void> => {
@@ -225,24 +186,46 @@ export default function AiChatPanel({
     setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content: text }]);
     setInput('');
     setStreaming(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const handlers: AgentHandlers = {
+      onTurnStart: (requestId) => {
+        requestIdRef.current = requestId;
+      },
+      onText: finalizeTurn,
+      onStep: addStep,
+      requestApproval: (summary) =>
+        new Promise<boolean>((resolve) => setApproval({ summary, resolve })).then((ok) => {
+          setApproval(null);
+          return ok;
+        }),
+      onAudit: (entry) => window.luma.ai.logAction(entry)
+    };
+
     try {
-      await runAgentLoop();
-    } catch (error) {
-      const message = (error as Error).message || 'Błąd połączenia';
-      markError(message, /abort/i.test(message));
+      const { status, error } = await runAgent(convoRef.current, TOOL_SPECS, deps, handlers, {
+        ...DEFAULT_LIMITS,
+        signal: controller.signal
+      });
+      if (status === 'error') markError(error ?? 'Błąd połączenia', false);
+      else if (status === 'aborted') markError('', true);
+      else if (status === 'timeout') addStep('Przerwano — przekroczono budżet czasu.');
+      else if (status === 'step-limit') addStep('Przerwano — przekroczono limit kroków.');
     } finally {
       setStreaming(false);
       requestIdRef.current = null;
+      abortRef.current = null;
     }
   };
 
   const stop = (): void => {
-    // W trakcie oczekiwania na zgodę „stop" oznacza odrzucenie akcji; poza tym przerywa strumień.
-    if (approval) {
-      approval.resolve(false);
-      return;
-    }
+    // Twarde przerwanie całego biegu agenta: sygnał zatrzymuje pętlę między turami,
+    // anulowanie ucina trwające żądanie, a oczekująca zgoda schodzi jako odrzucenie.
+    abortRef.current?.abort();
     if (requestIdRef.current) window.luma.ai.cancelChat(requestIdRef.current);
+    if (approval) approval.resolve(false);
   };
 
   const clearChat = (): void => {
