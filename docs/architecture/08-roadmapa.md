@@ -218,11 +218,11 @@ wymagające Twojej infrastruktury/decyzji:
 
 | Etap | Zakres |
 | --- | --- |
-| **AI-0** ✔ — interfejs dostawców | `AiProvider` (core) + `OpenAiCompatibleProvider` (OpenAI API / lokalny / własny endpoint, streaming SSE); klucz w safeStorage (nie wraca do renderera); konfiguracja, test połączenia i wybór modelu w panelu „Agent AI". Codex CLI → AI-4 |
-| **AI-1** — czat bez wykonywania działań | panel czatu, analiza zaznaczonego tekstu, analiza wyjścia terminala, generowanie komend, brak automatycznego wykonania |
+| **AI-0** ✔ — interfejs dostawców | `AiProvider` (core) + `OpenAiCompatibleProvider` (OpenAI API / lokalny / własny endpoint, streaming SSE) **oraz `AnthropicProvider`** (Claude Messages API: x-api-key, `system`, `content_block_delta`); klucz w safeStorage (nie wraca do renderera); konfiguracja, test połączenia i wybór modelu w panelu „Agent AI". |
+| **AI-1** ✔ — czat bez wykonywania działań | panel „Czat AI" (osobna zakładka), odpowiedź strumieniowana z przyciskiem stop, dołączanie zaznaczenia i ostatniego wyjścia terminala jako kontekstu, komendy jako bloki kodu z „Kopiuj", brak automatycznego wykonania. IPC `ai:chat`/`ai:chatDelta` + AbortController per żądanie w main |
 | **AI-2** — narzędzia tylko do odczytu | odczyt aktywnego terminala, odczyt wybranych plików, lista sesji, odczyt UART, analiza logów |
 | **AI-3** — zatwierdzane wykonywanie | wysyłanie komend do terminala, wykonywanie procesów, zapis plików, wysyłanie danych przez UART, system potwierdzeń, dziennik audytowy |
-| **AI-4** — integracja z Codex CLI | wykrywanie oficjalnej instalacji, uruchamianie procesu Codex, obsługa oficjalnego logowania, integracja sesji z UI, brak przejmowania tokenów |
+| **AI-4** (częściowo ✔) — integracja z CLI subskrypcji | **zrobione: wykrywanie i uruchamianie oficjalnego Codex CLI oraz Claude Code w panelu terminala (sesja `ai-cli`, logowanie kontem, bez przejmowania tokenów).** Głębsza integracja sesji z UI i statusem — dalej |
 | **AI-5** — agent wieloetapowy | planowanie zadań, wykonywanie sekwencji narzędzi, kontrola czasu, limity operacji, przerywanie, retry i obsługa błędów |
 | **AI-6** — narzędzia wtyczek | rejestracja narzędzi przez wtyczki, schematy wejścia i wyjścia, klasyfikacja ryzyka, osobne uprawnienia, dokumentacja SDK |
 | **AI-7** — kontrolowana autonomia | uprawnienia dla workspace’u, zaufane sesje, profile ryzyka urządzeń, limity kosztów, limity liczby operacji, pełny rejestr działań |
