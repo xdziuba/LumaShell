@@ -2301,4 +2301,32 @@ body {
       border-color: rgba(90, 255, 170, 0.5);
     }
   }
+
+  // Bramka zatwierdzania akcji (AI-3) — celowo wyróżniona, wymaga decyzji.
+  &__approval {
+    margin: 0 12px 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 176, 32, 0.55);
+    background: rgba(255, 176, 32, 0.1);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  &__approval-head {
+    color: #ffce7a;
+    font-weight: 600;
+    font-size: 12px;
+  }
+  &__approval-body {
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+  }
+  &__approval-actions {
+    display: flex;
+    gap: 8px;
+  }
 }

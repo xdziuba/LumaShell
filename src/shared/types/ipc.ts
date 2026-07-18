@@ -54,6 +54,8 @@ export const IpcChannel = {
   AiChat: 'ai:chat',
   AiChatCancel: 'ai:chatCancel',
   AiPickTextFile: 'ai:pickTextFile',
+  AiWriteFile: 'ai:writeFile',
+  AiLogAction: 'ai:logAction',
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
   TerminalResize: 'terminal:resize',
@@ -119,6 +121,17 @@ export interface AiChatRequest {
 export interface AiChatResult {
   text: string;
   toolCalls: AiChatToolCall[];
+}
+
+/** Wpis do dziennika audytowego akcji AI (AI-3): co, decyzja, skutek. */
+export interface AiActionLog {
+  /** Nazwa narzędzia akcji (np. send_to_terminal, write_file). */
+  tool: string;
+  /** Krótki, czytelny opis celu (np. treść komendy albo ścieżka pliku). */
+  summary: string;
+  decision: 'approved' | 'denied';
+  /** Wynik po wykonaniu (albo komunikat błędu); brak przy odrzuceniu. */
+  outcome?: string;
 }
 
 /** Porcja strumienia odpowiedzi. */

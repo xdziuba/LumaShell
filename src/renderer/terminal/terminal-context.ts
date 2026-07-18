@@ -36,6 +36,11 @@ export function activeTerminal(): TerminalAccessor | undefined {
   return lastActiveId ? accessors.get(lastActiveId) : undefined;
 }
 
+/** Identyfikator ostatnio aktywnej sesji — cel akcji „wyślij do terminala" (AI-3). */
+export function activeSessionId(): string | undefined {
+  return lastActiveId && accessors.has(lastActiveId) ? lastActiveId : undefined;
+}
+
 /**
  * Terminal, w którym coś jest zaznaczone (dowolny), a jeśli nigdzie — ostatnio aktywny.
  * Dzięki temu „dołącz zaznaczenie" działa niezależnie od tego, który panel był na wierzchu.

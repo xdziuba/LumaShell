@@ -13,6 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   parseAiChat,
+  parseAiLogAction,
+  parseAiWriteFile,
   parseSshConnect,
   parseTerminalCreate,
   parseTerminalWrite,
@@ -104,6 +106,11 @@ const rzuca = (fn: () => unknown): boolean => {
   sprawdz('czat z obcą rolą odrzucony', rzuca(() => parseAiChat({ requestId: 'r', messages: [{ role: 'root', content: 'x' }] })));
   sprawdz('czat bez wiadomości odrzucony', rzuca(() => parseAiChat({ requestId: 'r', messages: [] })));
   sprawdz('czat poprawny przechodzi', !rzuca(() => parseAiChat({ requestId: 'r', messages: [{ role: 'user', content: 'cześć' }] })));
+  // Akcje AI-3: zapis pliku bez ścieżki i audyt ze złą decyzją odrzucone; poprawne przechodzą.
+  sprawdz('zapis pliku bez ścieżki odrzucony', rzuca(() => parseAiWriteFile({ path: '   ', content: 'x' })));
+  sprawdz('zapis pliku poprawny przechodzi', !rzuca(() => parseAiWriteFile({ path: 'C:/tmp/a.txt', content: 'x' })));
+  sprawdz('audyt ze złą decyzją odrzucony', rzuca(() => parseAiLogAction({ tool: 'send_to_terminal', summary: 's', decision: 'maybe' })));
+  sprawdz('audyt poprawny przechodzi', !rzuca(() => parseAiLogAction({ tool: 'write_file', summary: 's', decision: 'approved', outcome: 'ok' })));
   // SSH: port poza zakresem.
   sprawdz(
     'SSH port 0 odrzucony',

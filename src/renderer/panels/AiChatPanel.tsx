@@ -8,23 +8,26 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import type { AiChatMessage } from '@shared/types/ipc';
+import type { AiChatMessage, AiChatToolCall } from '@shared/types/ipc';
 import type { AiConfig } from '@core/ai/provider';
 import { activeTerminal, terminalWithSelection } from '../terminal/terminal-context';
-import { TOOL_SPECS, runTool, toolLabel } from '../ai/tools';
+import { TOOL_SPECS, actionSummary, requiresApproval, runTool, toolLabel } from '../ai/tools';
 
 /** Ile ostatnich wierszy bufora dołączamy ręcznie jako „wyjście terminala". */
 const RECENT_LINES = 60;
 /** Twardy limit tur pętli agenta — zabezpieczenie przed zapętleniem na narzędziach. */
 const MAX_STEPS = 8;
 
-/** Stała rola systemowa: asystent proponuje i czyta, ale nie wykonuje — granica AI-2. */
+/** Rola systemowa: asystent czyta swobodnie, a akcje wykonuje dopiero po zgodzie (AI-3). */
 const SYSTEM_PROMPT =
   'Jesteś asystentem wbudowanym w terminal LumaShell. Pomagasz z powłoką (PowerShell, ' +
   'bash, WSL), SSH, portami szeregowymi, siecią i kontenerami. Masz narzędzia TYLKO DO ODCZYTU ' +
-  '(wyjście terminala, zaznaczenie, lista sesji) — używaj ich, gdy pomagają odpowiedzieć. ' +
-  'Możesz proponować komendy w blokach kodu, ale NIE wykonujesz żadnych akcji ani nie piszesz ' +
-  'do terminala — użytkownik sam decyduje, czy je uruchomić. Odpowiadaj zwięźle i po polsku.';
+  '(wyjście terminala, zaznaczenie, lista sesji) — używaj ich swobodnie, gdy pomagają. Masz też ' +
+  'narzędzia AKCJI: send_to_terminal (wpisanie/uruchomienie komendy) i write_file (zapis pliku). ' +
+  'KAŻDA akcja wymaga zgody użytkownika — zanim jej użyjesz, krótko wyjaśnij, co i po co zrobisz. ' +
+  'Nie zakładaj, że akcja się powiodła, dopóki nie dostaniesz wyniku narzędzia. Domyślnie ' +
+  'pokazuj komendę i wykonuj ją tylko wtedy, gdy użytkownik chce, żebyś to zrobił. Odpowiadaj ' +
+  'zwięźle i po polsku.';
 
 interface ChatMsg {
   id: string;
@@ -97,6 +100,8 @@ export default function AiChatPanel({
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  // Oczekująca zgoda na akcję (AI-3): pętla agenta czeka na decyzję użytkownika.
+  const [approval, setApproval] = useState<{ summary: string; resolve: (ok: boolean) => void } | null>(null);
   const requestIdRef = useRef<string | null>(null);
   // Rozmowa dla modelu (osobno od widoku): system + tury z narzędziami i ich wynikami.
   const convoRef = useRef<AiChatMessage[]>([{ role: 'system', content: SYSTEM_PROMPT }]);
@@ -177,15 +182,39 @@ export default function AiChatPanel({
         return;
       }
 
-      // Zapisz turę z prośbą o narzędzia, wykonaj każde (read-only) i dołącz wyniki.
+      // Zapisz turę z prośbą o narzędzia, wykonaj każde i dołącz wyniki.
       convoRef.current.push({ role: 'assistant', content: result.text, toolCalls: result.toolCalls });
       for (const call of result.toolCalls) {
-        addStep(toolLabel(call.name));
-        const output = runTool(call.name, call.arguments);
+        const output = await handleToolCall(call);
         convoRef.current.push({ role: 'tool', toolCallId: call.id, content: output });
       }
     }
     addStep('Przerwano — przekroczono limit kroków narzędzi.');
+  };
+
+  /**
+   * Wykonuje jedno wywołanie narzędzia. Read-only leci od razu; akcja (AI-3) przechodzi przez
+   * bramkę zatwierdzania i zawsze trafia do dziennika audytowego — niezależnie od decyzji.
+   */
+  const handleToolCall = async (call: AiChatToolCall): Promise<string> => {
+    if (!requiresApproval(call.name)) {
+      addStep(toolLabel(call.name));
+      return runTool(call.name, call.arguments);
+    }
+
+    const summary = actionSummary(call.name, call.arguments);
+    const approved = await new Promise<boolean>((resolve) => setApproval({ summary, resolve }));
+    setApproval(null);
+
+    if (!approved) {
+      window.luma.ai.logAction({ tool: call.name, summary, decision: 'denied' });
+      addStep(`Odrzucono: ${summary}`);
+      return 'Użytkownik odrzucił tę akcję.';
+    }
+    const outcome = await runTool(call.name, call.arguments);
+    window.luma.ai.logAction({ tool: call.name, summary, decision: 'approved', outcome });
+    addStep(`Wykonano: ${summary}`);
+    return outcome;
   };
 
   const send = async (): Promise<void> => {
@@ -208,6 +237,11 @@ export default function AiChatPanel({
   };
 
   const stop = (): void => {
+    // W trakcie oczekiwania na zgodę „stop" oznacza odrzucenie akcji; poza tym przerywa strumień.
+    if (approval) {
+      approval.resolve(false);
+      return;
+    }
     if (requestIdRef.current) window.luma.ai.cancelChat(requestIdRef.current);
   };
 
@@ -276,6 +310,24 @@ export default function AiChatPanel({
             <Row key={m.id} msg={m} />
           ))}
         </div>
+
+        {approval && (
+          <div className="chat__approval">
+            <div className="chat__approval-head">⚠ Model prosi o zgodę na akcję</div>
+            <div className="chat__approval-body">{approval.summary}</div>
+            <div className="chat__approval-actions">
+              <button
+                className="dialog__button dialog__button--primary"
+                onClick={() => approval.resolve(true)}
+              >
+                Zatwierdź i wykonaj
+              </button>
+              <button className="dialog__button" onClick={() => approval.resolve(false)}>
+                Odrzuć
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="chat__compose">
           <div className="chat__context">

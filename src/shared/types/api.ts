@@ -6,6 +6,7 @@
  */
 
 import type {
+  AiActionLog,
   AiChatDeltaEvent,
   AiChatRequest,
   AiChatResult,
@@ -146,6 +147,10 @@ export interface LumaApi {
     onChatDelta(callback: (event: AiChatDeltaEvent) => void): Unsubscribe;
     /** Dialog wyboru pliku tekstowego do dołączenia jako kontekst; null przy anulowaniu. */
     pickTextFile(): Promise<{ name: string; content: string } | null>;
+    /** Zapisuje plik (akcja AI-3 — już zatwierdzona w UI); zwraca skutek. */
+    writeFile(path: string, content: string): Promise<{ ok: boolean; message: string }>;
+    /** Dopisuje wpis do dziennika audytowego akcji AI. */
+    logAction(entry: AiActionLog): void;
   };
 
   /** Diagnostyka i zgłaszanie problemów (lokalny log, bez telemetrii). */

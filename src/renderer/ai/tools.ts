@@ -1,22 +1,24 @@
 /**
- * Narzędzia tylko-do-odczytu dla modelu (AI-2).
+ * Narzędzia dla modelu: tylko-do-odczytu (AI-2) oraz akcje wymagające zatwierdzenia (AI-3).
  *
- * Model może SAM je wywołać w pętli agenta, żeby zajrzeć w to, co użytkownik i tak ma na
- * ekranie: wyjście aktywnego terminala, zaznaczenie, listę otwartych sesji. Nic tu nie
- * wykonuje poleceń ani nie zapisuje — pisanie do terminala i akcje przychodzą dopiero w
- * AI-3 (docs/architecture/09-agent-ai.md). Wykonanie żyje w rendererze, bo to tu są bufory
- * xterm i store; klucz i wywołanie modelu zostają w procesie głównym.
+ * Narzędzia read-only model wywołuje swobodnie w pętli agenta (wyjście terminala,
+ * zaznaczenie, lista sesji). Narzędzia akcji (`send_to_terminal`, `write_file`) mają
+ * `requiresApproval` — pętla NIE wykona ich bez wyraźnej zgody użytkownika w UI, a każda
+ * propozycja i decyzja trafia do dziennika audytowego (docs/architecture/09-agent-ai.md).
+ * Wykonanie żyje w rendererze (bufory xterm, store); klucz i model zostają w main.
  */
 
 import type { AiChatToolSpec } from '@shared/types/ipc';
 import { leaves } from '@core/workspace/pane-tree';
 import { useWorkspace } from '../store/workspace';
-import { activeTerminal, terminalWithSelection } from '../terminal/terminal-context';
+import { activeSessionId, activeTerminal, terminalWithSelection } from '../terminal/terminal-context';
 
 export interface AiTool {
   spec: AiChatToolSpec;
+  /** Akcja (zapis/wysłanie) — pętla musi najpierw uzyskać zgodę użytkownika. */
+  requiresApproval?: boolean;
   /** Zwraca wynik jako tekst dla modelu (nigdy nie rzuca — błąd też jest tekstem). */
-  run(args: Record<string, unknown>): string;
+  run(args: Record<string, unknown>): string | Promise<string>;
 }
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -74,6 +76,55 @@ const TOOLS: AiTool[] = [
       }
       return rows.length > 0 ? rows.join('\n') : 'Brak otwartych sesji.';
     }
+  },
+  // --- Akcje (AI-3) — wymagają zatwierdzenia użytkownika ---
+  {
+    spec: {
+      name: 'send_to_terminal',
+      description:
+        'Wysyła tekst do aktywnej sesji terminala (powłoka, SSH, port szeregowy). Gdy ' +
+        'execute=true, dopisuje Enter i uruchamia. WYMAGA zgody użytkownika. Zwraca tylko ' +
+        'potwierdzenie wysłania — po wynik użyj potem read_active_terminal.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Tekst albo komenda do wysłania.' },
+          execute: { type: 'boolean', description: 'Czy dopisać Enter i uruchomić (domyślnie false).' }
+        },
+        required: ['text']
+      }
+    },
+    requiresApproval: true,
+    run: async (args) => {
+      const id = activeSessionId();
+      if (!id) return 'Brak aktywnej sesji terminala.';
+      const text = String(args['text'] ?? '');
+      await window.luma.terminal.write(id, args['execute'] ? `${text}\r` : text);
+      return args['execute']
+        ? `Wysłano i uruchomiono: ${text}`
+        : `Wpisano do terminala (bez uruchamiania): ${text}`;
+    }
+  },
+  {
+    spec: {
+      name: 'write_file',
+      description:
+        'Zapisuje treść tekstową do pliku pod wskazaną ścieżką (np. skrypt, plik ' +
+        'konfiguracyjny). WYMAGA zgody użytkownika. Nie nadaje się do danych binarnych.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Pełna ścieżka pliku do zapisania.' },
+          content: { type: 'string', description: 'Treść do zapisania.' }
+        },
+        required: ['path', 'content']
+      }
+    },
+    requiresApproval: true,
+    run: async (args) => {
+      const result = await window.luma.ai.writeFile(String(args['path'] ?? ''), String(args['content'] ?? ''));
+      return result.message;
+    }
   }
 ];
 
@@ -91,17 +142,39 @@ export function toolLabel(name: string): string {
       return 'Odczyt zaznaczenia';
     case 'list_sessions':
       return 'Lista sesji';
+    case 'send_to_terminal':
+      return 'Wysłanie do terminala';
+    case 'write_file':
+      return 'Zapis pliku';
     default:
       return name;
   }
 }
 
+/** Czy narzędzie jest akcją wymagającą zgody użytkownika przed wykonaniem. */
+export function requiresApproval(name: string): boolean {
+  return BY_NAME.get(name)?.requiresApproval === true;
+}
+
+/** Zwięzły, czytelny opis akcji do bramki zatwierdzania i audytu. */
+export function actionSummary(name: string, args: Record<string, unknown>): string {
+  if (name === 'send_to_terminal') {
+    const text = String(args['text'] ?? '');
+    return args['execute'] ? `Uruchom w terminalu: ${text}` : `Wpisz w terminalu: ${text}`;
+  }
+  if (name === 'write_file') {
+    const content = String(args['content'] ?? '');
+    return `Zapis pliku ${String(args['path'] ?? '')} (${content.length} znaków)`;
+  }
+  return toolLabel(name);
+}
+
 /** Wykonuje narzędzie po nazwie; nieznane albo błąd → czytelny tekst dla modelu. */
-export function runTool(name: string, args: Record<string, unknown>): string {
+export async function runTool(name: string, args: Record<string, unknown>): Promise<string> {
   const tool = BY_NAME.get(name);
   if (!tool) return `Nieznane narzędzie: ${name}`;
   try {
-    return tool.run(args);
+    return await tool.run(args);
   } catch (error) {
     return `Błąd narzędzia ${name}: ${(error as Error).message}`;
   }

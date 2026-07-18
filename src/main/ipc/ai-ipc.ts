@@ -6,12 +6,19 @@
  * połączenie sieciowe (docs/security/01-model-procesow.md).
  */
 
-import { basename } from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
+import { appendFileSync } from 'node:fs';
 import { dialog, ipcMain, type BrowserWindow } from 'electron';
 import { IpcChannel, IpcEvent, type AiChatResult } from '@shared/types/ipc';
-import { parseAiChat, parseAiChatCancel } from '@shared/schemas/ipc-validation';
+import {
+  parseAiChat,
+  parseAiChatCancel,
+  parseAiLogAction,
+  parseAiWriteFile
+} from '@shared/schemas/ipc-validation';
 import { getAiConfig, getAiProvider, saveAiConfig } from '../ai/ai-config-store';
+import { logsDir } from '../error-reporter';
 
 /** Górny limit dołączanego pliku — kontekst modelu i tak jest skończony. */
 const MAX_ATTACH_BYTES = 256 * 1024;
@@ -83,4 +90,31 @@ export function registerAiIpc(window: BrowserWindow): void {
       return { name: basename(path), content };
     }
   );
+
+  // Zapis pliku przez AI (AI-3). Decyzję o zapisie podejmuje użytkownik w UI (bramka
+  // zatwierdzania) — tu tylko wykonujemy już zaakceptowaną akcję i zwracamy skutek.
+  ipcMain.handle(
+    IpcChannel.AiWriteFile,
+    async (_event, payload): Promise<{ ok: boolean; message: string }> => {
+      const { path, content } = parseAiWriteFile(payload);
+      try {
+        await writeFile(path, content, 'utf8');
+        return { ok: true, message: `Zapisano do ${path} (${content.length} znaków).` };
+      } catch (error) {
+        return { ok: false, message: `Nie udało się zapisać: ${(error as Error).message}` };
+      }
+    }
+  );
+
+  // Dziennik audytowy akcji AI: każda propozycja akcji i decyzja użytkownika trafia do
+  // logs/ai-audit.log. Audyt nie może wywrócić akcji, więc błąd zapisu jest połykany.
+  ipcMain.handle(IpcChannel.AiLogAction, (_event, payload) => {
+    const entry = parseAiLogAction(payload);
+    const line = `${JSON.stringify({ ts: new Date().toISOString(), ...entry })}\n`;
+    try {
+      appendFileSync(join(logsDir(), 'ai-audit.log'), line, 'utf8');
+    } catch {
+      // brak audytu nie może zablokować pracy
+    }
+  });
 }

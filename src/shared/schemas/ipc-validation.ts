@@ -8,6 +8,7 @@
  */
 
 import type {
+  AiActionLog,
   AiChatMessage,
   AiChatRequest,
   AiChatRole,
@@ -378,6 +379,33 @@ export function parseAiChat(payload: unknown): AiChatRequest {
 export function parseAiChatCancel(payload: unknown): { requestId: string } {
   const source = asRecord(payload);
   return { requestId: requireString(source, 'requestId', 64) };
+}
+
+/** Górny limit zapisywanego pliku — akcja AI-3 dotyczy plików konfiguracyjnych, nie obrazów. */
+const MAX_WRITE_FILE_BYTES = 2_000_000;
+
+/** Waliduje żądanie zapisu pliku przez AI (AI-3) — ścieżka i treść. Zapis jest już zatwierdzony w UI. */
+export function parseAiWriteFile(payload: unknown): { path: string; content: string } {
+  const source = asRecord(payload);
+  const path = requireString(source, 'path', 1024);
+  if (path.trim().length === 0) throw new IpcValidationError('pusta ścieżka pliku');
+  return { path, content: requireString(source, 'content', MAX_WRITE_FILE_BYTES) };
+}
+
+/** Waliduje wpis do dziennika audytowego akcji AI (AI-3). */
+export function parseAiLogAction(payload: unknown): AiActionLog {
+  const source = asRecord(payload);
+  const decision = source['decision'];
+  if (decision !== 'approved' && decision !== 'denied') {
+    throw new IpcValidationError(`nieznana decyzja audytu: ${String(decision)}`);
+  }
+  const entry: AiActionLog = {
+    tool: requireString(source, 'tool', 64),
+    summary: requireString(source, 'summary', 4000),
+    decision
+  };
+  if (source['outcome'] !== undefined) entry.outcome = requireString(source, 'outcome', 8000);
+  return entry;
 }
 
 /** Waliduje drzewo paneli z niezaufanego JSON. Rzuca przy błędzie struktury. */

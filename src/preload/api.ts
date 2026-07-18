@@ -15,6 +15,7 @@ import type { TerminalSettings } from '@shared/types/settings';
 import {
   IpcChannel,
   IpcEvent,
+  type AiActionLog,
   type AiChatDeltaEvent,
   type AiChatRequest,
   type AiChatResult,
@@ -147,7 +148,10 @@ export const api: LumaApi = {
     onChatDelta: (callback: (event: AiChatDeltaEvent) => void): Unsubscribe =>
       subscribe(IpcEvent.AiChatDelta, callback),
     pickTextFile: (): Promise<{ name: string; content: string } | null> =>
-      ipcRenderer.invoke(IpcChannel.AiPickTextFile)
+      ipcRenderer.invoke(IpcChannel.AiPickTextFile),
+    writeFile: (path: string, content: string): Promise<{ ok: boolean; message: string }> =>
+      ipcRenderer.invoke(IpcChannel.AiWriteFile, { path, content }),
+    logAction: (entry: AiActionLog): void => void ipcRenderer.invoke(IpcChannel.AiLogAction, entry)
   },
 
   diagnostics: {
