@@ -8,7 +8,7 @@
  * Wykonanie żyje w rendererze (bufory xterm, store); klucz i model zostają w main.
  */
 
-import type { AiChatToolSpec } from '@shared/types/ipc';
+import type { AiChatToolSpec, PluginToolInfo } from '@shared/types/ipc';
 import { leaves } from '@core/workspace/pane-tree';
 import { useWorkspace } from '../store/workspace';
 import { activeSessionId, activeTerminal, terminalWithSelection } from '../terminal/terminal-context';
@@ -178,4 +178,61 @@ export async function runTool(name: string, args: Record<string, unknown>): Prom
   } catch (error) {
     return `Błąd narzędzia ${name}: ${(error as Error).message}`;
   }
+}
+
+/**
+ * Zestaw narzędzi widziany przez pętlę agenta: wbudowane + z wtyczek (AI-6).
+ *
+ * Nazwy narzędzi wtyczek są namespace'owane (`p_<plugin>_<tool>`), żeby nie kolidowały z
+ * wbudowanymi ani między wtyczkami, i pasowały do ograniczeń nazw narzędzi API modeli.
+ */
+export interface Toolset {
+  specs: AiChatToolSpec[];
+  requiresApproval(name: string): boolean;
+  actionSummary(name: string, args: Record<string, unknown>): string;
+  toolLabel(name: string): string;
+  runTool(name: string, args: Record<string, unknown>): Promise<string>;
+}
+
+/** Bezpieczna, unikalna nazwa narzędzia wtyczki dla API modelu (≤64 znaki, [A-Za-z0-9_-]). */
+function pluginToolName(tool: PluginToolInfo): string {
+  const raw = `p_${tool.pluginId}_${tool.id}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return raw.length <= 64 ? raw : raw.slice(0, 64);
+}
+
+/** Buduje toolset scalający narzędzia wbudowane z narzędziami wtyczek. */
+export function createToolset(pluginTools: PluginToolInfo[]): Toolset {
+  const byName = new Map<string, PluginToolInfo>();
+  const pluginSpecs: AiChatToolSpec[] = [];
+  for (const tool of pluginTools) {
+    const name = pluginToolName(tool);
+    if (byName.has(name)) continue; // kolizja po skróceniu — pomijamy duplikat
+    byName.set(name, tool);
+    pluginSpecs.push({ name, description: `[wtyczka] ${tool.description}`, parameters: tool.parameters });
+  }
+
+  return {
+    specs: [...TOOL_SPECS, ...pluginSpecs],
+    requiresApproval: (name) => {
+      const tool = byName.get(name);
+      return tool ? tool.risky : requiresApproval(name);
+    },
+    actionSummary: (name, args) => {
+      const tool = byName.get(name);
+      return tool ? `Narzędzie wtyczki: ${tool.id}` : actionSummary(name, args);
+    },
+    toolLabel: (name) => {
+      const tool = byName.get(name);
+      return tool ? `Wtyczka: ${tool.id}` : toolLabel(name);
+    },
+    runTool: async (name, args) => {
+      const tool = byName.get(name);
+      if (!tool) return runTool(name, args);
+      try {
+        return await window.luma.plugins.runTool(tool.pluginId, tool.id, args);
+      } catch (error) {
+        return `Błąd narzędzia wtyczki: ${(error as Error).message}`;
+      }
+    }
+  };
 }

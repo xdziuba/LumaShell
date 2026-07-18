@@ -30,6 +30,10 @@ const bridge = window.pluginHost;
 /** Zarejestrowane handlery komend: klucz `pluginId::commandId`. */
 const commandHandlers = new Map<string, () => void>();
 
+/** Handlery narzędzi AI (AI-6): klucz `pluginId::toolId`; mogą być async i ZWRACAĆ wynik. */
+type ToolHandler = (args: Record<string, unknown>) => unknown | Promise<unknown>;
+const toolHandlers = new Map<string, ToolHandler>();
+
 /** Buduje `context` przekazywany do activate() danej wtyczki. */
 function makeContext(pluginId: string): unknown {
   return {
@@ -42,6 +46,15 @@ function makeContext(pluginId: string): unknown {
     notifications: {
       showInfo(message: string): void {
         bridge.send({ type: 'notify', pluginId, level: 'info', message: String(message) });
+      }
+    },
+    // Narzędzia AI (AI-6): model może je wywołać w pętli agenta. Handler zwraca tekst dla
+    // modelu; narzędzie musi być też zadeklarowane w manifeście (contributes.tools) i wtyczka
+    // musi mieć uprawnienie ai.tools — inaczej main odrzuci wywołanie.
+    tools: {
+      registerTool(toolId: string, handler: ToolHandler): void {
+        toolHandlers.set(`${pluginId}::${toolId}`, handler);
+        bridge.send({ type: 'register-tool', pluginId, toolId });
       }
     }
   };
@@ -76,7 +89,15 @@ function loadPlugin(pluginId: string, code: string): void {
 }
 
 bridge.onMessage((raw) => {
-  const message = raw as { type?: string; pluginId?: string; commandId?: string; code?: string };
+  const message = raw as {
+    type?: string;
+    pluginId?: string;
+    commandId?: string;
+    toolId?: string;
+    callId?: string;
+    args?: Record<string, unknown>;
+    code?: string;
+  };
   if (message.type === 'load' && message.pluginId && typeof message.code === 'string') {
     loadPlugin(message.pluginId, message.code);
   } else if (message.type === 'invoke' && message.pluginId && message.commandId) {
@@ -91,6 +112,20 @@ bridge.onMessage((raw) => {
         message: error instanceof Error ? error.message : String(error)
       });
     }
+  } else if (message.type === 'invoke-tool' && message.pluginId && message.toolId && message.callId) {
+    // Wywołanie narzędzia AI — request/response po callId (handler może być async).
+    const callId = message.callId;
+    const handler = toolHandlers.get(`${message.pluginId}::${message.toolId}`);
+    if (!handler) {
+      bridge.send({ type: 'tool-error', callId, message: 'narzędzie nie zarejestrowane' });
+      return;
+    }
+    Promise.resolve()
+      .then(() => handler(message.args ?? {}))
+      .then((result) => bridge.send({ type: 'tool-result', callId, result: String(result) }))
+      .catch((error: unknown) =>
+        bridge.send({ type: 'tool-error', callId, message: error instanceof Error ? error.message : String(error) })
+      );
   }
 });
 

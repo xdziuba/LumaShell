@@ -59,6 +59,36 @@ const base = {
   sprawdz('brak id rzuca', rzucil);
 }
 
+// Narzędzia AI (AI-6): uprawnienie ai.tools i contributes.tools walidowane.
+{
+  const m = parseManifest({
+    ...base,
+    permissions: ['ai.tools'],
+    contributes: {
+      commands: [],
+      tools: [
+        { id: 'current_time', description: 'czas', parameters: { type: 'object', properties: {} } },
+        { id: 'danger', description: 'akcja', parameters: {}, risky: true }
+      ]
+    }
+  });
+  sprawdz('uprawnienie ai.tools zachowane', hasPermission(m, 'ai.tools'));
+  sprawdz('narzędzia zachowane', m.contributes.tools?.length === 2, String(m.contributes.tools?.length));
+  sprawdz('flaga risky zachowana', m.contributes.tools?.[1]?.risky === true);
+  sprawdz('read-only narzędzie bez risky', m.contributes.tools?.[0]?.risky === undefined);
+}
+
+// Narzędzie bez id → wyjątek (nie wolno wystawić modelowi bezimiennego narzędzia).
+{
+  let rzucil = false;
+  try {
+    parseManifest({ ...base, contributes: { commands: [], tools: [{ description: 'x', parameters: {} }] } });
+  } catch (e) {
+    rzucil = e instanceof ManifestValidationError;
+  }
+  sprawdz('narzędzie bez id rzuca', rzucil);
+}
+
 console.log('WYNIKI (manifest wtyczki)');
 console.log('─'.repeat(52));
 for (const w of wyniki) console.log(`${w.ok ? '  OK  ' : ' BLAD '} ${w.n}${w.d ? `  (${w.d})` : ''}`);

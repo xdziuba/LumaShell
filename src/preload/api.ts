@@ -26,6 +26,7 @@ import {
   type InstalledPlugin,
   type PluginCommand,
   type PluginNotification,
+  type PluginToolInfo,
   type SessionSpec,
   type ShellInfo,
   type SftpEntry,
@@ -128,7 +129,12 @@ export const api: LumaApi = {
     setEnabled: (id: string, enabled: boolean): Promise<InstalledPlugin[]> =>
       ipcRenderer.invoke(IpcChannel.PluginSetEnabled, id, enabled),
     onPluginsChanged: (callback: (plugins: InstalledPlugin[]) => void): Unsubscribe =>
-      subscribe(IpcEvent.PluginsChanged, callback)
+      subscribe(IpcEvent.PluginsChanged, callback),
+    listTools: (): Promise<PluginToolInfo[]> => ipcRenderer.invoke(IpcChannel.PluginListTools),
+    runTool: (pluginId: string, toolId: string, args: Record<string, unknown>): Promise<string> =>
+      ipcRenderer.invoke(IpcChannel.PluginRunTool, pluginId, toolId, args),
+    onToolsChanged: (callback: (tools: PluginToolInfo[]) => void): Unsubscribe =>
+      subscribe(IpcEvent.PluginToolsChanged, callback)
   },
 
   whatsNew: (): Promise<WhatsNewEntry[]> => ipcRenderer.invoke(IpcChannel.AppWhatsNew),

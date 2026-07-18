@@ -43,6 +43,8 @@ export const IpcChannel = {
   PluginRunCommand: 'plugin:runCommand',
   PluginInstalled: 'plugin:installed',
   PluginSetEnabled: 'plugin:setEnabled',
+  PluginListTools: 'plugin:listTools',
+  PluginRunTool: 'plugin:runTool',
   AppWhatsNew: 'app:whatsNew',
   AppOpenLogs: 'app:openLogs',
   AppReportProblem: 'app:reportProblem',
@@ -76,6 +78,8 @@ export const IpcEvent = {
   PluginNotification: 'plugin:notification',
   /** Zmiana listy/stanu zainstalowanych wtyczek — menedżer odświeża widok. */
   PluginsChanged: 'plugin:pluginsChanged',
+  /** Zmiana zestawu narzędzi AI z wtyczek — czat przebudowuje toolset. */
+  PluginToolsChanged: 'plugin:toolsChanged',
   /** Zmiana stanu maksymalizacji — przycisk zmienia wtedy ikonę. */
   WindowMaximizedChanged: 'window:maximizedChanged',
   /** Kolejna porcja (delta) strumieniowanej odpowiedzi czatu AI. */
@@ -145,6 +149,16 @@ export interface PluginCommand {
   pluginId: string;
   id: string;
   title: string;
+}
+
+/** Narzędzie AI wystawione przez wtyczkę (AI-6), gotowe do przekazania modelowi. */
+export interface PluginToolInfo {
+  pluginId: string;
+  id: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  /** Akcja — pętla agenta poprosi o zgodę przed wykonaniem. */
+  risky: boolean;
 }
 
 /** Powiadomienie od wtyczki (po sprawdzeniu uprawnienia notifications.show). */

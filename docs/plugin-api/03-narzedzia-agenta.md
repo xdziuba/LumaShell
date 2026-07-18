@@ -1,107 +1,97 @@
-# Plugin API — narzędzia agenta
+# Plugin API — narzędzia AI (AI-6)
 
-Wtyczki JavaScript mogą udostępniać agentowi AI dodatkowe narzędzia.
+Wtyczki mogą udostępniać modelowi AI własne narzędzia. Model wywołuje je sam w pętli agenta
+(jak wbudowane `read_active_terminal` itd.), a wynik wraca do rozmowy. Wykonanie dzieje się w
+**izolowanym hoście wtyczek** (sandbox, bez Node — decyzja D2); main pośredniczy i egzekwuje
+uprawnienia.
 
-## 1. Protokół narzędzi
+## 1. Uprawnienie
 
-Narzędzia mają **wersjonowane schematy JSON**.
+Rejestracja narzędzi wymaga uprawnienia **`ai.tools`** w manifeście. Bez niego zgłoszenia
+narzędzi i ich wywołania są odrzucane na granicy RPC (proces główny), niezależnie od tego, co
+robi kod wtyczki.
 
-```json
-{
-  "name": "serial.writeText",
-  "version": "1",
-  "description": "Writes text to an open serial session.",
-  "risk": "hardware-write",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "sessionId": {
-        "type": "string"
-      },
-      "text": {
-        "type": "string"
-      },
-      "lineEnding": {
-        "enum": ["none", "lf", "cr", "crlf"]
-      }
-    },
-    "required": ["sessionId", "text"]
-  }
-}
-```
-
-### Rejestr wykonania
-
-Każde wykonanie narzędzia zawiera:
-
-* identyfikator zadania,
-* identyfikator sesji agenta,
-* identyfikator użytkownika,
-* nazwę narzędzia,
-* argumenty,
-* poziom ryzyka,
-* wynik,
-* czas rozpoczęcia i zakończenia,
-* informację o zgodzie użytkownika.
-
-Szczegóły: [security/04 — Audyt](../security/04-audyt.md).
-
-## 2. Manifest z narzędziami agenta
+## 2. Manifest: `contributes.tools`
 
 ```json
 {
-  "id": "com.example.stm32-tools",
-  "name": "STM32 Tools",
+  "id": "com.lumashell.toolbox",
+  "name": "Toolbox AI",
   "version": "1.0.0",
   "apiVersion": "1",
-  "permissions": [
-    "agent.registerTools",
-    "serial.read",
-    "serial.write"
-  ],
+  "main": "dist/index.js",
+  "permissions": ["ai.tools"],
   "contributes": {
-    "agentTools": [
+    "tools": [
       {
-        "name": "stm32.readDeviceInfo",
-        "risk": "read-only"
+        "id": "current_time",
+        "description": "Zwraca aktualny czas lokalny komputera.",
+        "parameters": { "type": "object", "properties": {} }
       },
       {
-        "name": "stm32.flashFirmware",
-        "risk": "critical"
+        "id": "flash_firmware",
+        "description": "Wgrywa firmware na podłączone urządzenie.",
+        "parameters": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] },
+        "risky": true
       }
     ]
   }
 }
 ```
 
-## 3. Rejestracja narzędzia
+* `id` — identyfikator narzędzia (unikalny w obrębie wtyczki). Modelowi jest ono pokazywane
+  pod nazwą znamespace'owaną (`p_<pluginId>_<id>`), więc nie koliduje z wbudowanymi ani z
+  innymi wtyczkami.
+* `description` — opis dla modelu (kiedy użyć narzędzia).
+* `parameters` — **JSON Schema** wejścia, przekazywany wprost do API modelu.
+* `risky` — gdy `true`, narzędzie jest **akcją**: pętla agenta poprosi użytkownika o zgodę
+  przed wykonaniem, a decyzja trafi do dziennika audytowego (jak wbudowane akcje z AI-3).
+  Domyślnie `false` (tylko-do-odczytu, bez pytania).
 
-```ts
-export function activate(context: PluginContext) {
-  context.agent.registerTool({
-    name: "stm32.readDeviceInfo",
-    description: "Reads information from a connected STM32 device",
-    risk: "read-only",
-    inputSchema: {
-      type: "object",
-      properties: {
-        sessionId: {
-          type: "string"
-        }
-      },
-      required: ["sessionId"]
-    },
-    execute: async ({ sessionId }) => {
-      return context.serial.request(sessionId, "device-info\r\n");
-    }
+Narzędzie musi być zadeklarowane w manifeście — wtyczka nie może zarejestrować w runtime
+narzędzia, którego manifest nie zapowiada.
+
+## 3. Rejestracja handlera
+
+W `activate(context)` wtyczka podpina handler przez `context.tools.registerTool`. Handler
+może być asynchroniczny i **zwraca tekst** — to on trafia do modelu jako wynik narzędzia.
+
+```js
+function activate(context) {
+  context.tools.registerTool('current_time', function (args) {
+    return 'Aktualny czas lokalny: ' + new Date().toString();
   });
 }
+
+module.exports = { activate, deactivate() {} };
 ```
 
-## 4. Zasady
+Handler dostaje argumenty jako obiekt (zwalidowany kształtem, ale sama logika należy do
+wtyczki). Rzucenie błędu jest bezpieczne — zostanie przekazane modelowi jako komunikat błędu,
+nie wywróci hosta.
 
-* Wtyczka **nie otrzymuje automatycznie** wszystkich uprawnień agenta.
-* Uprawnienia wtyczki i uprawnienia agenta są sprawdzane **niezależnie**.
-* Rejestracja narzędzi wymaga uprawnienia `agent.registerTools`.
-* Każde narzędzie deklaruje **poziom ryzyka**, który steruje wymaganiem potwierdzenia —
-  patrz [security/03 — Polityka agenta](../security/03-polityka-agenta.md).
+## 4. Przepływ wywołania (request/response)
+
+W przeciwieństwie do komend (jednokierunkowych) narzędzia mają odpowiedź korelowaną `callId`:
+
+```
+model → renderer (pętla agenta) → main (ai:chat zwraca tool_call)
+renderer → main: plugin:runTool(pluginId, toolId, args)
+main → host: { invoke-tool, callId, ... }   (po sprawdzeniu: aktywna, ai.tools, zadeklarowane)
+host → main: { tool-result, callId, result } albo { tool-error, callId, message }
+main → renderer: wynik (tekst) → dopięty do rozmowy jako wiadomość roli `tool`
+```
+
+Limit czasu na odpowiedź narzędzia to 30 s — po nim wywołanie kończy się błędem.
+
+## 5. Zasady bezpieczeństwa
+
+* Bez `ai.tools` — zero narzędzi (egzekwowane w main, nie po dobrej woli wtyczki).
+* Narzędzie musi być w manifeście **i** zarejestrowane w runtime, żeby dało się je wywołać.
+* `risky: true` ⇒ zgoda użytkownika + wpis w [dzienniku audytowym](../security/04-audyt.md)
+  (`logs/ai-audit.log`), tak samo jak wbudowane akcje (AI-3).
+* Handler działa w sandboxie bez Node — realne zdolności (sieć, pliki) i tak muszą iść przez
+  RPC do procesu głównego.
+
+> Uwaga: na tym etapie ryzyko jest binarne (`risky`). Wielopoziomowa klasyfikacja ryzyka i
+> osobne profile zaufania to zakres AI-7.

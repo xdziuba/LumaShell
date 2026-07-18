@@ -17,6 +17,7 @@ import type {
   InstalledPlugin,
   PluginCommand,
   PluginNotification,
+  PluginToolInfo,
   SessionSpec,
   ShellInfo,
   SftpEntry,
@@ -120,6 +121,11 @@ export interface LumaApi {
     /** Włącza/wyłącza wtyczkę; zwraca zaktualizowaną listę. */
     setEnabled(id: string, enabled: boolean): Promise<InstalledPlugin[]>;
     onPluginsChanged(callback: (plugins: InstalledPlugin[]) => void): Unsubscribe;
+    /** Narzędzia AI wystawione przez wtyczki (AI-6) — do scalenia z wbudowanymi. */
+    listTools(): Promise<PluginToolInfo[]>;
+    /** Wywołuje narzędzie wtyczki i zwraca jego wynik jako tekst (albo rzuca). */
+    runTool(pluginId: string, toolId: string, args: Record<string, unknown>): Promise<string>;
+    onToolsChanged(callback: (tools: PluginToolInfo[]) => void): Unsubscribe;
   };
 
   /** Nowości/zmiany aplikacji — pobierane z GitHuba, z lokalnym fallbackiem. */

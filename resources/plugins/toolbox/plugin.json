@@ -1,0 +1,17 @@
+{
+  "id": "com.lumashell.toolbox",
+  "name": "Toolbox AI",
+  "version": "1.0.0",
+  "apiVersion": "1",
+  "main": "dist/index.js",
+  "permissions": ["ai.tools"],
+  "contributes": {
+    "tools": [
+      {
+        "id": "current_time",
+        "description": "Zwraca aktualny czas lokalny komputera. Użyj, gdy pytanie dotyczy bieżącej daty lub godziny.",
+        "parameters": { "type": "object", "properties": {} }
+      }
+    ]
+  }
+}

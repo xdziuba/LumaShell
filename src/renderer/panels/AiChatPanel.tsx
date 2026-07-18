@@ -7,11 +7,11 @@
  * akcje przychodzą dopiero w AI-3 (docs/architecture/09-agent-ai.md).
  */
 
-import { useEffect, useRef, useState } from 'react';
-import type { AiChatMessage } from '@shared/types/ipc';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { AiChatMessage, PluginToolInfo } from '@shared/types/ipc';
 import type { AiConfig } from '@core/ai/provider';
 import { activeTerminal, terminalWithSelection } from '../terminal/terminal-context';
-import { TOOL_SPECS, actionSummary, requiresApproval, runTool, toolLabel } from '../ai/tools';
+import { createToolset } from '../ai/tools';
 import { DEFAULT_LIMITS, runAgent, type AgentDeps, type AgentHandlers } from '../ai/agent';
 
 /** Ile ostatnich wierszy bufora dołączamy ręcznie jako „wyjście terminala". */
@@ -108,8 +108,14 @@ export default function AiChatPanel({
   const convoRef = useRef<AiChatMessage[]>([{ role: 'system', content: SYSTEM_PROMPT }]);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Narzędzia AI wystawione przez wtyczki (AI-6) — scalane z wbudowanymi w toolset.
+  const [pluginTools, setPluginTools] = useState<PluginToolInfo[]>([]);
+  const toolset = useMemo(() => createToolset(pluginTools), [pluginTools]);
+
   useEffect(() => {
     void window.luma.ai.getConfig().then(setCfg);
+    void window.luma.plugins.listTools().then(setPluginTools);
+    return window.luma.plugins.onToolsChanged(setPluginTools);
   }, []);
 
   // Delty strumienia dopisujemy do aktywnego dymka asystenta (tworzymy go przy pierwszej porcji).
@@ -166,13 +172,13 @@ export default function AiChatPanel({
       return copy;
     });
 
-  /** Zależności runnera agenta — realne wywołania w rendererze. */
+  /** Zależności runnera agenta — realne wywołania w rendererze; narzędzia z toolsetu (AI-6). */
   const deps: AgentDeps = {
     chat: (req) => window.luma.ai.chat(req),
-    runTool,
-    requiresApproval,
-    actionSummary,
-    toolLabel,
+    runTool: toolset.runTool,
+    requiresApproval: toolset.requiresApproval,
+    actionSummary: toolset.actionSummary,
+    toolLabel: toolset.toolLabel,
     now: () => Date.now(),
     delay: (ms) => new Promise((r) => setTimeout(r, ms)),
     genId: () => crypto.randomUUID()
@@ -205,7 +211,7 @@ export default function AiChatPanel({
     };
 
     try {
-      const { status, error } = await runAgent(convoRef.current, TOOL_SPECS, deps, handlers, {
+      const { status, error } = await runAgent(convoRef.current, toolset.specs, deps, handlers, {
         ...DEFAULT_LIMITS,
         signal: controller.signal
       });

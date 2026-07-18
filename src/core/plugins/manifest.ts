@@ -13,7 +13,8 @@ export const PERMISSIONS = [
   'commands.register',
   'notifications.show',
   'terminal.read',
-  'terminal.write'
+  'terminal.write',
+  'ai.tools'
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -21,6 +22,18 @@ export type Permission = (typeof PERMISSIONS)[number];
 export interface CommandContribution {
   id: string;
   title: string;
+}
+
+/**
+ * Narzędzie AI udostępniane modelowi przez wtyczkę (AI-6). `parameters` to JSON Schema
+ * wejścia. `risky` = akcja: pętla agenta poprosi wtedy o zgodę użytkownika (jak przy
+ * wbudowanych akcjach z AI-3).
+ */
+export interface ToolContribution {
+  id: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  risky?: boolean;
 }
 
 export interface PluginManifest {
@@ -34,6 +47,8 @@ export interface PluginManifest {
   permissions: Permission[];
   contributes: {
     commands: CommandContribution[];
+    /** Narzędzia AI (opcjonalne) — wymagają uprawnienia `ai.tools`. */
+    tools?: ToolContribution[];
   };
 }
 

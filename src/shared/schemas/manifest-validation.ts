@@ -6,7 +6,7 @@
  * nie umiała poprawnie poprosić (docs/plugin-api/02-uprawnienia-i-izolacja.md).
  */
 
-import type { Permission, PluginManifest } from '@core/plugins/manifest';
+import type { Permission, PluginManifest, ToolContribution } from '@core/plugins/manifest';
 
 /**
  * Allowlista uprawnień egzekwowana przez walidator.
@@ -19,7 +19,8 @@ const ALLOWED_PERMISSIONS: readonly Permission[] = [
   'commands.register',
   'notifications.show',
   'terminal.read',
-  'terminal.write'
+  'terminal.write',
+  'ai.tools'
 ];
 
 export class ManifestValidationError extends Error {
@@ -73,6 +74,19 @@ export function parseManifest(payload: unknown): PluginManifest {
     return { id: safeString(c, 'id', 80), title: safeString(c, 'title', 120) };
   });
 
+  const rawTools = Array.isArray(contributes['tools']) ? contributes['tools'] : [];
+  const tools: ToolContribution[] = rawTools.map((raw) => {
+    const t = record(raw, 'tool');
+    const tool: ToolContribution = {
+      id: safeString(t, 'id', 64),
+      description: safeString(t, 'description', 4000),
+      // Schemat wejścia idzie wprost do API modelu; przyjmujemy dowolny obiekt (albo pusty).
+      parameters: record(t['parameters'] ?? {}, 'parameters')
+    };
+    if (t['risky'] === true) tool.risky = true;
+    return tool;
+  });
+
   return {
     id: safeString(src, 'id', 80),
     name: safeString(src, 'name', 120),
@@ -80,6 +94,6 @@ export function parseManifest(payload: unknown): PluginManifest {
     apiVersion: safeString(src, 'apiVersion', 8),
     main: safeMain(src),
     permissions,
-    contributes: { commands }
+    contributes: tools.length > 0 ? { commands, tools } : { commands }
   };
 }
