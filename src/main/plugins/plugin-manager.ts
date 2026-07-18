@@ -11,8 +11,9 @@ import { join } from 'node:path';
 import { app, ipcMain, type BrowserWindow } from 'electron';
 import { hasPermission, type PluginManifest } from '@core/plugins/manifest';
 import { parseManifest } from '@shared/schemas/manifest-validation';
-import { IpcChannel, IpcEvent } from '@shared/types/ipc';
+import { IpcChannel, IpcEvent, type InstalledPlugin } from '@shared/types/ipc';
 import { createPluginHost, sendToHost } from './plugin-host';
+import { isDisabled, setDisabled } from './plugin-state-store';
 
 interface LoadedPlugin {
   manifest: PluginManifest;
@@ -20,6 +21,9 @@ interface LoadedPlugin {
   commands: Array<{ id: string; title: string }>;
 }
 
+/** Wszystkie wykryte wtyczki (włączone i wyłączone) — źródło dla menedżera. */
+const discovered = new Map<string, { manifest: PluginManifest; code: string }>();
+/** Aktualnie AKTYWNE wtyczki (włączone i załadowane do hosta). */
 const plugins = new Map<string, LoadedPlugin>();
 let mainWindow: BrowserWindow | undefined;
 
@@ -100,6 +104,50 @@ function notifyRenderer(): void {
   }
 }
 
+/** Lista zainstalowanych wtyczek dla menedżera (włączone + wyłączone). */
+function installedList(): InstalledPlugin[] {
+  return [...discovered.values()].map(({ manifest }) => ({
+    id: manifest.id,
+    name: manifest.name,
+    version: manifest.version,
+    permissions: manifest.permissions,
+    commands: manifest.contributes.commands,
+    enabled: !isDisabled(manifest.id)
+  }));
+}
+
+function notifyPluginsChanged(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IpcEvent.PluginsChanged, installedList());
+  }
+}
+
+/**
+ * Włącza/wyłącza wtyczkę.
+ *
+ * Wyłączenie usuwa ją z aktywnych (komendy znikają z palety, invoke jest blokowany) i
+ * zapamiętuje stan. Włączenie ładuje jej kod do hosta na nowo. Stan przeżywa restart.
+ */
+function setPluginEnabled(id: string, enabled: boolean): InstalledPlugin[] {
+  const entry = discovered.get(id);
+  if (!entry) return installedList();
+  setDisabled(id, !enabled);
+
+  if (enabled) {
+    if (!plugins.has(id)) {
+      plugins.set(id, { manifest: entry.manifest, commands: [] });
+      sendToHost({ type: 'load', pluginId: id, code: entry.code });
+    }
+  } else {
+    // Blokuje invoke (PluginRunCommand sprawdza plugins.has) i usuwa komendy z palety.
+    plugins.delete(id);
+  }
+
+  notifyRenderer();
+  notifyPluginsChanged();
+  return installedList();
+}
+
 /** Inicjalizacja: host, IPC i załadowanie wykrytych wtyczek. */
 export async function initPlugins(window: BrowserWindow): Promise<void> {
   mainWindow = window;
@@ -119,6 +167,11 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
     if (!plugins.has(pluginId)) return;
     sendToHost({ type: 'invoke', pluginId, commandId });
   });
+  ipcMain.handle(IpcChannel.PluginInstalled, () => installedList());
+  ipcMain.handle(IpcChannel.PluginSetEnabled, (_event, id: unknown, enabled: unknown) => {
+    if (typeof id !== 'string' || typeof enabled !== 'boolean') return installedList();
+    return setPluginEnabled(id, enabled);
+  });
 
   await ready;
 
@@ -132,8 +185,12 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
     for (const name of entries) {
       const loaded = await readPlugin(join(dir, name));
       if (!loaded) continue;
-      plugins.set(loaded.manifest.id, { manifest: loaded.manifest, commands: [] });
-      sendToHost({ type: 'load', pluginId: loaded.manifest.id, code: loaded.code });
+      const id = loaded.manifest.id;
+      discovered.set(id, { manifest: loaded.manifest, code: loaded.code });
+      // Wyłączone wtyczki są znane menedżerowi, ale nie trafiają do hosta.
+      if (isDisabled(id)) continue;
+      plugins.set(id, { manifest: loaded.manifest, commands: [] });
+      sendToHost({ type: 'load', pluginId: id, code: loaded.code });
     }
   }
 }

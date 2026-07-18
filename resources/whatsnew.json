@@ -1,0 +1,33 @@
+[
+  {
+    "version": "0.9.0",
+    "date": "2026-07-18",
+    "title": "Redesign UI i panele jako zakładki",
+    "changes": [
+      "Szklany interfejs: ciemna atmosfera, przezroczysty terminal, logo i ikony typów sesji",
+      "Własne przyciski okna (kolorowe kółka) i kursor łapki na klikalnych",
+      "Własny scrollbar terminala; naprawiona podwójna ramka i podwójny scrollbar",
+      "Ustawienia, Motywy, Wtyczki, About i Skróty otwierają się jako osobne zakładki",
+      "Dolny pasek jako toolbar z rozwijanymi menu",
+      "SSH: obsługa logowania hasłem przez keyboard-interactive"
+    ]
+  },
+  {
+    "version": "0.8.0",
+    "date": "2026-07-18",
+    "title": "Etap 7 — dodatkowe protokoły",
+    "changes": [
+      "TCP, TLS, Telnet, WebSocket i UDP jako pełnoprawne transporty",
+      "Docker i Kubernetes przez owijkę docker/kubectl exec"
+    ]
+  },
+  {
+    "version": "0.7.0",
+    "date": "2026-07-17",
+    "title": "Etap 6 — system wtyczek",
+    "changes": [
+      "Izolowany Plugin Host (sandbox, bez Node) i Plugin API v1",
+      "Manifest, uprawnienia i przykładowa wtyczka"
+    ]
+  }
+]

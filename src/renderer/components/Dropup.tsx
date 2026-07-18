@@ -11,11 +11,20 @@ import { useEffect, useRef, useState } from 'react';
 interface DropupProps {
   label: React.ReactNode;
   title?: string;
-  /** Zawartość menu; `close` domyka menu po wybraniu akcji. */
+  /** Wyrównanie menu: 'right' (domyślne, akcje po prawej) albo 'left' (menu kategorii). */
+  align?: 'left' | 'right';
+  /** Styl przycisku: 'button' (akcja w toolbarze) albo 'category' (Plik/Widok/…). */
+  variant?: 'button' | 'category';
   children: (close: () => void) => React.ReactNode;
 }
 
-export function Dropup({ label, title, children }: DropupProps): React.JSX.Element {
+export function Dropup({
+  label,
+  title,
+  align = 'right',
+  variant = 'button',
+  children
+}: DropupProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -39,9 +48,13 @@ export function Dropup({ label, title, children }: DropupProps): React.JSX.Eleme
 
   return (
     <div className="dropup" ref={ref}>
-      {open && <div className="dropup__menu">{children(close)}</div>}
+      {open && <div className={`dropup__menu dropup__menu--${align}`}>{children(close)}</div>}
       <button
-        className={`statusbar__button dropup__toggle${open ? ' is-active' : ''}`}
+        className={
+          variant === 'category'
+            ? `dropup__cat${open ? ' is-active' : ''}`
+            : `statusbar__button dropup__toggle${open ? ' is-active' : ''}`
+        }
         onClick={() => setOpen((v) => !v)}
         title={title}
         aria-haspopup="true"

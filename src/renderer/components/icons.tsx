@@ -7,6 +7,7 @@
  */
 
 import type { SessionSpec } from '@shared/types/ipc';
+import type { PanelKind } from '../panels/kinds';
 
 type IconProps = { className?: string };
 
@@ -140,6 +141,67 @@ export function IconWinClose(): React.JSX.Element {
   );
 }
 
+// --- Ikony paneli (zakładki bez sesji) ---
+
+/** Ustawienia — zębatka. */
+export function IconSettings({ className }: IconProps): React.JSX.Element {
+  return (
+    <svg {...base} className={className}>
+      <circle cx="8" cy="8" r="2.1" />
+      <path d="M8 1.5v1.6M8 12.9v1.6M14.5 8h-1.6M3.1 8H1.5M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1M12.6 12.6l-1.1-1.1M4.5 4.5 3.4 3.4" />
+    </svg>
+  );
+}
+
+/** Motywy — paleta/kropla. */
+export function IconPalette({ className }: IconProps): React.JSX.Element {
+  return (
+    <svg {...base} className={className}>
+      <path d="M8 2.2c3.2 0 5.8 2.3 5.8 5.1 0 1.7-1.4 2.6-2.8 2.6H9.7c-.7 0-1.2.6-1.2 1.2 0 .3.1.5.3.8.2.3.3.5.3.8 0 .6-.5 1.1-1.4 1.1-3.2 0-5.8-2.6-5.8-5.8S4.8 2.2 8 2.2Z" />
+      <path d="M5.5 7h.01M8 5h.01M10.5 7h.01" />
+    </svg>
+  );
+}
+
+/** Wtyczki — puzzel. */
+export function IconPuzzle({ className }: IconProps): React.JSX.Element {
+  return (
+    <svg {...base} className={className}>
+      <path d="M6.4 2.6h3.2v1.5a1.1 1.1 0 1 0 2.2 0V2.6h1.6v3.2h-1.5a1.1 1.1 0 1 0 0 2.2h1.5v3.2h-3.2v-1.5a1.1 1.1 0 1 0-2.2 0v1.5H2.6V8.4h1.5a1.1 1.1 0 1 0 0-2.2H2.6V2.6z" />
+    </svg>
+  );
+}
+
+/** O aplikacji — info. */
+export function IconInfo({ className }: IconProps): React.JSX.Element {
+  return (
+    <svg {...base} className={className}>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M8 7.2v3.4M8 5.1h.01" />
+    </svg>
+  );
+}
+
+/** Skróty — klawiatura. */
+export function IconKeyboard({ className }: IconProps): React.JSX.Element {
+  return (
+    <svg {...base} className={className}>
+      <rect x="1.6" y="4" width="12.8" height="8" rx="1.5" />
+      <path d="M4 6.4h.01M6.2 6.4h.01M8.4 6.4h.01M10.6 6.4h.01M5 9.4h6" />
+    </svg>
+  );
+}
+
+/** Nowości — iskra. */
+export function IconSparkle({ className }: IconProps): React.JSX.Element {
+  return (
+    <svg {...base} className={className}>
+      <path d="M8 1.8c.4 2.7 1.7 4 4.4 4.4-2.7.4-4 1.7-4.4 4.4-.4-2.7-1.7-4-4.4-4.4C6.3 5.8 7.6 4.5 8 1.8Z" />
+      <path d="M12.5 10.5c.2 1.1.7 1.6 1.8 1.8-1.1.2-1.6.7-1.8 1.8-.2-1.1-.7-1.6-1.8-1.8 1.1-.2 1.6-.7 1.8-1.8Z" />
+    </svg>
+  );
+}
+
 /** Ikona pasująca do rodzaju sesji — używana w tabach i na pasku bocznym. */
 export function SessionIcon({ kind, className }: { kind: SessionSpec['kind']; className?: string }): React.JSX.Element {
   switch (kind) {
@@ -153,5 +215,24 @@ export function SessionIcon({ kind, className }: { kind: SessionSpec['kind']; cl
       return <IconContainer className={className} />;
     default:
       return <IconTerminal className={className} />;
+  }
+}
+
+/** Ikona pasująca do rodzaju panelu (zakładka bez sesji). */
+export function PanelIcon({ panel, className }: { panel: PanelKind; className?: string }): React.JSX.Element {
+  switch (panel) {
+    case 'settings':
+      return <IconSettings className={className} />;
+    case 'themes':
+      return <IconPalette className={className} />;
+    case 'plugins':
+      return <IconPuzzle className={className} />;
+    case 'shortcuts':
+      return <IconKeyboard className={className} />;
+    case 'whatsnew':
+      return <IconSparkle className={className} />;
+    case 'about':
+    default:
+      return <IconInfo className={className} />;
   }
 }

@@ -9,6 +9,7 @@ import type {
   AppCapabilities,
   ContainerInfo,
   HostVerifyRequest,
+  InstalledPlugin,
   PluginCommand,
   PluginNotification,
   SessionSpec,
@@ -18,6 +19,7 @@ import type {
   TerminalCreateResult,
   TerminalDataEvent,
   TerminalExitEvent,
+  WhatsNewEntry,
   WorkspaceSnapshot
 } from './ipc';
 import type { SerialPortInfo } from '@core/transports/transport';
@@ -107,7 +109,15 @@ export interface LumaApi {
     runCommand(pluginId: string, commandId: string): void;
     onCommandsChanged(callback: (commands: PluginCommand[]) => void): Unsubscribe;
     onNotification(callback: (n: PluginNotification) => void): Unsubscribe;
+    /** Lista zainstalowanych wtyczek (do menedżera). */
+    installed(): Promise<InstalledPlugin[]>;
+    /** Włącza/wyłącza wtyczkę; zwraca zaktualizowaną listę. */
+    setEnabled(id: string, enabled: boolean): Promise<InstalledPlugin[]>;
+    onPluginsChanged(callback: (plugins: InstalledPlugin[]) => void): Unsubscribe;
   };
+
+  /** Nowości/zmiany aplikacji — pobierane z GitHuba, z lokalnym fallbackiem. */
+  whatsNew(): Promise<WhatsNewEntry[]>;
 
   /** SFTP działa na istniejącej sesji SSH (po jej sessionId). */
   sftp: {
