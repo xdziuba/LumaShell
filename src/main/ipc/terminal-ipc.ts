@@ -17,6 +17,7 @@ import { SerialTransport, listSerialPorts } from '@services/serial/serial-transp
 import { SshTransport } from '@services/ssh/ssh-transport';
 import { createNetworkTransport } from '@services/net/network-transport';
 import { createContainerTransport, listContainers } from '@services/container/container-exec';
+import { createAiCliTransport, detectAiClis } from '@services/ai/ai-cli';
 import { dropConnection, registerConnection, resolveOptions } from '../ssh/ssh-connections';
 import { registerHostVerifyIpc } from '../ssh/host-verify';
 import {
@@ -154,6 +155,13 @@ async function createTransport(
     };
   }
 
+  if (spec.kind === 'ai-cli') {
+    return {
+      transport: createAiCliTransport(sessionId, { tool: spec.tool, columns, rows }),
+      label: spec.label
+    };
+  }
+
   const shells = await getShells();
   // Identyfikator z renderera jest kluczem do listy wykrytych powłok, nigdy ścieżką.
   // Nieznany identyfikator schodzi na powłokę domyślną zamiast wywracać sesję.
@@ -183,6 +191,9 @@ export function registerTerminalIpc(window: BrowserWindow): void {
 
   // Wykrywanie kontenerów/podów jest leniwe i odporne — puste, gdy brak docker/kubectl.
   ipcMain.handle(IpcChannel.ContainerList, () => listContainers());
+
+  // Wykrywanie CLI AI (codex/claude) w PATH — nic nie uruchamia, tylko sprawdza dostępność.
+  ipcMain.handle(IpcChannel.AiDetectClis, () => detectAiClis());
 
   // Rejestracja połączenia SSH: sekrety zostają w procesie głównym, renderer dostaje
   // tylko connectionId, którym potem otwiera sesję.

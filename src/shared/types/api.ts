@@ -6,6 +6,7 @@
  */
 
 import type {
+  AiCliAvailability,
   AppCapabilities,
   ContainerInfo,
   HostVerifyRequest,
@@ -128,6 +129,8 @@ export interface LumaApi {
     listModels(): Promise<AiModel[]>;
     /** Test połączenia — rzuca czytelnym błędem albo zwraca liczbę modeli. */
     testConnection(): Promise<{ ok: true; models: number }>;
+    /** Które oficjalne CLI AI (Codex/Claude Code) są w PATH — do szybkiego startu w sesji. */
+    detectClis(): Promise<AiCliAvailability>;
   };
 
   /** Diagnostyka i zgłaszanie problemów (lokalny log, bez telemetrii). */

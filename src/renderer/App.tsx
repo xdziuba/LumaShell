@@ -10,6 +10,7 @@ import { PANEL_TITLES } from './panels/kinds';
 import { GITHUB_URL } from './panels/app-meta';
 import { applyTheme } from './theme/apply-theme';
 import {
+  IconAi,
   IconContainer,
   IconNetwork,
   IconPlus,
@@ -24,6 +25,8 @@ import type { Command } from './commands/types';
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { Profile } from '@core/profiles/profile';
 import type {
+  AiCliAvailability,
+  AiCliTool,
   HostVerifyRequest,
   PluginCommand,
   PluginNotification,
@@ -42,6 +45,12 @@ function specFromProfile(profile: Profile): SessionSpec {
     ? { kind: 'serial', path: profile.target.path, baudRate: profile.target.baudRate }
     : { kind: 'pty', shellId: profile.target.shellId, cwd: profile.target.cwd };
 }
+
+/** Oficjalne CLI AI logujące się kontem (subskrypcja) — do szybkiego startu w terminalu. */
+const AI_CLIS: Array<{ tool: AiCliTool; label: string; account: string; install: string }> = [
+  { tool: 'codex', label: 'Codex CLI', account: 'konto ChatGPT', install: 'npm i -g @openai/codex' },
+  { tool: 'claude', label: 'Claude Code', account: 'konto Claude', install: 'npm i -g @anthropic-ai/claude-code' }
+];
 
 // Panele otwierane rzadko ładowane leniwie — poza bundlem startowym
 // (docs/architecture/05-wydajnosc.md).
@@ -79,6 +88,8 @@ export function App(): React.JSX.Element {
   const [loggingSessions, setLoggingSessions] = useState<Set<string>>(new Set());
   const [pluginCommands, setPluginCommands] = useState<PluginCommand[]>([]);
   const [notification, setNotification] = useState<PluginNotification | null>(null);
+  // Które CLI AI są w PATH — decyduje, czy szybki start jest aktywny czy z podpowiedzią instalacji.
+  const [aiClis, setAiClis] = useState<AiCliAvailability>({ codex: false, claude: false });
 
   const {
     tabs,
@@ -141,6 +152,8 @@ export function App(): React.JSX.Element {
     });
     // Listowanie portów niczego nie otwiera, więc jest bezpieczne przy starcie.
     void window.luma.serial.listPorts().then(setPorts);
+    // Wykrycie CLI AI też tylko sprawdza PATH — nic nie uruchamia.
+    void window.luma.ai.detectClis().then(setAiClis);
 
     // Powłoki i zapamiętany układ ładowane razem: odtwarzamy tylko sesje powłok
     // (workspace-store odsiał już porty COM), a gdy nic nie zapisano — pierwsza powłoka.
@@ -262,6 +275,11 @@ export function App(): React.JSX.Element {
 
   const otworzPowloke = (shell: ShellInfo): void =>
     void open({ kind: 'pty', shellId: shell.id }, shell.label);
+
+  // Uruchomienie oficjalnego CLI AI w nowej zakładce-sesji. Logowanie kontem robi samo
+  // narzędzie przy pierwszym starcie — my nie dotykamy tokenów.
+  const otworzAiCli = (tool: AiCliTool, label: string): void =>
+    void open({ kind: 'ai-cli', tool, label }, label);
 
   // Klik portu otwiera dialog konfiguracji; właściwe otwarcie po zatwierdzeniu.
   const otworzPort = (port: SerialPortInfo): void => setSerialDialogPath(port.path);
@@ -535,6 +553,32 @@ export function App(): React.JSX.Element {
             <span className="sidebar__item-label">Kontener (Docker/K8s)…</span>
           </button>
 
+          <div className="sidebar__heading sidebar__heading--spaced">AGENT AI</div>
+          {AI_CLIS.map((cli) => (
+            <button
+              key={cli.tool}
+              className="sidebar__item sidebar__item--action"
+              onClick={() => otworzAiCli(cli.tool, cli.label)}
+              disabled={!aiClis[cli.tool]}
+              title={
+                aiClis[cli.tool]
+                  ? `Uruchom ${cli.label} — logowanie ${cli.account}`
+                  : `Nie znaleziono w PATH — zainstaluj: ${cli.install}`
+              }
+            >
+              <IconAi className="sidebar__ico" />
+              <span className="sidebar__item-label">{cli.label}</span>
+            </button>
+          ))}
+          <button
+            className="sidebar__item sidebar__item--action"
+            onClick={() => openPanel('ai')}
+            title="Konfiguracja dostawcy AI (klucz API)"
+          >
+            <IconAi className="sidebar__ico" />
+            <span className="sidebar__item-label">Konfiguracja…</span>
+          </button>
+
           <div className="sidebar__heading sidebar__heading--spaced">PORTY COM</div>
           {ports.length === 0 && <div className="sidebar__item">brak portów</div>}
           {ports.map((port) => (
@@ -790,8 +834,33 @@ export function App(): React.JSX.Element {
             {(close) => (
               <>
                 <button className="dropup__item" onClick={() => { openPanel('ai'); close(); }}>
-                  <span>Agent AI</span>
+                  <span>Agent AI (konfiguracja)</span>
                 </button>
+                <div className="dropup__sep" />
+                {AI_CLIS.map((cli) =>
+                  aiClis[cli.tool] ? (
+                    <button
+                      key={cli.tool}
+                      className="dropup__item"
+                      onClick={() => { otworzAiCli(cli.tool, cli.label); close(); }}
+                      title={`Uruchom ${cli.label} w terminalu — logowanie ${cli.account}`}
+                    >
+                      <span>{cli.label}</span>
+                      <span className="dropup__hint">{cli.account}</span>
+                    </button>
+                  ) : (
+                    <button
+                      key={cli.tool}
+                      className="dropup__item"
+                      disabled
+                      title={`Nie znaleziono w PATH — zainstaluj: ${cli.install}`}
+                    >
+                      <span>{cli.label}</span>
+                      <span className="dropup__hint">brak w PATH</span>
+                    </button>
+                  )
+                )}
+                <div className="dropup__sep" />
                 <button className="dropup__item" onClick={() => { openPanel('plugins'); close(); }}>
                   <span>Wtyczki</span>
                 </button>
