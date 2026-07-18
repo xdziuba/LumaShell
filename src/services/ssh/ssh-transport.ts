@@ -61,6 +61,18 @@ export class SshTransport implements TerminalTransport {
     const client = new Client();
     this.#client = client;
 
+    // Logowanie hasłem: wiele serwerów (PAM/OpenSSH) realizuje je przez keyboard-interactive,
+    // a nie przez metodę 'password'. Bez tej obsługi ssh2 zgłasza „All configured
+    // authentication methods failed", mimo poprawnego hasła. Odpowiadamy hasłem na każdy monit.
+    if (this.options.password) {
+      client.on(
+        'keyboard-interactive',
+        (_name, _instructions, _lang, prompts, finish) => {
+          finish(prompts.map(() => this.options.password ?? ''));
+        }
+      );
+    }
+
     try {
       // Jump host: łączymy się z bastionem i tunelujemy do celu; strumień tunelu
       // staje się gniazdem połączenia docelowego.
@@ -76,6 +88,8 @@ export class SshTransport implements TerminalTransport {
           sock,
           username: this.options.username,
           password: this.options.password,
+          // Zezwól na keyboard-interactive jako drogę logowania hasłem (patrz handler wyżej).
+          tryKeyboard: Boolean(this.options.password),
           privateKey: this.options.privateKey,
           passphrase: this.options.passphrase,
           agent: this.options.agent,
@@ -138,6 +152,12 @@ export class SshTransport implements TerminalTransport {
     const jumpClient = new Client();
     this.#jumpClient = jumpClient;
 
+    if (jump.password) {
+      jumpClient.on('keyboard-interactive', (_name, _instr, _lang, prompts, finish) => {
+        finish(prompts.map(() => jump.password ?? ''));
+      });
+    }
+
     await new Promise<void>((resolve, reject) => {
       jumpClient.once('ready', resolve);
       jumpClient.once('error', reject);
@@ -146,6 +166,7 @@ export class SshTransport implements TerminalTransport {
         port: jump.port ?? 22,
         username: jump.username,
         password: jump.password,
+        tryKeyboard: Boolean(jump.password),
         privateKey: jump.privateKey,
         passphrase: jump.passphrase,
         agent: jump.agent,

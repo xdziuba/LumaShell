@@ -426,7 +426,9 @@ export function TerminalView({
   return (
     // Ukryta zakładka zostaje zamontowana (jej powłoka ma żyć dalej), ale znika dla
     // czytników ekranu. xterm montuje się w .term-host; scrollbar to nakładka po prawej.
-    <div className={`terminal${active ? '' : ' terminal--hidden'}`} aria-hidden={!active}>
+    // Klasa .term-pane (nie .terminal!) — xterm.js sam dodaje klasę „terminal" do swojego
+    // korzenia, więc kolizja dawała podwójną ramkę i psuła przewijanie.
+    <div className={`term-pane${active ? '' : ' term-pane--hidden'}`} aria-hidden={!active}>
       <div className="term-host" ref={hostRef} />
       <div className="term-scrollbar" ref={scrollbarRef}>
         <div className="term-scrollbar__thumb" ref={thumbRef} />

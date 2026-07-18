@@ -596,8 +596,11 @@ body {
 // Obszar terminala: powierzchnia glass. xterm renderuje z allowTransparency (tło rgba),
 // więc tapeta i pulpit prześwitują przez tekst — konsola wygląda jak matowa szyba, spójnie
 // z panelami. Terminal jest kartą: margines, zaokrąglenie, hairline border, miękki cień.
-// docs/architecture/03-interfejs-i-motywy.md
-.terminal {
+//
+// UWAGA: klasa .term-pane, NIE .terminal — xterm.js sam dodaje klasę „terminal" do korzenia
+// swojego elementu, więc użycie .terminal nakładało te style także na xterm (podwójna ramka,
+// overflow:hidden psujące przewijanie). docs/architecture/03-interfejs-i-motywy.md
+.term-pane {
   flex: 1;
   min-width: 0;
   position: relative;
@@ -641,15 +644,23 @@ body {
     height: 100%;
   }
 
-  // xterm ustawia na viewporcie nieprzezroczyste tło motywu i rezerwuje natywny gutter —
-  // zerujemy jedno i drugie; tło niesie tafla .terminal, a przewijanie pokazuje .term-scrollbar.
+  // xterm ustawia na viewporcie nieprzezroczyste tło motywu — zerujemy je; tło niesie
+  // tafla .term-pane.
   .xterm-viewport {
     background-color: transparent !important;
+    scrollbar-width: none;
 
     &::-webkit-scrollbar {
-      width: 0;
-      height: 0;
+      width: 0 !important;
+      height: 0 !important;
+      display: none !important;
     }
+  }
+
+  // xterm.js ma WŁASNY scrollbar (xterm-scrollable-element z vscode: .scrollbar + .slider).
+  // To on dawał „drugi", ciemny suwak obok naszego zielonego — chowamy go całkowicie.
+  .xterm-scrollable-element > .scrollbar {
+    display: none !important;
   }
 }
 
