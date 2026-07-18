@@ -197,8 +197,9 @@ istniejącym już kontraktem transportu, dochodzi z dojrzewaniem Plugin API (Eta
 * ✔ automatyczne aktualizacje — electron-updater przez GitHub Releases (tylko w spakowanej wersji),
 * ✔ system raportowania błędów — globalne handlery + log w userData, ErrorBoundary renderera,
   „Zgłoś problem"/„Otwórz logi" w menu Pomoc,
-* ✔ dokumentacja — docs/architecture/09-pakowanie.md,
-* podpisywanie aplikacji — **wymaga certyfikatu** (patrz niżej), świadomie odłożone.
+* ✔ dokumentacja — docs/architecture/11-pakowanie.md,
+* podpisywanie aplikacji — **świadomie wydajemy bez podpisu w tej fazie**; akceptujemy
+  ostrzeżenie SmartScreen (użytkownik klika „Uruchom mimo to"). Dodanie podpisu opisane niżej.
 
 **Etap 8 zamknięty w zakresie autonomicznym.** Paczka jest zweryfikowana: `npm run dist:dir`
 buduje działającą aplikację, a spakowany `LumaShell.exe` uruchamia się i tworzy sesję PTY
@@ -217,7 +218,7 @@ wymagające Twojej infrastruktury/decyzji:
 
 | Etap | Zakres |
 | --- | --- |
-| **AI-0** — interfejs dostawców | `AiProvider`, konfiguracja OpenAI API, obsługa lokalnego endpointu, bezpieczne przechowywanie kluczy, wybór modelu |
+| **AI-0** ✔ — interfejs dostawców | `AiProvider` (core) + `OpenAiCompatibleProvider` (OpenAI API / lokalny / własny endpoint, streaming SSE); klucz w safeStorage (nie wraca do renderera); konfiguracja, test połączenia i wybór modelu w panelu „Agent AI". Codex CLI → AI-4 |
 | **AI-1** — czat bez wykonywania działań | panel czatu, analiza zaznaczonego tekstu, analiza wyjścia terminala, generowanie komend, brak automatycznego wykonania |
 | **AI-2** — narzędzia tylko do odczytu | odczyt aktywnego terminala, odczyt wybranych plików, lista sesji, odczyt UART, analiza logów |
 | **AI-3** — zatwierdzane wykonywanie | wysyłanie komend do terminala, wykonywanie procesów, zapis plików, wysyłanie danych przez UART, system potwierdzeń, dziennik audytowy |

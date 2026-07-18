@@ -192,6 +192,16 @@ export function IconKeyboard({ className }: IconProps): React.JSX.Element {
   );
 }
 
+/** Agent AI — głowa robota. */
+export function IconAi({ className }: IconProps): React.JSX.Element {
+  return (
+    <svg {...base} className={className}>
+      <rect x="2.8" y="5" width="10.4" height="7.2" rx="2.2" />
+      <path d="M8 5V2.9M8 2.9h.01M5.6 8.4h.01M10.4 8.4h.01M6.2 10.4h3.6" />
+    </svg>
+  );
+}
+
 /** Nowości — iskra. */
 export function IconSparkle({ className }: IconProps): React.JSX.Element {
   return (
@@ -227,6 +237,8 @@ export function PanelIcon({ panel, className }: { panel: PanelKind; className?: 
       return <IconPalette className={className} />;
     case 'plugins':
       return <IconPuzzle className={className} />;
+    case 'ai':
+      return <IconAi className={className} />;
     case 'shortcuts':
       return <IconKeyboard className={className} />;
     case 'whatsnew':

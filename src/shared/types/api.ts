@@ -25,6 +25,7 @@ import type {
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { Profile } from '@core/profiles/profile';
 import type { Theme } from '@core/theme/theme';
+import type { AiConfig, AiModel } from '@core/ai/provider';
 import type { TerminalSettings } from './settings';
 
 /** Każdy nasłuch zwraca funkcję wypisującą. */
@@ -118,6 +119,16 @@ export interface LumaApi {
 
   /** Nowości/zmiany aplikacji — pobierane z GitHuba, z lokalnym fallbackiem. */
   whatsNew(): Promise<WhatsNewEntry[]>;
+
+  /** Konfiguracja dostawcy AI (AI-0). Klucz zostaje w procesie głównym. */
+  ai: {
+    getConfig(): Promise<AiConfig>;
+    /** `apiKey`: pomiń = bez zmiany, '' = usuń, wartość = zapisz. Zwraca config po walidacji. */
+    saveConfig(config: Pick<AiConfig, 'provider' | 'baseUrl' | 'model'>, apiKey?: string): Promise<AiConfig>;
+    listModels(): Promise<AiModel[]>;
+    /** Test połączenia — rzuca czytelnym błędem albo zwraca liczbę modeli. */
+    testConnection(): Promise<{ ok: true; models: number }>;
+  };
 
   /** Diagnostyka i zgłaszanie problemów (lokalny log, bez telemetrii). */
   diagnostics: {
