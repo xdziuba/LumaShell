@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
+  parseAiChat,
   parseSshConnect,
   parseTerminalCreate,
   parseTerminalWrite,
@@ -99,6 +100,10 @@ const rzuca = (fn: () => unknown): boolean => {
     rzuca(() => parseTerminalCreate({ spec: { kind: 'ai-cli', tool: 'rm -rf', label: 'x' }, columns: 80, rows: 24 }))
   );
   sprawdz('ai-cli „claude" przechodzi', !rzuca(() => parseTerminalCreate({ spec: { kind: 'ai-cli', tool: 'claude', label: 'Claude Code' }, columns: 80, rows: 24 })));
+  // Czat AI: nieznana rola i pusta rozmowa odrzucone; poprawna przechodzi.
+  sprawdz('czat z obcą rolą odrzucony', rzuca(() => parseAiChat({ requestId: 'r', messages: [{ role: 'root', content: 'x' }] })));
+  sprawdz('czat bez wiadomości odrzucony', rzuca(() => parseAiChat({ requestId: 'r', messages: [] })));
+  sprawdz('czat poprawny przechodzi', !rzuca(() => parseAiChat({ requestId: 'r', messages: [{ role: 'user', content: 'cześć' }] })));
   // SSH: port poza zakresem.
   sprawdz(
     'SSH port 0 odrzucony',

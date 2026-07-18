@@ -51,6 +51,8 @@ export const IpcChannel = {
   AiSaveConfig: 'ai:saveConfig',
   AiListModels: 'ai:listModels',
   AiTestConnection: 'ai:testConnection',
+  AiChat: 'ai:chat',
+  AiChatCancel: 'ai:chatCancel',
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
   TerminalResize: 'terminal:resize',
@@ -72,8 +74,31 @@ export const IpcEvent = {
   /** Zmiana listy/stanu zainstalowanych wtyczek — menedżer odświeża widok. */
   PluginsChanged: 'plugin:pluginsChanged',
   /** Zmiana stanu maksymalizacji — przycisk zmienia wtedy ikonę. */
-  WindowMaximizedChanged: 'window:maximizedChanged'
+  WindowMaximizedChanged: 'window:maximizedChanged',
+  /** Kolejna porcja (delta) strumieniowanej odpowiedzi czatu AI. */
+  AiChatDelta: 'ai:chatDelta'
 } as const;
+
+/** Rola wiadomości czatu — zgodna z ChatMessage w core/ai/provider. */
+export type AiChatRole = 'system' | 'user' | 'assistant';
+
+/** Pojedyncza wiadomość wysyłana do modelu (renderer → main). */
+export interface AiChatMessage {
+  role: AiChatRole;
+  content: string;
+}
+
+/** Żądanie czatu: identyfikator (do strumienia i anulowania) + historia rozmowy. */
+export interface AiChatRequest {
+  requestId: string;
+  messages: AiChatMessage[];
+}
+
+/** Porcja strumienia odpowiedzi. */
+export interface AiChatDeltaEvent {
+  requestId: string;
+  delta: string;
+}
 
 /** Komenda wystawiona przez wtyczkę, widoczna w palecie. */
 export interface PluginCommand {

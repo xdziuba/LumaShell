@@ -11,6 +11,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 import { HexFormatter, timestamp } from './hex-format';
+import { noteActiveSession, registerTerminal } from './terminal-context';
 import type { MonitorMode, SessionSpec } from '@shared/types/ipc';
 import type { TerminalSettings } from '@shared/types/settings';
 
@@ -100,6 +101,9 @@ export function TerminalView({
   onExitRef.current = onExit;
   onRendererRef.current = onRenderer;
   onErrorRef.current = onError;
+  // Czy zakładka jest na wierzchu — w refie, bo czyta to asynchroniczny handler startu sesji.
+  const activeRef = useRef(active);
+  activeRef.current = active;
   // Tryb monitora w refie — zmiana nie może restartować sesji.
   const monitorRef = useRef(monitor);
   const hexRef = useRef<HexFormatter | null>(null);
@@ -323,6 +327,24 @@ export function TerminalView({
         sessionIdRef.current = session.sessionId;
         onReadyRef.current({ label: session.label, sessionId: session.sessionId });
 
+        // Udostępnij zaznaczenie i ostatnie wyjście panelowi czatu AI (bez akcji — sam odczyt).
+        cleanups.push(
+          registerTerminal(session.sessionId, {
+            getSelection: () => term.getSelection(),
+            getRecentText: (maxLines) => {
+              const buffer = term.buffer.active;
+              const end = buffer.length;
+              const start = Math.max(0, end - maxLines);
+              const lines: string[] = [];
+              for (let i = start; i < end; i++) {
+                lines.push(buffer.getLine(i)?.translateToString(true) ?? '');
+              }
+              return lines.join('\n').replace(/\n+$/, '');
+            }
+          })
+        );
+        if (activeRef.current) noteActiveSession(session.sessionId);
+
         cleanups.push(
           window.luma.terminal.onData((event) => {
             if (event.sessionId !== sessionIdRef.current) return;
@@ -392,9 +414,13 @@ export function TerminalView({
   }, [settings, dopasuj]);
 
   // Powrót na wierzch: kontener dopiero teraz odzyskał wymiary, więc terminal trzeba
-  // przeliczyć — w tle nie było z czego.
+  // przeliczyć — w tle nie było z czego. Zapamiętujemy też sesję jako ostatnio aktywną,
+  // żeby panel czatu wiedział, z którego terminala brać wyjście.
   useEffect(() => {
-    if (active) dopasuj();
+    if (!active) return;
+    dopasuj();
+    const id = sessionIdRef.current;
+    if (id) noteActiveSession(id);
   }, [active, dopasuj]);
 
   // Zmiana motywu na żywo — kolory terminala, bez restartu sesji.

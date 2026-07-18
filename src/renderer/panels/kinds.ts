@@ -6,13 +6,22 @@
  * importować typ bez cyklu.
  */
 
-export type PanelKind = 'settings' | 'themes' | 'plugins' | 'ai' | 'about' | 'shortcuts' | 'whatsnew';
+export type PanelKind =
+  | 'settings'
+  | 'themes'
+  | 'plugins'
+  | 'ai'
+  | 'aiChat'
+  | 'about'
+  | 'shortcuts'
+  | 'whatsnew';
 
 export const PANEL_TITLES: Record<PanelKind, string> = {
   settings: 'Ustawienia',
   themes: 'Motywy',
   plugins: 'Wtyczki',
   ai: 'Agent AI',
+  aiChat: 'Czat AI',
   about: 'O aplikacji',
   shortcuts: 'Skróty klawiszowe',
   whatsnew: 'Nowości'

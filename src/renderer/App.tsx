@@ -68,6 +68,7 @@ const ShortcutsPanel = lazy(() => import('./panels/ShortcutsPanel'));
 const WhatsNewPanel = lazy(() => import('./panels/WhatsNewPanel'));
 const PluginManager = lazy(() => import('./panels/PluginManager'));
 const AiPanel = lazy(() => import('./panels/AiPanel'));
+const AiChatPanel = lazy(() => import('./panels/AiChatPanel'));
 
 export function App(): React.JSX.Element {
   const [shells, setShells] = useState<ShellInfo[]>([]);
@@ -554,6 +555,14 @@ export function App(): React.JSX.Element {
           </button>
 
           <div className="sidebar__heading sidebar__heading--spaced">AGENT AI</div>
+          <button
+            className="sidebar__item sidebar__item--action"
+            onClick={() => openPanel('aiChat')}
+            title="Czat z modelem AI (bez wykonywania akcji)"
+          >
+            <IconAi className="sidebar__ico" />
+            <span className="sidebar__item-label">Czat AI</span>
+          </button>
           {AI_CLIS.map((cli) => (
             <button
               key={cli.tool}
@@ -668,6 +677,9 @@ export function App(): React.JSX.Element {
                       )}
                       {tab.panel === 'plugins' && <PluginManager onClose={close} />}
                       {tab.panel === 'ai' && <AiPanel onClose={close} />}
+                      {tab.panel === 'aiChat' && (
+                        <AiChatPanel onClose={close} onOpenConfig={() => openPanel('ai')} />
+                      )}
                       {tab.panel === 'about' && <AboutPanel onClose={close} />}
                       {tab.panel === 'shortcuts' && <ShortcutsPanel onClose={close} />}
                       {tab.panel === 'whatsnew' && <WhatsNewPanel onClose={close} />}
@@ -833,6 +845,9 @@ export function App(): React.JSX.Element {
           <Dropup label="Narzędzia" align="left" variant="category">
             {(close) => (
               <>
+                <button className="dropup__item" onClick={() => { openPanel('aiChat'); close(); }}>
+                  <span>Czat AI</span>
+                </button>
                 <button className="dropup__item" onClick={() => { openPanel('ai'); close(); }}>
                   <span>Agent AI (konfiguracja)</span>
                 </button>

@@ -15,6 +15,8 @@ import type { TerminalSettings } from '@shared/types/settings';
 import {
   IpcChannel,
   IpcEvent,
+  type AiChatDeltaEvent,
+  type AiChatRequest,
   type AiCliAvailability,
   type AppCapabilities,
   type ContainerInfo,
@@ -136,7 +138,13 @@ export const api: LumaApi = {
     listModels: (): Promise<AiModel[]> => ipcRenderer.invoke(IpcChannel.AiListModels),
     testConnection: (): Promise<{ ok: true; models: number }> =>
       ipcRenderer.invoke(IpcChannel.AiTestConnection),
-    detectClis: (): Promise<AiCliAvailability> => ipcRenderer.invoke(IpcChannel.AiDetectClis)
+    detectClis: (): Promise<AiCliAvailability> => ipcRenderer.invoke(IpcChannel.AiDetectClis),
+    chat: (request: AiChatRequest): Promise<{ full: string }> =>
+      ipcRenderer.invoke(IpcChannel.AiChat, request),
+    cancelChat: (requestId: string): void =>
+      void ipcRenderer.invoke(IpcChannel.AiChatCancel, { requestId }),
+    onChatDelta: (callback: (event: AiChatDeltaEvent) => void): Unsubscribe =>
+      subscribe(IpcEvent.AiChatDelta, callback)
   },
 
   diagnostics: {

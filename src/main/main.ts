@@ -24,7 +24,7 @@ function bootstrap(): void {
   const window = createMainWindow();
   registerWindowIpc(window);
   registerTerminalIpc(window);
-  registerAiIpc();
+  registerAiIpc(window);
 
   window.once('ready-to-show', () => {
     console.log(`[start] okno gotowe po ${Date.now() - startedAt} ms`);

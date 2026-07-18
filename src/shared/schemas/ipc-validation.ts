@@ -8,6 +8,9 @@
  */
 
 import type {
+  AiChatMessage,
+  AiChatRequest,
+  AiChatRole,
   ContainerRuntime,
   NetworkProtocol,
   SerialFraming,
@@ -294,6 +297,38 @@ export function parseTerminalResize(payload: unknown): TerminalResizeRequest {
 export function parseTerminalDispose(payload: unknown): TerminalDisposeRequest {
   const source = asRecord(payload);
   return { sessionId: requireString(source, 'sessionId', MAX_SESSION_ID) };
+}
+
+const AI_CHAT_ROLES = new Set<AiChatRole>(['system', 'user', 'assistant']);
+/** Górne granice rozmowy — model i tak ma limit kontekstu, a my chronimy się przed zalaniem. */
+const MAX_CHAT_MESSAGES = 200;
+const MAX_CHAT_CONTENT = 200_000;
+
+/** Waliduje żądanie czatu AI z renderera (id + historia ról user/assistant/system). */
+export function parseAiChat(payload: unknown): AiChatRequest {
+  const source = asRecord(payload);
+  const requestId = requireString(source, 'requestId', 64);
+  const raw = source['messages'];
+  if (!Array.isArray(raw)) throw new IpcValidationError('pole "messages" musi być tablicą');
+  if (raw.length === 0) throw new IpcValidationError('rozmowa nie może być pusta');
+  if (raw.length > MAX_CHAT_MESSAGES) {
+    throw new IpcValidationError(`rozmowa przekracza ${MAX_CHAT_MESSAGES} wiadomości`);
+  }
+  const messages: AiChatMessage[] = raw.map((entry) => {
+    const m = asRecord(entry);
+    const role = m['role'];
+    if (typeof role !== 'string' || !AI_CHAT_ROLES.has(role as AiChatRole)) {
+      throw new IpcValidationError(`nieznana rola wiadomości: ${String(role)}`);
+    }
+    return { role: role as AiChatRole, content: requireString(m, 'content', MAX_CHAT_CONTENT) };
+  });
+  return { requestId, messages };
+}
+
+/** Waliduje żądanie anulowania czatu — sam identyfikator. */
+export function parseAiChatCancel(payload: unknown): { requestId: string } {
+  const source = asRecord(payload);
+  return { requestId: requireString(source, 'requestId', 64) };
 }
 
 /** Waliduje drzewo paneli z niezaufanego JSON. Rzuca przy błędzie struktury. */

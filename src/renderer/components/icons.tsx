@@ -238,6 +238,7 @@ export function PanelIcon({ panel, className }: { panel: PanelKind; className?: 
     case 'plugins':
       return <IconPuzzle className={className} />;
     case 'ai':
+    case 'aiChat':
       return <IconAi className={className} />;
     case 'shortcuts':
       return <IconKeyboard className={className} />;
