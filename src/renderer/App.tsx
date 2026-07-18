@@ -810,6 +810,12 @@ export function App(): React.JSX.Element {
                   <span>O aplikacji</span>
                 </button>
                 <div className="dropup__sep" />
+                <button className="dropup__item" onClick={() => { window.luma.diagnostics.reportProblem(); close(); }}>
+                  <span>Zgłoś problem</span>
+                </button>
+                <button className="dropup__item" onClick={() => { window.luma.diagnostics.openLogs(); close(); }}>
+                  <span>Otwórz logi</span>
+                </button>
                 <button className="dropup__item" onClick={() => { window.open(GITHUB_URL, '_blank'); close(); }}>
                   <span>GitHub ↗</span>
                 </button>

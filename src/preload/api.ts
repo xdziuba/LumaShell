@@ -127,6 +127,12 @@ export const api: LumaApi = {
 
   whatsNew: (): Promise<WhatsNewEntry[]> => ipcRenderer.invoke(IpcChannel.AppWhatsNew),
 
+  diagnostics: {
+    openLogs: (): void => void ipcRenderer.invoke(IpcChannel.AppOpenLogs),
+    reportProblem: (): void => void ipcRenderer.invoke(IpcChannel.AppReportProblem),
+    reportError: (message: string): void => void ipcRenderer.invoke(IpcChannel.AppReportError, message)
+  },
+
   sftp: {
     realpath: (sessionId: string, path: string): Promise<string> =>
       ipcRenderer.invoke(IpcChannel.SftpRealpath, sessionId, path),

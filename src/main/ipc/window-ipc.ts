@@ -8,7 +8,8 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { app, dialog, ipcMain, type BrowserWindow } from 'electron';
+import { app, dialog, ipcMain, shell, type BrowserWindow } from 'electron';
+import { logsDir, reportRendererError } from '../error-reporter';
 import { detectCapabilities } from '../capabilities';
 import { loadSettings, saveSettings } from '../settings-store';
 import { deleteProfile, listProfiles, saveProfile } from '../profiles-store';
@@ -67,6 +68,18 @@ export function registerWindowIpc(window: BrowserWindow): void {
       // offline albo pliku jeszcze nie ma w repo — fallback niżej
     }
     return JSON.parse(await readFile(join(app.getAppPath(), 'resources', 'whatsnew.json'), 'utf8'));
+  });
+
+  // Diagnostyka: otwarcie katalogu logów, zgłoszenie problemu i zapis błędu z renderera.
+  ipcMain.handle(IpcChannel.AppOpenLogs, () => shell.openPath(logsDir()));
+  ipcMain.handle(IpcChannel.AppReportProblem, () => {
+    const body = encodeURIComponent(
+      `**Opis problemu:**\n\n\n**Kroki do odtworzenia:**\n\n\n**Wersja:** ${app.getVersion()}\n**System:** ${process.platform} ${process.getSystemVersion?.() ?? ''}\n`
+    );
+    return shell.openExternal(`https://github.com/xdziuba/LumaShell/issues/new?body=${body}`);
+  });
+  ipcMain.handle(IpcChannel.AppReportError, (_event, message: unknown) => {
+    if (typeof message === 'string') reportRendererError(message.slice(0, 8000));
   });
 
   ipcMain.handle(IpcChannel.ThemesGet, () => getThemeState());

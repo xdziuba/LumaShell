@@ -119,6 +119,16 @@ export interface LumaApi {
   /** Nowości/zmiany aplikacji — pobierane z GitHuba, z lokalnym fallbackiem. */
   whatsNew(): Promise<WhatsNewEntry[]>;
 
+  /** Diagnostyka i zgłaszanie problemów (lokalny log, bez telemetrii). */
+  diagnostics: {
+    /** Otwiera katalog logów w eksploratorze. */
+    openLogs(): void;
+    /** Otwiera formularz zgłoszenia błędu na GitHubie (z wersją i systemem). */
+    reportProblem(): void;
+    /** Zapisuje błąd renderera do logu (używane przez ErrorBoundary). */
+    reportError(message: string): void;
+  };
+
   /** SFTP działa na istniejącej sesji SSH (po jej sessionId). */
   sftp: {
     realpath(sessionId: string, path: string): Promise<string>;
