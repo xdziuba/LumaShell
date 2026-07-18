@@ -9,9 +9,16 @@
 
 import { useEffect, useState } from 'react';
 import type { AiConfig, AiModel } from '@core/ai/provider';
-import { OPENAI_DEFAULT_BASE_URL } from '@core/ai/provider';
+import { ANTHROPIC_DEFAULT_BASE_URL, OPENAI_DEFAULT_BASE_URL } from '@core/ai/provider';
 
 const LOCAL_DEFAULT_BASE_URL = 'http://localhost:11434/v1';
+
+/** Domyślny bazowy URL zależny od dostawcy (dla „własnego" zostawiamy, co było). */
+const BASE_URL_FOR: Partial<Record<AiConfig['provider'], string>> = {
+  openai: OPENAI_DEFAULT_BASE_URL,
+  anthropic: ANTHROPIC_DEFAULT_BASE_URL,
+  local: LOCAL_DEFAULT_BASE_URL
+};
 
 type Status = { kind: 'idle' | 'ok' | 'err' | 'busy'; msg?: string };
 
@@ -45,13 +52,7 @@ export default function AiPanel({ onClose }: { onClose: () => void }): React.JSX
   const update = (patch: Partial<AiConfig>): void => setCfg({ ...cfg, ...patch });
 
   const changeProvider = (provider: AiConfig['provider']): void => {
-    const baseUrl =
-      provider === 'openai'
-        ? OPENAI_DEFAULT_BASE_URL
-        : provider === 'local'
-          ? LOCAL_DEFAULT_BASE_URL
-          : cfg.baseUrl;
-    update({ provider, baseUrl });
+    update({ provider, baseUrl: BASE_URL_FOR[provider] ?? cfg.baseUrl });
   };
 
   /** Zapisuje konfigurację (klucz tylko gdy wpisano); zwraca zapisany config. */
@@ -87,7 +88,8 @@ export default function AiPanel({ onClose }: { onClose: () => void }): React.JSX
     }
   };
 
-  const keyPlaceholder = cfg.hasKey ? '•••••••• (klucz zapisany)' : 'sk-…';
+  const keyHint = cfg.provider === 'anthropic' ? 'sk-ant-…' : 'sk-…';
+  const keyPlaceholder = cfg.hasKey ? '•••••••• (klucz zapisany)' : keyHint;
 
   return (
     <div className="panel">
@@ -104,10 +106,19 @@ export default function AiPanel({ onClose }: { onClose: () => void }): React.JSX
             <span>Dostawca</span>
             <select value={cfg.provider} onChange={(e) => changeProvider(e.target.value as AiConfig['provider'])}>
               <option value="openai">OpenAI API</option>
+              <option value="anthropic">Anthropic (Claude API)</option>
               <option value="local">Model lokalny (Ollama / LM Studio)</option>
               <option value="custom">Własny endpoint (zgodny z OpenAI)</option>
             </select>
           </label>
+
+          {cfg.provider === 'anthropic' && (
+            <p className="panel__hint">
+              Klucz API to osobne, płatne konto Anthropic — subskrypcja Claude (Max) go NIE
+              obejmuje. Chcesz użyć subskrypcji? Uruchom „Claude Code" z sekcji AGENT AI
+              (loguje się kontem, bez klucza).
+            </p>
+          )}
 
           <label className="aiCfg__row">
             <span>Bazowy URL</span>

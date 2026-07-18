@@ -9,13 +9,14 @@
 import { readFile, writeFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { app } from 'electron';
-import type { AiConfig, AiProviderKind } from '@core/ai/provider';
+import type { AiConfig, AiProvider, AiProviderKind } from '@core/ai/provider';
 import { OPENAI_DEFAULT_BASE_URL } from '@core/ai/provider';
 import { deleteSecret, getSecret, hasSecret, setSecret } from '../credential-store';
 import { OpenAiCompatibleProvider } from '@services/ai/openai-compatible';
+import { AnthropicProvider } from '@services/ai/anthropic-provider';
 
 const KEY_ID = 'ai.apiKey';
-const PROVIDERS: readonly AiProviderKind[] = ['openai', 'local', 'custom'];
+const PROVIDERS: readonly AiProviderKind[] = ['openai', 'anthropic', 'local', 'custom'];
 
 interface StoredConfig {
   provider: AiProviderKind;
@@ -89,8 +90,13 @@ export async function saveAiConfig(rawConfig: unknown, apiKey: string | null | u
 }
 
 /** Buduje dostawcę z bieżącej konfiguracji i odszyfrowanego klucza — wyłącznie w main. */
-export async function getAiProvider(): Promise<OpenAiCompatibleProvider> {
+export async function getAiProvider(): Promise<AiProvider> {
   const c = await load();
   const apiKey = await getSecret(KEY_ID);
+  // Anthropic mówi innym protokołem (Messages API), więc dostaje własną implementację;
+  // OpenAI/lokalny/własny endpoint dzielą jedną, bo różni je tylko baseUrl i klucz.
+  if (c.provider === 'anthropic') {
+    return new AnthropicProvider({ baseUrl: c.baseUrl, apiKey });
+  }
   return new OpenAiCompatibleProvider({ kind: c.provider, baseUrl: c.baseUrl, apiKey });
 }

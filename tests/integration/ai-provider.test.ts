@@ -11,6 +11,7 @@
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { OpenAiCompatibleProvider } from '../../src/services/ai/openai-compatible.ts';
+import { AnthropicProvider } from '../../src/services/ai/anthropic-provider.ts';
 
 const wyniki: Array<{ n: string; ok: boolean; d?: string }> = [];
 const sprawdz = (n: string, ok: boolean, d?: string): void => {
@@ -18,17 +19,25 @@ const sprawdz = (n: string, ok: boolean, d?: string): void => {
 };
 
 async function main(): Promise<void> {
+  // Ostatni ładunek wysłany do /v1/messages — do sprawdzenia rozbicia promptu systemowego.
+  let lastAnthropicBody: Record<string, unknown> = {};
+
   const server = createServer((req, res) => {
     const auth = req.headers['authorization'];
-    // Zły klucz → 401 w formacie OpenAI.
-    if (auth === 'Bearer BAD') {
+    const xApiKey = req.headers['x-api-key'];
+    // Zły klucz → 401. OpenAI używa Bearer, Anthropic nagłówka x-api-key — sprawdzamy oba.
+    if (auth === 'Bearer BAD' || xApiKey === 'BAD') {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: { message: 'Invalid key' } }));
       return;
     }
     if (req.method === 'GET' && req.url === '/v1/models') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ data: [{ id: 'gpt-4o-mini' }, { id: 'gpt-4o' }, { bad: 1 }] }));
+      res.end(
+        JSON.stringify({
+          data: [{ id: 'gpt-4o-mini' }, { id: 'gpt-4o', display_name: 'GPT-4o' }, { bad: 1 }]
+        })
+      );
       return;
     }
     if (req.method === 'POST' && req.url === '/v1/chat/completions') {
@@ -39,6 +48,28 @@ async function main(): Promise<void> {
       send({ choices: [{ delta: {} }] }); // porcja bez treści — ignorowana
       res.write('data: [DONE]\n\n');
       res.end();
+      return;
+    }
+    // Anthropic Messages API — inny format strumienia (typowane zdarzenia SSE) i inne pola.
+    if (req.method === 'POST' && req.url === '/v1/messages') {
+      let raw = '';
+      req.on('data', (chunk) => (raw += chunk));
+      req.on('end', () => {
+        try {
+          lastAnthropicBody = JSON.parse(raw) as Record<string, unknown>;
+        } catch {
+          lastAnthropicBody = {};
+        }
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        const evt = (name: string, obj: unknown): void =>
+          res.write(`event: ${name}\ndata: ${JSON.stringify(obj)}\n\n`);
+        evt('content_block_delta', { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hel' } });
+        evt('content_block_delta', { type: 'content_block_delta', delta: { type: 'text_delta', text: 'lo' } });
+        // Zdarzenie bez text_delta — ignorowane przez parser.
+        evt('content_block_stop', { type: 'content_block_stop' });
+        evt('message_stop', { type: 'message_stop' });
+        res.end();
+      });
       return;
     }
     res.writeHead(404);
@@ -85,6 +116,52 @@ async function main(): Promise<void> {
     const provider = new OpenAiCompatibleProvider({ kind: 'custom', baseUrl: `${baseUrl}/`, apiKey: 'GOOD' });
     const models = await provider.listModels();
     sprawdz('baseUrl z końcowym / jest normalizowany', models.length === 2);
+  }
+
+  // --- Anthropic: lista modeli (z display_name jako etykietą) ---
+  {
+    const provider = new AnthropicProvider({ baseUrl, apiKey: 'GOOD' });
+    const models = await provider.listModels();
+    sprawdz('Anthropic listModels zwraca 2 modele', models.length === 2, JSON.stringify(models));
+    sprawdz('Anthropic mapuje display_name na label', models.find((m) => m.id === 'gpt-4o')?.label === 'GPT-4o');
+  }
+
+  // --- Anthropic: czat (strumień content_block_delta) + rozbicie promptu systemowego ---
+  {
+    const provider = new AnthropicProvider({ baseUrl, apiKey: 'GOOD' });
+    const deltas: string[] = [];
+    const full = await provider.chat(
+      {
+        model: 'claude-sonnet-4',
+        messages: [
+          { role: 'system', content: 'jesteś pomocny' },
+          { role: 'user', content: 'cześć' }
+        ]
+      },
+      (d) => deltas.push(d)
+    );
+    sprawdz('Anthropic chat sklejył pełny tekst', full === 'Hello', full);
+    sprawdz('Anthropic chat wywołał onDelta dla każdej porcji', deltas.join('|') === 'Hel|lo', deltas.join('|'));
+    sprawdz('Anthropic wydzielił prompt systemowy do pola system', lastAnthropicBody['system'] === 'jesteś pomocny');
+    sprawdz(
+      'Anthropic wysyła tylko user/assistant w messages',
+      Array.isArray(lastAnthropicBody['messages']) &&
+        (lastAnthropicBody['messages'] as unknown[]).length === 1,
+      JSON.stringify(lastAnthropicBody['messages'])
+    );
+    sprawdz('Anthropic ustawia wymagane max_tokens', typeof lastAnthropicBody['max_tokens'] === 'number');
+  }
+
+  // --- Anthropic: zły klucz (x-api-key) → czytelny błąd 401 ---
+  {
+    const provider = new AnthropicProvider({ baseUrl, apiKey: 'BAD' });
+    let message = '';
+    try {
+      await provider.listModels();
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    sprawdz('Anthropic zły klucz daje błąd 401', message.includes('401') && message.includes('Invalid key'), message);
   }
 
   server.close();

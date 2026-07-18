@@ -8,7 +8,7 @@
  * (docs/security/02-sekrety.md).
  */
 
-export type AiProviderKind = 'openai' | 'local' | 'custom';
+export type AiProviderKind = 'openai' | 'anthropic' | 'local' | 'custom';
 
 /** Model dostępny u dostawcy. */
 export interface AiModel {
@@ -61,3 +61,6 @@ export interface AiProvider {
 
 /** Domyślny bazowy URL dla trybu OpenAI API. */
 export const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+
+/** Domyślny bazowy URL dla trybu Anthropic (Claude) API. */
+export const ANTHROPIC_DEFAULT_BASE_URL = 'https://api.anthropic.com/v1';
