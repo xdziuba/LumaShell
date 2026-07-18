@@ -40,6 +40,9 @@ export const IpcChannel = {
   SessionLogStop: 'sessionLog:stop',
   PluginCommands: 'plugin:commands',
   PluginRunCommand: 'plugin:runCommand',
+  PluginInstalled: 'plugin:installed',
+  PluginSetEnabled: 'plugin:setEnabled',
+  AppWhatsNew: 'app:whatsNew',
   TerminalCreate: 'terminal:create',
   TerminalWrite: 'terminal:write',
   TerminalResize: 'terminal:resize',
@@ -58,6 +61,8 @@ export const IpcEvent = {
   SshHostVerify: 'ssh:hostVerify',
   PluginCommandsChanged: 'plugin:commandsChanged',
   PluginNotification: 'plugin:notification',
+  /** Zmiana listy/stanu zainstalowanych wtyczek — menedżer odświeża widok. */
+  PluginsChanged: 'plugin:pluginsChanged',
   /** Zmiana stanu maksymalizacji — przycisk zmienia wtedy ikonę. */
   WindowMaximizedChanged: 'window:maximizedChanged'
 } as const;
@@ -74,6 +79,24 @@ export interface PluginNotification {
   pluginName: string;
   level: string;
   message: string;
+}
+
+/** Zainstalowana wtyczka w widoku menedżera. */
+export interface InstalledPlugin {
+  id: string;
+  name: string;
+  version: string;
+  permissions: string[];
+  commands: Array<{ id: string; title: string }>;
+  enabled: boolean;
+}
+
+/** Wpis „Nowości" (What's New) — jedno wydanie. */
+export interface WhatsNewEntry {
+  version: string;
+  date: string;
+  title: string;
+  changes: string[];
 }
 
 /**

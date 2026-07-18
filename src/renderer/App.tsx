@@ -5,7 +5,8 @@ import { PaneView, type PaneCallbacks } from './components/PaneView';
 import { SerialMacros } from './components/SerialMacros';
 import { Dropup } from './components/Dropup';
 import { useShortcuts, type ShortcutMap } from './hooks/useShortcuts';
-import { serializeTab, useWorkspace } from './store/workspace';
+import { serializeTab, useWorkspace, type SessionTab } from './store/workspace';
+import { PANEL_TITLES, type PanelKind } from './panels/kinds';
 import { applyTheme } from './theme/apply-theme';
 import {
   IconContainer,
@@ -52,6 +53,10 @@ const SerialConnectDialog = lazy(() => import('./components/SerialConnectDialog'
 const NetworkConnectDialog = lazy(() => import('./components/NetworkConnectDialog'));
 const ContainerConnectDialog = lazy(() => import('./components/ContainerConnectDialog'));
 const ThemeEditor = lazy(() => import('./components/ThemeEditor'));
+const AboutPanel = lazy(() => import('./panels/AboutPanel'));
+const ShortcutsPanel = lazy(() => import('./panels/ShortcutsPanel'));
+const WhatsNewPanel = lazy(() => import('./panels/WhatsNewPanel'));
+const PluginManager = lazy(() => import('./panels/PluginManager'));
 
 export function App(): React.JSX.Element {
   const [shells, setShells] = useState<ShellInfo[]>([]);
@@ -60,8 +65,6 @@ export function App(): React.JSX.Element {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [themes, setThemes] = useState<Theme[]>(BUILT_IN_THEMES);
   const [themeId, setThemeId] = useState<string>(BUILT_IN_THEMES[0]!.id);
-  const [themeEditorOpen, setThemeEditorOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sshOpen, setSshOpen] = useState(false);
   const [networkOpen, setNetworkOpen] = useState(false);
@@ -79,6 +82,7 @@ export function App(): React.JSX.Element {
     tabs,
     activeId,
     open,
+    openPanel,
     closeTab,
     activate,
     restore,
@@ -91,10 +95,18 @@ export function App(): React.JSX.Element {
   } = useWorkspace();
 
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
-  // Etykieta i status paska/zakładki pochodzą z aktywnego panelu danej zakładki.
-  const activeLeaf = activeTab ? findLeaf(activeTab.root, activeTab.activePaneId) : undefined;
+  // Etykieta i status paska/zakładki pochodzą z aktywnego panelu — tylko dla zakładek-sesji.
+  const activeLeaf =
+    activeTab?.kind === 'session' ? findLeaf(activeTab.root, activeTab.activePaneId) : undefined;
+
+  /** Czy aktywna jest zakładka-panel danego rodzaju (podświetlenie przycisku w toolbarze). */
+  const panelActive = (kind: PanelKind): boolean =>
+    activeTab?.kind === 'panel' && activeTab.panel === kind;
 
   const tabViews: TabView[] = tabs.map((tab) => {
+    if (tab.kind === 'panel') {
+      return { id: tab.id, label: PANEL_TITLES[tab.panel], status: 'running', kind: 'pty', panel: tab.panel, paneCount: 1 };
+    }
     const leaf = findLeaf(tab.root, tab.activePaneId) ?? leaves(tab.root)[0];
     return {
       id: tab.id,
@@ -154,11 +166,13 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     if (!odtworzono.current) return;
     const timer = setTimeout(() => {
+      // Zapisujemy wyłącznie zakładki-sesje; panele (Ustawienia/About/…) nie są trwałe.
+      const sessionTabs = tabs.filter((tab): tab is SessionTab => tab.kind === 'session');
       const activeIndex = Math.max(
         0,
-        tabs.findIndex((tab) => tab.id === activeId)
+        sessionTabs.findIndex((tab) => tab.id === activeId)
       );
-      void window.luma.workspace.save({ tabs: tabs.map(serializeTab), activeIndex });
+      void window.luma.workspace.save({ tabs: sessionTabs.map(serializeTab), activeIndex });
     }, 500);
     return () => clearTimeout(timer);
   }, [tabs, activeId]);
@@ -243,9 +257,8 @@ export function App(): React.JSX.Element {
   const usunMotyw = (id: string): void => {
     void window.luma.themes.delete(id).then((list) => {
       setThemes(list);
-      // Po usunięciu wróć do domyślnego i zastosuj go.
+      // Po usunięciu wróć do domyślnego i zastosuj go (zakładka edytora zostaje otwarta).
       wybierzMotyw(BUILT_IN_THEMES[0]!.id);
-      setThemeEditorOpen(false);
     });
   };
 
@@ -338,9 +351,11 @@ export function App(): React.JSX.Element {
     if (tab) activate(tab.id);
   };
 
-  // Ctrl+W zamyka aktywny panel; gdy to ostatni panel zakładki, zamyka całą zakładkę.
+  // Ctrl+W: dla sesji zamyka aktywny panel (ostatni → całą zakładkę); dla panelu zamyka zakładkę.
   const zamknijAktywny = (): void => {
-    if (activeTab) closePane(activeTab.id, activeTab.activePaneId);
+    if (!activeTab) return;
+    if (activeTab.kind === 'session') closePane(activeTab.id, activeTab.activePaneId);
+    else closeTab(activeTab.id);
   };
 
   // Komendy zależą od bieżącego stanu, więc paleta i skróty korzystają z tej samej listy.
@@ -439,10 +454,15 @@ export function App(): React.JSX.Element {
       {
         id: 'settings',
         title: 'Ustawienia',
-        keywords: 'czcionka rozmiar',
+        keywords: 'czcionka rozmiar ustawienia',
         hint: 'Ctrl+,',
-        run: () => setSettingsOpen((isOpen) => !isOpen)
-      }
+        run: () => openPanel('settings')
+      },
+      { id: 'panel.themes', title: 'Motywy', keywords: 'motyw theme kolor', run: () => openPanel('themes') },
+      { id: 'panel.plugins', title: 'Wtyczki', keywords: 'wtyczki plugins menedżer', run: () => openPanel('plugins') },
+      { id: 'panel.shortcuts', title: 'Skróty klawiszowe', keywords: 'skróty shortcuts klawisze', run: () => openPanel('shortcuts') },
+      { id: 'panel.whatsnew', title: 'Nowości', keywords: "co nowego what's new zmiany", run: () => openPanel('whatsnew') },
+      { id: 'panel.about', title: 'O aplikacji', keywords: 'about o aplikacji wersja', run: () => openPanel('about') }
     );
     // Komendy wtyczek — uruchamiane przez RPC do izolowanego hosta.
     for (const cmd of pluginCommands) {
@@ -462,7 +482,7 @@ export function App(): React.JSX.Element {
       'ctrl+shift+p': () => setPaletteOpen((open) => !open),
       'ctrl+t': nowaZakladka,
       'ctrl+w': zamknijAktywny,
-      'ctrl+comma': () => setSettingsOpen((open) => !open),
+      'ctrl+comma': () => openPanel('settings'),
       'ctrl+tab': () => przesunZakladke(1),
       'ctrl+shift+tab': () => przesunZakladke(-1),
       'ctrl+shift+e': () => splitActivePane('row'),
@@ -577,6 +597,42 @@ export function App(): React.JSX.Element {
             sesje przy życiu przy przełączaniu.
           */}
           {tabs.map((tab) => {
+            const cls = `pane-root${tab.id === activeId ? '' : ' pane-root--hidden'}`;
+
+            // Zakładka-panel: zastępuje terminal swoją treścią (Ustawienia/Motywy/About/…).
+            if (tab.kind === 'panel') {
+              const close = (): void => closeTab(tab.id);
+              return (
+                <div key={tab.id} className={cls}>
+                  <div className="panel-view">
+                    <Suspense fallback={<div className="panel-card__loading">ładowanie…</div>}>
+                      {tab.panel === 'settings' && (
+                        <SettingsPanel settings={settings} onChange={zmienUstawienia} onClose={close} />
+                      )}
+                      {tab.panel === 'themes' && (
+                        <ThemeEditor
+                          base={activeTheme}
+                          onPreview={podgladMotywu}
+                          onSave={zapiszMotyw}
+                          onImport={importujMotyw}
+                          onExport={(t) => void window.luma.themes.export(t)}
+                          onDelete={usunMotyw}
+                          onClose={() => {
+                            applyTheme(activeTheme); // cofnij ewentualny podgląd
+                            close();
+                          }}
+                        />
+                      )}
+                      {tab.panel === 'plugins' && <PluginManager onClose={close} />}
+                      {tab.panel === 'about' && <AboutPanel onClose={close} />}
+                      {tab.panel === 'shortcuts' && <ShortcutsPanel onClose={close} />}
+                      {tab.panel === 'whatsnew' && <WhatsNewPanel onClose={close} />}
+                    </Suspense>
+                  </div>
+                </div>
+              );
+            }
+
             const cb: PaneCallbacks = {
               settings,
               terminalTheme,
@@ -596,51 +652,17 @@ export function App(): React.JSX.Element {
               onResize: (splitId, ratio) => resizeSplit(tab.id, splitId, ratio)
             };
             return (
-              <div
-                key={tab.id}
-                className={`pane-root${tab.id === activeId ? '' : ' pane-root--hidden'}`}
-              >
+              <div key={tab.id} className={cls}>
                 <PaneView node={tab.root} cb={cb} />
               </div>
             );
           })}
 
-          {/* Panele otwierają się jako karta na całym polu terminala (nie boczne). */}
-          {settingsOpen && (
-            <div className="panel-card">
-              <Suspense fallback={<div className="panel-card__loading">ładowanie…</div>}>
-                <SettingsPanel
-                  settings={settings}
-                  onChange={zmienUstawienia}
-                  onClose={() => setSettingsOpen(false)}
-                />
-              </Suspense>
-            </div>
-          )}
-
+          {/* SFTP to narzędzie SESJI (nie globalny panel) — nakładka nad aktywną zakładką SSH. */}
           {sftpOpen && sshSessionId && (
             <div className="panel-card">
               <Suspense fallback={<div className="panel-card__loading">ładowanie…</div>}>
                 <SftpPanel sessionId={sshSessionId} onClose={() => setSftpOpen(false)} />
-              </Suspense>
-            </div>
-          )}
-
-          {themeEditorOpen && (
-            <div className="panel-card">
-              <Suspense fallback={<div className="panel-card__loading">ładowanie…</div>}>
-                <ThemeEditor
-                  base={activeTheme}
-                  onPreview={podgladMotywu}
-                  onSave={zapiszMotyw}
-                  onImport={importujMotyw}
-                  onExport={(t) => void window.luma.themes.export(t)}
-                  onDelete={usunMotyw}
-                  onClose={() => {
-                    setThemeEditorOpen(false);
-                    applyTheme(activeTheme); // cofnij ewentualny podgląd do zapisanego
-                  }}
-                />
               </Suspense>
             </div>
           )}
@@ -777,7 +799,7 @@ export function App(): React.JSX.Element {
                 <button
                   className="dropup__item"
                   onClick={() => {
-                    setThemeEditorOpen(true);
+                    openPanel('themes');
                     close();
                   }}
                 >
@@ -788,8 +810,8 @@ export function App(): React.JSX.Element {
           </Dropup>
 
           <button
-            className={`statusbar__button${settingsOpen ? ' is-active' : ''}`}
-            onClick={() => setSettingsOpen((isOpen) => !isOpen)}
+            className={`statusbar__button${panelActive('settings') ? ' is-active' : ''}`}
+            onClick={() => openPanel('settings')}
           >
             Ustawienia
           </button>

@@ -17,6 +17,7 @@ import {
   type AppCapabilities,
   type ContainerInfo,
   type HostVerifyRequest,
+  type InstalledPlugin,
   type PluginCommand,
   type PluginNotification,
   type SessionSpec,
@@ -26,6 +27,7 @@ import {
   type TerminalCreateResult,
   type TerminalDataEvent,
   type TerminalExitEvent,
+  type WhatsNewEntry,
   type WorkspaceSnapshot
 } from '@shared/types/ipc';
 
@@ -115,8 +117,15 @@ export const api: LumaApi = {
     onCommandsChanged: (callback: (commands: PluginCommand[]) => void): Unsubscribe =>
       subscribe(IpcEvent.PluginCommandsChanged, callback),
     onNotification: (callback: (n: PluginNotification) => void): Unsubscribe =>
-      subscribe(IpcEvent.PluginNotification, callback)
+      subscribe(IpcEvent.PluginNotification, callback),
+    installed: (): Promise<InstalledPlugin[]> => ipcRenderer.invoke(IpcChannel.PluginInstalled),
+    setEnabled: (id: string, enabled: boolean): Promise<InstalledPlugin[]> =>
+      ipcRenderer.invoke(IpcChannel.PluginSetEnabled, id, enabled),
+    onPluginsChanged: (callback: (plugins: InstalledPlugin[]) => void): Unsubscribe =>
+      subscribe(IpcEvent.PluginsChanged, callback)
   },
+
+  whatsNew: (): Promise<WhatsNewEntry[]> => ipcRenderer.invoke(IpcChannel.AppWhatsNew),
 
   sftp: {
     realpath: (sessionId: string, path: string): Promise<string> =>

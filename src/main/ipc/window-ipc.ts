@@ -7,7 +7,8 @@
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { dialog, ipcMain, type BrowserWindow } from 'electron';
+import { join } from 'node:path';
+import { app, dialog, ipcMain, type BrowserWindow } from 'electron';
 import { detectCapabilities } from '../capabilities';
 import { loadSettings, saveSettings } from '../settings-store';
 import { deleteProfile, listProfiles, saveProfile } from '../profiles-store';
@@ -54,6 +55,19 @@ export function registerWindowIpc(window: BrowserWindow): void {
 
   ipcMain.handle(IpcChannel.WorkspaceGet, () => loadWorkspace());
   ipcMain.handle(IpcChannel.WorkspaceSave, (_event, payload) => saveWorkspace(payload));
+
+  // Nowości: próbujemy pobrać aktualny changelog z GitHuba, a gdy brak sieci/pliku —
+  // wracamy do wersji dołączonej do aplikacji. Zawsze zwraca coś sensownego.
+  ipcMain.handle(IpcChannel.AppWhatsNew, async (): Promise<unknown> => {
+    const url = 'https://raw.githubusercontent.com/xdziuba/LumaShell/main/resources/whatsnew.json';
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      if (res.ok) return await res.json();
+    } catch {
+      // offline albo pliku jeszcze nie ma w repo — fallback niżej
+    }
+    return JSON.parse(await readFile(join(app.getAppPath(), 'resources', 'whatsnew.json'), 'utf8'));
+  });
 
   ipcMain.handle(IpcChannel.ThemesGet, () => getThemeState());
   ipcMain.handle(IpcChannel.ThemeSelect, (_event, id) => selectTheme(id));

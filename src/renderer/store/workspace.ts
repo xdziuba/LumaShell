@@ -1,8 +1,9 @@
 /**
- * Stan workspace'u: zakładki, każda z drzewem paneli (Etap 2 — podziały).
+ * Stan workspace'u: zakładki (Etap 2 — podziały; polish UI — panele jako zakładki).
  *
- * Struktura drzewa i jej przekształcenia mieszkają w `core/workspace/pane-tree` — czyste,
- * przetestowane jednostkowo. Store dokłada zarządzanie zakładkami i aktywnym panelem.
+ * Zakładka jest albo SESJĄ (drzewo paneli terminala), albo PANELEM (Ustawienia/About/…),
+ * który zastępuje terminal, gdy jest aktywny. Struktura drzewa i jej przekształcenia
+ * mieszkają w `core/workspace/pane-tree` — czyste, przetestowane jednostkowo.
  */
 
 import { create } from 'zustand';
@@ -18,15 +19,27 @@ import {
   type SplitDirection
 } from '@core/workspace/pane-tree';
 import type { SessionSpec, StoredPane, WorkspaceTab } from '@shared/types/ipc';
+import type { PanelKind } from '../panels/kinds';
 
 export type TabStatus = PaneStatus;
 
-export interface Tab {
+/** Zakładka-sesja: drzewo paneli terminala. */
+export interface SessionTab {
+  kind: 'session';
   id: string;
   root: Pane;
   /** Który panel w tej zakładce ma fokus. */
   activePaneId: string;
 }
+
+/** Zakładka-panel: widok bez sesji (Ustawienia, About, Wtyczki…). */
+export interface PanelTab {
+  kind: 'panel';
+  id: string;
+  panel: PanelKind;
+}
+
+export type Tab = SessionTab | PanelTab;
 
 /** Identyfikatory lokalne dla okna — licznik wystarcza, bez UUID. */
 let nextId = 1;
@@ -57,8 +70,8 @@ function fromStored(node: StoredPane): Pane {
       };
 }
 
-/** Serializacja zakładki do zapisu: drzewo + indeks aktywnego liścia. */
-export function serializeTab(tab: Tab): WorkspaceTab {
+/** Serializacja zakładki-sesji do zapisu: drzewo + indeks aktywnego liścia. */
+export function serializeTab(tab: SessionTab): WorkspaceTab {
   const activeLeafIndex = Math.max(
     0,
     leaves(tab.root).findIndex((leaf) => leaf.id === tab.activePaneId)
@@ -71,15 +84,15 @@ interface WorkspaceState {
   activeId: string | null;
 
   open: (spec: SessionSpec, label: string) => string;
+  /** Otwiera panel jako zakładkę; jeśli taki już jest — tylko go aktywuje. */
+  openPanel: (panel: PanelKind) => void;
   closeTab: (id: string) => void;
   activate: (id: string) => void;
   restore: (tabs: WorkspaceTab[], activeIndex: number) => void;
-  /** Przenosi zakładkę przed albo za wskazaną (drag & drop kolejności). */
-  reorderTab: (id: string, targetId: string, before: boolean) => void;
   /** Ustawia pełną kolejność zakładek wg listy id (commit przeciągania z podglądem). */
   setTabOrder: (ids: string[]) => void;
 
-  /** Aktualizacja liścia (etykieta, status) — szuka po całym drzewie zakładki. */
+  /** Aktualizacja liścia (etykieta, status) — tylko dla zakładek-sesji. */
   updatePane: (tabId: string, paneId: string, patch: Partial<Omit<LeafPane, 'id' | 'kind'>>) => void;
   splitActivePane: (direction: SplitDirection) => void;
   closePane: (tabId: string, paneId: string) => void;
@@ -93,10 +106,19 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
 
   open: (spec, label) => {
     const leaf = makeLeaf(spec, label);
-    const tab: Tab = { id: genId('tab'), root: leaf, activePaneId: leaf.id };
+    const tab: SessionTab = { kind: 'session', id: genId('tab'), root: leaf, activePaneId: leaf.id };
     set((state) => ({ tabs: [...state.tabs, tab], activeId: tab.id }));
     return tab.id;
   },
+
+  openPanel: (panel) =>
+    set((state) => {
+      // Panel danego rodzaju istnieje w jednym egzemplarzu — drugie otwarcie tylko aktywuje.
+      const existing = state.tabs.find((tab) => tab.kind === 'panel' && tab.panel === panel);
+      if (existing) return { activeId: existing.id };
+      const tab: PanelTab = { kind: 'panel', id: genId('tab'), panel };
+      return { tabs: [...state.tabs, tab], activeId: tab.id };
+    }),
 
   closeTab: (id) =>
     set((state) => {
@@ -119,28 +141,13 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       return { tabs: next };
     }),
 
-  reorderTab: (id, targetId, before) =>
-    set((state) => {
-      if (id === targetId) return state;
-      const tabs = [...state.tabs];
-      const from = tabs.findIndex((tab) => tab.id === id);
-      if (from === -1) return state;
-      const [moved] = tabs.splice(from, 1);
-      // Indeks celu liczony PO usunięciu przeciąganej — dzięki temu brak off-by-one
-      // przy przenoszeniu w prawo.
-      const targetIndex = tabs.findIndex((tab) => tab.id === targetId);
-      if (targetIndex === -1) return state;
-      tabs.splice(before ? targetIndex : targetIndex + 1, 0, moved!);
-      return { tabs };
-    }),
-
   restore: (stored, activeIndex) =>
     set(() => {
       const tabs: Tab[] = stored.map((entry) => {
         const root = fromStored(entry.root);
         const list = leaves(root);
         const activeLeaf = list[Math.min(entry.activeLeafIndex, list.length - 1)] ?? list[0]!;
-        return { id: genId('tab'), root, activePaneId: activeLeaf.id };
+        return { kind: 'session', id: genId('tab'), root, activePaneId: activeLeaf.id };
       });
       const active = tabs[Math.min(activeIndex, tabs.length - 1)] ?? null;
       return { tabs, activeId: active?.id ?? null };
@@ -149,14 +156,16 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   updatePane: (tabId, paneId, patch) =>
     set((state) => ({
       tabs: state.tabs.map((tab) =>
-        tab.id === tabId ? { ...tab, root: updateLeaf(tab.root, paneId, patch) } : tab
+        tab.id === tabId && tab.kind === 'session'
+          ? { ...tab, root: updateLeaf(tab.root, paneId, patch) }
+          : tab
       )
     })),
 
   splitActivePane: (direction) =>
     set((state) => {
       const tab = state.tabs.find((t) => t.id === state.activeId);
-      if (!tab) return state;
+      if (!tab || tab.kind !== 'session') return state;
       const source = leaves(tab.root).find((l) => l.id === tab.activePaneId);
       if (!source) return state;
 
@@ -164,14 +173,16 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       const fresh = makeLeaf(source.spec, source.label);
       const root = splitLeaf(tab.root, source.id, direction, genId('split'), () => fresh);
       return {
-        tabs: state.tabs.map((t) => (t.id === tab.id ? { ...t, root, activePaneId: fresh.id } : t))
+        tabs: state.tabs.map((t) =>
+          t.id === tab.id && t.kind === 'session' ? { ...t, root, activePaneId: fresh.id } : t
+        )
       };
     }),
 
   closePane: (tabId, paneId) =>
     set((state) => {
       const tab = state.tabs.find((t) => t.id === tabId);
-      if (!tab) return state;
+      if (!tab || tab.kind !== 'session') return state;
 
       const root = closeLeaf(tab.root, paneId);
       if (!root) {
@@ -188,19 +199,23 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
         ? tab.activePaneId
         : leaves(root)[0]!.id;
       return {
-        tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, root, activePaneId } : t))
+        tabs: state.tabs.map((t) =>
+          t.id === tabId && t.kind === 'session' ? { ...t, root, activePaneId } : t
+        )
       };
     }),
 
   focusPane: (tabId, paneId) =>
     set((state) => ({
-      tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, activePaneId: paneId } : t))
+      tabs: state.tabs.map((t) =>
+        t.id === tabId && t.kind === 'session' ? { ...t, activePaneId: paneId } : t
+      )
     })),
 
   resizeSplit: (tabId, splitId, ratio) =>
     set((state) => ({
       tabs: state.tabs.map((t) =>
-        t.id === tabId ? { ...t, root: setRatio(t.root, splitId, ratio) } : t
+        t.id === tabId && t.kind === 'session' ? { ...t, root: setRatio(t.root, splitId, ratio) } : t
       )
     }))
 }));
