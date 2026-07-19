@@ -1,6 +1,6 @@
 {
   "name": "lumashell",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "Szybki, konfigurowalny terminal dla Windows oparty na Electronie",
   "main": "./out/main/index.js",
   "author": "xdziuba",

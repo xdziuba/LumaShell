@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.0",
+    "date": "2026-07-19",
+    "title": "1.0 — asystent AI w terminalu",
+    "changes": [
+      "Panel „Czat AI": rozmowa strumieniowana, kontekst z terminala, komendy z przyciskiem Kopiuj",
+      "Agent z narzędziami: sam czyta terminal/sesje (tylko odczyt), a akcje wykonuje dopiero po Twojej zgodzie",
+      "Dostawcy: OpenAI API, Anthropic (Claude), model lokalny (Ollama/LM Studio) i własny endpoint",
+      "Codex CLI i Claude Code uruchamiane w terminalu — na Twoje konto, bez klucza API",
+      "Wtyczki mogą wystawiać własne narzędzia AI (uprawnienie ai.tools)",
+      "Kontrola autonomii: limity kroków/akcji/czasu, budżet tokenów i pełny dziennik działań"
+    ]
+  },
+  {
     "version": "0.9.0",
     "date": "2026-07-18",
     "title": "Redesign UI i panele jako zakładki",
