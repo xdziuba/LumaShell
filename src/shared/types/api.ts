@@ -22,6 +22,7 @@ import type {
   SessionSpec,
   ShellInfo,
   SftpEntry,
+  SftpProgressEvent,
   SshConnectRequest,
   TerminalCreateResult,
   TerminalDataEvent,
@@ -193,10 +194,26 @@ export interface LumaApi {
   sftp: {
     realpath(sessionId: string, path: string): Promise<string>;
     list(sessionId: string, path: string): Promise<SftpEntry[]>;
-    /** Pobiera plik zdalny; pokazuje dialog zapisu. `true`, gdy zapisano. */
-    download(sessionId: string, path: string): Promise<boolean>;
-    /** Wysyła wybrany plik lokalny do katalogu zdalnego; zwraca nazwę albo null. */
-    upload(sessionId: string, dir: string): Promise<string | null>;
+    /** Pobiera wskazane ścieżki (także katalogi) do wybranego katalogu lokalnego. */
+    download(sessionId: string, paths: string[]): Promise<number>;
+    /** Wysyła pliki wskazane w oknie wyboru do katalogu zdalnego; zwraca ich liczbę. */
+    upload(sessionId: string, dir: string): Promise<number>;
+    /** Wysyła konkretne ścieżki lokalne (przeciągnięte z pulpitu). */
+    uploadPaths(sessionId: string, dir: string, localPaths: string[]): Promise<number>;
+    mkdir(sessionId: string, path: string): Promise<void>;
+    /** Zmiana nazwy działa też jako przeniesienie w obrębie hosta. */
+    rename(sessionId: string, from: string, to: string): Promise<void>;
+    /** Usuwa rekurencyjnie wskazane ścieżki. */
+    delete(sessionId: string, paths: string[]): Promise<void>;
+    copy(sessionId: string, paths: string[], targetDir: string): Promise<void>;
+    move(sessionId: string, paths: string[], targetDir: string): Promise<void>;
+    chmod(sessionId: string, path: string, mode: number): Promise<void>;
+    onProgress(callback: (event: SftpProgressEvent) => void): Unsubscribe;
+    /**
+     * Ścieżka pliku przeciągniętego z pulpitu. Od Electrona 32 `File.path` nie istnieje,
+     * a `webUtils.getPathForFile` wolno wołać wyłącznie w preloadzie.
+     */
+    pathForFile(file: File): string;
   };
 
   terminal: {

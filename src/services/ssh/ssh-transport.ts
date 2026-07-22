@@ -19,6 +19,10 @@ export interface SftpEntry {
   name: string;
   type: 'dir' | 'file' | 'other';
   size: number;
+  /** Czas modyfikacji w milisekundach (ssh2 podaje sekundy). */
+  mtime: number;
+  /** Bity uprawnień POSIX (bez typu pliku) — do pokazania i do „chmod". */
+  mode: number;
 }
 
 /** Kolor komunikatów LumaShell wstrzykiwanych w strumień terminala. */
@@ -319,9 +323,27 @@ export class SshTransport implements TerminalTransport {
           list.map((entry) => ({
             name: entry.filename,
             type: entry.attrs.isDirectory() ? 'dir' : entry.attrs.isFile() ? 'file' : 'other',
-            size: entry.attrs.size
+            size: entry.attrs.size,
+            mtime: entry.attrs.mtime * 1000,
+            // Same bity uprawnień — górne bity trybu niosą typ pliku, który mamy już w `type`.
+            mode: entry.attrs.mode & 0o7777
           }))
         );
+      });
+    });
+  }
+
+  /** Stat pojedynczej ścieżki — do rozpoznania, czy cel operacji jest katalogiem. */
+  async sftpStat(path: string): Promise<{ type: 'dir' | 'file' | 'other'; size: number; mode: number }> {
+    const sftp = await this.#ensureSftp();
+    return new Promise((resolve, reject) => {
+      sftp.stat(path, (error, stats) => {
+        if (error) return reject(error);
+        resolve({
+          type: stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'other',
+          size: stats.size,
+          mode: stats.mode & 0o7777
+        });
       });
     });
   }
@@ -338,6 +360,56 @@ export class SshTransport implements TerminalTransport {
     return new Promise<void>((resolve, reject) => {
       sftp.writeFile(path, data, (error) => (error ? reject(error) : resolve()));
     });
+  }
+
+  async sftpMkdir(path: string): Promise<void> {
+    const sftp = await this.#ensureSftp();
+    return new Promise<void>((resolve, reject) => {
+      sftp.mkdir(path, (error) => (error ? reject(error) : resolve()));
+    });
+  }
+
+  /** Zmiana nazwy = także przeniesienie: serwer robi to w miejscu, bez kopiowania danych. */
+  async sftpRename(from: string, to: string): Promise<void> {
+    const sftp = await this.#ensureSftp();
+    return new Promise<void>((resolve, reject) => {
+      sftp.rename(from, to, (error) => (error ? reject(error) : resolve()));
+    });
+  }
+
+  async sftpUnlink(path: string): Promise<void> {
+    const sftp = await this.#ensureSftp();
+    return new Promise<void>((resolve, reject) => {
+      sftp.unlink(path, (error) => (error ? reject(error) : resolve()));
+    });
+  }
+
+  async sftpRmdir(path: string): Promise<void> {
+    const sftp = await this.#ensureSftp();
+    return new Promise<void>((resolve, reject) => {
+      sftp.rmdir(path, (error) => (error ? reject(error) : resolve()));
+    });
+  }
+
+  async sftpChmod(path: string, mode: number): Promise<void> {
+    const sftp = await this.#ensureSftp();
+    return new Promise<void>((resolve, reject) => {
+      sftp.chmod(path, mode, (error) => (error ? reject(error) : resolve()));
+    });
+  }
+
+  /**
+   * Strumienie dla dużych plików: `readFile`/`writeFile` trzymają całą zawartość w pamięci,
+   * więc do transferów używamy strumieni i raportujemy postęp porcjami.
+   */
+  async sftpReadStream(path: string): Promise<NodeJS.ReadableStream> {
+    const sftp = await this.#ensureSftp();
+    return sftp.createReadStream(path);
+  }
+
+  async sftpWriteStream(path: string): Promise<NodeJS.WritableStream> {
+    const sftp = await this.#ensureSftp();
+    return sftp.createWriteStream(path);
   }
 
   onData(callback: (data: Uint8Array) => void): void {

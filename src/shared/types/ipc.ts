@@ -38,6 +38,13 @@ export const IpcChannel = {
   SftpList: 'sftp:list',
   SftpDownload: 'sftp:download',
   SftpUpload: 'sftp:upload',
+  SftpUploadPaths: 'sftp:uploadPaths',
+  SftpMkdir: 'sftp:mkdir',
+  SftpRename: 'sftp:rename',
+  SftpDelete: 'sftp:delete',
+  SftpCopy: 'sftp:copy',
+  SftpMove: 'sftp:move',
+  SftpChmod: 'sftp:chmod',
   SessionLogStart: 'sessionLog:start',
   SessionLogStop: 'sessionLog:stop',
   PluginCommands: 'plugin:commands',
@@ -89,7 +96,9 @@ export const IpcEvent = {
   /** Zmiana stanu maksymalizacji — przycisk zmienia wtedy ikonę. */
   WindowMaximizedChanged: 'window:maximizedChanged',
   /** Kolejna porcja (delta) strumieniowanej odpowiedzi czatu AI. */
-  AiChatDelta: 'ai:chatDelta'
+  AiChatDelta: 'ai:chatDelta',
+  /** Postęp operacji plikowej SFTP (transfer, kopiowanie, usuwanie). */
+  SftpProgress: 'sftp:progress'
 } as const;
 
 /** Rola wiadomości czatu — zgodna z ChatMessage w core/ai/provider. */
@@ -365,6 +374,25 @@ export interface SftpEntry {
   name: string;
   type: 'dir' | 'file' | 'other';
   size: number;
+  /** Czas modyfikacji w milisekundach. */
+  mtime: number;
+  /** Bity uprawnień POSIX (0–0o7777). */
+  mode: number;
+}
+
+/**
+ * Postęp operacji plikowej. Jedna operacja (np. wysłanie trzech plików) to jedno zadanie
+ * o stałym `taskId`; `done`/`total` liczone są w bajtach dla transferów, a w elementach dla
+ * operacji zdalnych (kopiowanie, usuwanie).
+ */
+export interface SftpProgressEvent {
+  taskId: string;
+  label: string;
+  done: number;
+  total: number;
+  /** Ustawione, gdy zadanie się skończyło — z błędem albo bez. */
+  finished?: boolean;
+  error?: string;
 }
 
 /** Kontener/pod wykryty przez CLI — do wyboru w interfejsie (Etap 7). */
