@@ -57,6 +57,7 @@ export const IpcChannel = {
   PluginStop: 'plugin:stop',
   PluginReload: 'plugin:reload',
   PluginOpenLog: 'plugin:openLog',
+  PluginStatusBar: 'plugin:statusBar',
   WorkspaceActiveTab: 'workspace:activeTab',
   AppWhatsNew: 'app:whatsNew',
   AppPaths: 'app:paths',
@@ -101,6 +102,8 @@ export const IpcEvent = {
   WindowMaximizedChanged: 'window:maximizedChanged',
   /** Kolejna porcja (delta) strumieniowanej odpowiedzi czatu AI. */
   AiChatDelta: 'ai:chatDelta',
+  /** Zmiana elementów paska statusu dodanych przez wtyczki. */
+  PluginStatusBarChanged: 'plugin:statusBarChanged',
   /** Postęp operacji plikowej SFTP (transfer, kopiowanie, usuwanie). */
   SftpProgress: 'sftp:progress'
 } as const;
@@ -238,6 +241,22 @@ export interface UserDirs {
   pluginsData: string;
   themes: string;
   logs: string;
+}
+
+/**
+ * Element paska statusu dodany przez wtyczkę (Plugin API v2).
+ *
+ * `pluginName` jest w kontrakcie celowo: użytkownik ma widzieć, CZYJ to komunikat, bez
+ * polegania na tym, co wtyczka wpisała w tekst.
+ */
+export interface PluginStatusItem {
+  pluginId: string;
+  pluginName: string;
+  id: string;
+  text: string;
+  tooltip?: string;
+  /** Komenda wtyczki uruchamiana po kliknięciu (musi być zadeklarowana w manifeście). */
+  command?: string;
 }
 
 /** Wpis „Nowości" (What's New) — jedno wydanie. */

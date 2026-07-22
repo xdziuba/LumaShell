@@ -18,6 +18,7 @@ import type {
   InstalledPlugin,
   PluginCommand,
   PluginNotification,
+  PluginStatusItem,
   PluginToolInfo,
   SessionSpec,
   ShellInfo,
@@ -147,6 +148,9 @@ export interface LumaApi {
     reload(id: string): Promise<InstalledPlugin[]>;
     /** Otwiera plik logu wtyczki. */
     openLog(id: string): void;
+    /** Elementy paska statusu dodane przez wtyczki. */
+    statusBar(): Promise<PluginStatusItem[]>;
+    onStatusBarChanged(callback: (items: PluginStatusItem[]) => void): Unsubscribe;
   };
 
   paths: {

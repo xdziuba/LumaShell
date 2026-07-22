@@ -27,6 +27,7 @@ import {
   type InstalledPlugin,
   type PluginCommand,
   type PluginNotification,
+  type PluginStatusItem,
   type PluginToolInfo,
   type SessionSpec,
   type ShellInfo,
@@ -148,7 +149,10 @@ export const api: LumaApi = {
     rescan: (): Promise<InstalledPlugin[]> => ipcRenderer.invoke(IpcChannel.PluginRescan),
     stop: (id: string): Promise<InstalledPlugin[]> => ipcRenderer.invoke(IpcChannel.PluginStop, id),
     reload: (id: string): Promise<InstalledPlugin[]> => ipcRenderer.invoke(IpcChannel.PluginReload, id),
-    openLog: (id: string): void => void ipcRenderer.invoke(IpcChannel.PluginOpenLog, id)
+    openLog: (id: string): void => void ipcRenderer.invoke(IpcChannel.PluginOpenLog, id),
+    statusBar: (): Promise<PluginStatusItem[]> => ipcRenderer.invoke(IpcChannel.PluginStatusBar),
+    onStatusBarChanged: (callback: (items: PluginStatusItem[]) => void): Unsubscribe =>
+      subscribe(IpcEvent.PluginStatusBarChanged, callback)
   },
 
   paths: {

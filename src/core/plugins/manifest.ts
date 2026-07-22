@@ -14,7 +14,13 @@ export const PERMISSIONS = [
   'notifications.show',
   'terminal.read',
   'terminal.write',
-  'ai.tools'
+  'ai.tools',
+  /**
+   * Własny element na pasku statusu. Wtyczka pisze tam TEKST widoczny w oknie aplikacji,
+   * więc jest to uprawnienie: obok zawsze pokazujemy, która wtyczka go dodała, a długość
+   * jest przycinana — pasek nie może udawać komunikatu LumaShella.
+   */
+  'ui.statusBar'
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

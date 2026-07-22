@@ -89,6 +89,21 @@ function loguj(...args) {
   console.log('[discord]', ...args);
 }
 
+/** Wskaźnik na pasku statusu — jedyne miejsce, gdzie widać stan bez otwierania palety. */
+async function odswiezWskaznik() {
+  if (!ctx) return;
+  await ctx.ui
+    .setStatusBarItem({
+      id: 'stan',
+      text: polaczone ? 'Discord ●' : 'Discord ○',
+      tooltip: polaczone
+        ? `Połączono. Nazwy zakładek: ${pokazujZakladki ? 'widoczne' : 'ukryte'}.`
+        : `Brak połączenia${ostatniBlad ? ` — ${ostatniBlad}` : ''}. Kliknij, aby spróbować ponownie.`,
+      command: 'discord.reconnect'
+    })
+    .catch(() => undefined);
+}
+
 /** Aktywność pokazywana w Discordzie. `details` to górna linia, `state` dolna. */
 function zbudujAktywnosc(info) {
   const aktywnosc = {
@@ -131,6 +146,7 @@ function zaplanujWysylke() {
 // --- połączenie ----------------------------------------------------------------------
 
 function rozlacz() {
+  const bylo = polaczone;
   if (gniazdo) {
     gniazdo.removeAllListeners();
     gniazdo.destroy();
@@ -138,6 +154,7 @@ function rozlacz() {
   gniazdo = null;
   polaczone = false;
   bufor = Buffer.alloc(0);
+  if (bylo) void odswiezWskaznik();
 }
 
 function zaplanujPonowienie() {
@@ -196,6 +213,7 @@ async function polacz() {
         ostatniBlad = '';
         loguj('połączono z Discordem jako', dane?.data?.user?.username ?? 'nieznany użytkownik');
         void wyslijStatus();
+        void odswiezWskaznik();
       } else if (op === OP.FRAME && dane?.evt === 'ERROR') {
         ostatniBlad = `Discord odrzucił: ${dane?.data?.message ?? 'nieznany błąd'}`;
         loguj(ostatniBlad);
@@ -254,6 +272,7 @@ exports.activate = async function activate(context) {
     pokazujZakladki = !pokazujZakladki;
     await ctx.storage.set('pokazujNazwyZakladek', pokazujZakladki);
     zaplanujWysylke();
+    await odswiezWskaznik();
     await ctx.notifications.show(
       pokazujZakladki ? 'Discord: nazwy zakładek będą widoczne' : 'Discord: nazwy zakładek ukryte'
     );
@@ -270,6 +289,7 @@ exports.activate = async function activate(context) {
     await ctx.notifications.show(polaczone ? 'Discord: połączono' : `Discord: ${ostatniBlad || 'próbuję dalej…'}`);
   });
 
+  await odswiezWskaznik();
   loguj(`start na ${os.platform()}, sesja od ${new Date(startSesji).toISOString()}`);
 
   if (!clientId) {

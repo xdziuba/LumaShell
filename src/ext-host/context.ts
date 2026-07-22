@@ -47,6 +47,15 @@ export interface LumaContext {
     onDidChangeActiveTab(callback: (tab: AktywnaZakladka | null) => void): () => void;
   };
 
+  ui: {
+    /**
+     * Ustawia (albo aktualizuje) element paska statusu. `command` musi być zadeklarowana
+     * w manifeście — element jest klikalny i nie może uruchomić czegoś spoza kontraktu.
+     */
+    setStatusBarItem(item: { id: string; text: string; tooltip?: string; command?: string }): Promise<void>;
+    removeStatusBarItem(id: string): Promise<void>;
+  };
+
   /** Trwały magazyn wtyczki: jeden plik JSON na wtyczkę w katalogu danych aplikacji. */
   storage: {
     get<T = unknown>(key: string): Promise<T | undefined>;
@@ -94,6 +103,15 @@ export function zbudujKontekst(pluginId: string, permissions: string[]): LumaCon
       getActiveTab: () => wywolaj('workspace.activeTab') as Promise<AktywnaZakladka | null>,
       onDidChangeActiveTab: (callback) =>
         naZdarzenie('workspace.activeTabChanged', (payload) => callback(payload as AktywnaZakladka | null))
+    },
+
+    ui: {
+      async setStatusBarItem(item) {
+        await wywolaj('ui.statusBar.set', item);
+      },
+      async removeStatusBarItem(id) {
+        await wywolaj('ui.statusBar.remove', { id });
+      }
     },
 
     storage: {

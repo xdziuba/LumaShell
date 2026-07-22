@@ -32,6 +32,7 @@ import type {
   HostVerifyRequest,
   PluginCommand,
   PluginNotification,
+  PluginStatusItem,
   SessionSpec,
   ShellInfo,
   SshConnectRequest
@@ -104,6 +105,8 @@ export function App(): React.JSX.Element {
   const [loggingSessions, setLoggingSessions] = useState<Set<string>>(new Set());
   const [pluginCommands, setPluginCommands] = useState<PluginCommand[]>([]);
   const [notification, setNotification] = useState<PluginNotification | null>(null);
+  // Elementy paska statusu dodane przez wtyczki (Plugin API v2).
+  const [pluginStatus, setPluginStatus] = useState<PluginStatusItem[]>([]);
   // Które CLI AI są w PATH — decyduje, czy szybki start jest aktywny czy z podpowiedzią instalacji.
   const [aiClis, setAiClis] = useState<AiCliAvailability>({ codex: false, claude: false });
 
@@ -237,6 +240,8 @@ export function App(): React.JSX.Element {
   // przychodzi zdarzeniem; toast znika po chwili.
   useEffect(() => {
     void window.luma.plugins.commands().then(setPluginCommands);
+    void window.luma.plugins.statusBar().then(setPluginStatus);
+    const offStatus = window.luma.plugins.onStatusBarChanged(setPluginStatus);
     const offCommands = window.luma.plugins.onCommandsChanged(setPluginCommands);
     const offNotify = window.luma.plugins.onNotification((n) => {
       setNotification(n);
@@ -245,6 +250,7 @@ export function App(): React.JSX.Element {
     return () => {
       offCommands();
       offNotify();
+      offStatus();
     };
   }, []);
 
@@ -1042,6 +1048,19 @@ export function App(): React.JSX.Element {
         </div>
 
         <div className="statusbar__group statusbar__group--end">
+          {/* Wkład wtyczek: zawsze z nazwą wtyczki w podpowiedzi, żeby nie udawał
+              komunikatu aplikacji. */}
+          {pluginStatus.map((item) => (
+            <button
+              key={`${item.pluginId}::${item.id}`}
+              className="statusbar__button statusbar__button--plugin"
+              title={`${item.pluginName}${item.tooltip ? ` — ${item.tooltip}` : ''}`}
+              onClick={() => item.command && window.luma.plugins.runCommand(item.pluginId, item.command)}
+              disabled={!item.command}
+            >
+              {item.text}
+            </button>
+          ))}
           {activeLeaf?.detail && <span className="statusbar__status">{activeLeaf.detail}</span>}
           {sshSessionId && (
             <button

@@ -6,7 +6,7 @@
   "runtime": "node",
   "main": "dist/index.js",
   "description": "Pokazuje w Discordzie, że pracujesz w LumaShellu: nazwę aplikacji, logo, nazwę otwartej zakładki i czas trwania sesji. Łączy się wyłącznie z lokalnym Discordem przez nazwany potok — nic nie wychodzi do internetu.",
-  "permissions": ["commands.register", "notifications.show"],
+  "permissions": ["commands.register", "notifications.show", "ui.statusBar"],
   "contributes": {
     "commands": [
       { "id": "discord.status", "title": "Discord: pokaż stan połączenia" },

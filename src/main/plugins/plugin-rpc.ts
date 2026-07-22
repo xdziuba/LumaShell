@@ -21,6 +21,8 @@ import { userDirs } from '../user-dirs';
 /** Co bramka musi wiedzieć o wtyczce, żeby podjąć decyzję. */
 export interface KontekstWtyczki {
   manifest: PluginManifest;
+  /** Ustawia albo usuwa element paska statusu tej wtyczki. */
+  ustawElementPaska: (item: { id: string; text: string; tooltip?: string; command?: string } | { id: string; usun: true }) => void;
   /** Dopisuje komendę do listy widocznej w palecie; zwraca `false`, gdy nie zadeklarowana. */
   zarejestrujKomende: (commandId: string) => boolean;
   pokazPowiadomienie: (message: string, level: string) => void;
@@ -136,6 +138,37 @@ const ZDOLNOSCI: Record<string, Zdolnosc> = {
 
   'storage.path': {
     wykonaj: (ctx) => plikDanych(ctx.manifest.id)
+  },
+
+  'ui.statusBar.set': {
+    permission: 'ui.statusBar',
+    wykonaj: (ctx, params) => {
+      // Tekst w oknie aplikacji ma być krótki i nie udawać komunikatu LumaShella —
+      // obok i tak pokazujemy nazwę wtyczki.
+      const item: { id: string; text: string; tooltip?: string; command?: string } = {
+        id: tekst(params, 'id', 60),
+        text: tekst(params, 'text', 40)
+      };
+      if (typeof params['tooltip'] === 'string') item.tooltip = params['tooltip'].slice(0, 200);
+      if (typeof params['command'] === 'string') {
+        const commandId = params['command'];
+        // Klik nie może uruchomić czegoś, czego nie ma w manifeście.
+        if (!ctx.manifest.contributes.commands.some((c) => c.id === commandId)) {
+          throw new BladZdolnosci(RpcError.Denied, `komenda ${commandId} nie jest zadeklarowana w manifeście`);
+        }
+        item.command = commandId;
+      }
+      ctx.ustawElementPaska(item);
+      return true;
+    }
+  },
+
+  'ui.statusBar.remove': {
+    permission: 'ui.statusBar',
+    wykonaj: (ctx, params) => {
+      ctx.ustawElementPaska({ id: tekst(params, 'id', 60), usun: true });
+      return true;
+    }
   }
 };
 

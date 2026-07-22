@@ -2681,3 +2681,13 @@ body {
   gap: 8px;
   margin-top: 10px;
 }
+
+// Element paska statusu dodany przez wtyczkę — subtelnie odróżniony od akcji aplikacji,
+// żeby było widać, że to nie jest komunikat LumaShella.
+.statusbar__button--plugin {
+  border-style: dashed;
+  &:disabled {
+    cursor: default;
+    opacity: 0.75;
+  }
+}

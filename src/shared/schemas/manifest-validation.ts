@@ -35,7 +35,8 @@ const ALLOWED_PERMISSIONS: readonly Permission[] = [
   'notifications.show',
   'terminal.read',
   'terminal.write',
-  'ai.tools'
+  'ai.tools',
+  'ui.statusBar'
 ];
 
 export class ManifestValidationError extends Error {

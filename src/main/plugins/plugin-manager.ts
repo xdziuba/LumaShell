@@ -12,7 +12,13 @@ import { join } from 'node:path';
 import { app, ipcMain, shell, type BrowserWindow } from 'electron';
 import { hasPermission, type PluginManifest } from '@core/plugins/manifest';
 import { parseManifest } from '@shared/schemas/manifest-validation';
-import { IpcChannel, IpcEvent, type InstalledPlugin, type PluginToolInfo } from '@shared/types/ipc';
+import {
+  IpcChannel,
+  IpcEvent,
+  type InstalledPlugin,
+  type PluginStatusItem,
+  type PluginToolInfo
+} from '@shared/types/ipc';
 import { createPluginHost, sendToHost } from './plugin-host';
 import { isDisabled, isTrusted, setDisabled, setTrusted } from './plugin-state-store';
 import { userDirs } from '../user-dirs';
@@ -55,6 +61,8 @@ const pendingTools = new Map<string, { resolve: (result: string) => void; reject
 const discovered = new Map<string, { manifest: PluginManifest; code: string; entry: string }>();
 /** Aktualnie AKTYWNE wtyczki (włączone i załadowane do hosta). */
 const plugins = new Map<string, LoadedPlugin>();
+/** Elementy paska statusu dodane przez wtyczki: klucz `pluginId::itemId`. */
+const elementyPaska = new Map<string, PluginStatusItem>();
 let mainWindow: BrowserWindow | undefined;
 
 /**
@@ -211,6 +219,7 @@ async function uruchomNode(manifest: PluginManifest, entry: string): Promise<voi
 async function zatrzymajNode(pluginId: string): Promise<void> {
   await zatrzymaj(pluginId);
   plugins.delete(pluginId);
+  usunElementyPaska(pluginId);
   notifyRenderer();
   notifyToolsChanged();
 }
@@ -236,6 +245,21 @@ function kontekstWtyczki(pluginId: string): KontekstWtyczki | undefined {
       }
       return true;
     },
+    ustawElementPaska: (item) => {
+      const klucz = `${pluginId}::${item.id}`;
+      if ('usun' in item) elementyPaska.delete(klucz);
+      else {
+        elementyPaska.set(klucz, {
+          pluginId,
+          pluginName: plugin.manifest.name,
+          id: item.id,
+          text: item.text,
+          ...(item.tooltip === undefined ? {} : { tooltip: item.tooltip }),
+          ...(item.command === undefined ? {} : { command: item.command })
+        });
+      }
+      notifyStatusBar();
+    },
     pokazPowiadomienie: (message, level) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IpcEvent.PluginNotification, {
@@ -255,6 +279,29 @@ function allCommands(): Array<{ pluginId: string; id: string; title: string }> {
     for (const c of plugin.commands) out.push({ pluginId: plugin.manifest.id, id: c.id, title: c.title });
   }
   return out;
+}
+
+/** Elementy paska statusu ze wszystkich wtyczek — kolejność stabilna (po kluczu). */
+function statusItems(): PluginStatusItem[] {
+  return [...elementyPaska.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, item]) => item);
+}
+
+function notifyStatusBar(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IpcEvent.PluginStatusBarChanged, statusItems());
+  }
+}
+
+/** Zdejmuje z paska wszystko, co należało do wyłączanej wtyczki. */
+function usunElementyPaska(pluginId: string): void {
+  let zmiana = false;
+  for (const klucz of [...elementyPaska.keys()]) {
+    if (klucz.startsWith(`${pluginId}::`)) {
+      elementyPaska.delete(klucz);
+      zmiana = true;
+    }
+  }
+  if (zmiana) notifyStatusBar();
 }
 
 function notifyRenderer(): void {
@@ -485,6 +532,7 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
   });
 
   // Narzędzia AI z wtyczek (AI-6).
+  ipcMain.handle(IpcChannel.PluginStatusBar, () => statusItems());
   ipcMain.handle(IpcChannel.PluginListTools, () => pluginTools());
   ipcMain.handle(IpcChannel.PluginRunTool, (_event, pluginId: unknown, toolId: unknown, args: unknown) => {
     if (typeof pluginId !== 'string' || typeof toolId !== 'string') {
