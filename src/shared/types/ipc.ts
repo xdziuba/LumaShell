@@ -58,6 +58,9 @@ export const IpcChannel = {
   PluginReload: 'plugin:reload',
   PluginOpenLog: 'plugin:openLog',
   PluginStatusBar: 'plugin:statusBar',
+  PluginViews: 'plugin:views',
+  PluginViewChildren: 'plugin:viewChildren',
+  PluginRunNodeCommand: 'plugin:runNodeCommand',
   WorkspaceActiveTab: 'workspace:activeTab',
   AppWhatsNew: 'app:whatsNew',
   AppPaths: 'app:paths',
@@ -104,6 +107,12 @@ export const IpcEvent = {
   AiChatDelta: 'ai:chatDelta',
   /** Zmiana elementów paska statusu dodanych przez wtyczki. */
   PluginStatusBarChanged: 'plugin:statusBarChanged',
+  /** Zmiana listy widoków wystawionych przez wtyczki. */
+  PluginViewsChanged: 'plugin:viewsChanged',
+  /** Wtyczka prosi o przeładowanie zawartości swojego widoku. */
+  PluginViewRefresh: 'plugin:viewRefresh',
+  /** Wtyczka prosi o otwarcie terminala w danym katalogu. */
+  PluginOpenTerminal: 'plugin:openTerminal',
   /** Postęp operacji plikowej SFTP (transfer, kopiowanie, usuwanie). */
   SftpProgress: 'sftp:progress'
 } as const;
@@ -256,6 +265,31 @@ export interface PluginStatusItem {
   text: string;
   tooltip?: string;
   /** Komenda wtyczki uruchamiana po kliknięciu (musi być zadeklarowana w manifeście). */
+  command?: string;
+}
+
+/** Widok (drzewo) wystawiony przez wtyczkę — otwierany jako zakładka. */
+export interface PluginView {
+  pluginId: string;
+  pluginName: string;
+  id: string;
+  title: string;
+}
+
+/**
+ * Węzeł drzewa dostarczony przez wtyczkę.
+ *
+ * Świadomie ubogi: etykieta, opis i informacja, czy da się rozwinąć. Wtyczka nie przysyła
+ * HTML-a ani stylów — rysuje aplikacja, w swoim motywie, więc widok wtyczki nie może
+ * wyglądać jak coś innego niż jest.
+ */
+export interface PluginTreeNode {
+  id: string;
+  label: string;
+  description?: string;
+  /** Czy węzeł ma dzieci (pokazujemy strzałkę rozwijania). */
+  expandable?: boolean;
+  /** Komenda wtyczki uruchamiana po dwukliku (musi być zadeklarowana w manifeście). */
   command?: string;
 }
 

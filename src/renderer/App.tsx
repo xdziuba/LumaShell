@@ -33,6 +33,7 @@ import type {
   PluginCommand,
   PluginNotification,
   PluginStatusItem,
+  PluginView,
   SessionSpec,
   ShellInfo,
   SshConnectRequest
@@ -80,6 +81,7 @@ const AboutPanel = lazy(() => import('./panels/AboutPanel'));
 const ShortcutsPanel = lazy(() => import('./panels/ShortcutsPanel'));
 const WhatsNewPanel = lazy(() => import('./panels/WhatsNewPanel'));
 const PluginManager = lazy(() => import('./panels/PluginManager'));
+const PluginTreeView = lazy(() => import('./plugins/PluginTreeView'));
 const WorkdirDialog = lazy(() => import('./components/WorkdirDialog'));
 const AiPanel = lazy(() => import('./panels/AiPanel'));
 const AiChatPanel = lazy(() => import('./panels/AiChatPanel'));
@@ -107,6 +109,7 @@ export function App(): React.JSX.Element {
   const [notification, setNotification] = useState<PluginNotification | null>(null);
   // Elementy paska statusu dodane przez wtyczki (Plugin API v2).
   const [pluginStatus, setPluginStatus] = useState<PluginStatusItem[]>([]);
+  const [pluginViews, setPluginViews] = useState<PluginView[]>([]);
   // Które CLI AI są w PATH — decyduje, czy szybki start jest aktywny czy z podpowiedzią instalacji.
   const [aiClis, setAiClis] = useState<AiCliAvailability>({ codex: false, claude: false });
 
@@ -123,7 +126,8 @@ export function App(): React.JSX.Element {
     closePane,
     focusPane,
     resizeSplit,
-    setTabOrder
+    setTabOrder,
+    openPluginView
   } = useWorkspace();
 
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
@@ -135,11 +139,19 @@ export function App(): React.JSX.Element {
   // swoją nazwę (Ustawienia/Motywy/…), nie mylące „brak sesji", które należy się dopiero
   // pustemu workspace'owi.
   const titleSubtitle =
-    activeTab?.kind === 'panel' ? PANEL_TITLES[activeTab.panel] : activeLeaf?.label ?? 'brak sesji';
+    activeTab?.kind === 'panel'
+      ? PANEL_TITLES[activeTab.panel]
+      : activeTab?.kind === 'plugin'
+        ? activeTab.title
+        : activeLeaf?.label ?? 'brak sesji';
 
   const tabViews: TabView[] = tabs.map((tab) => {
     if (tab.kind === 'panel') {
       return { id: tab.id, label: PANEL_TITLES[tab.panel], status: 'running', kind: 'pty', panel: tab.panel, paneCount: 1 };
+    }
+    if (tab.kind === 'plugin') {
+      // Zakładka widoku wtyczki: ikona jak przy panelach, ale tytuł od wtyczki.
+      return { id: tab.id, label: tab.title, status: 'running', kind: 'pty', panel: 'plugins', paneCount: 1 };
     }
     const leaf = findLeaf(tab.root, tab.activePaneId) ?? leaves(tab.root)[0];
     return {
@@ -241,7 +253,17 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     void window.luma.plugins.commands().then(setPluginCommands);
     void window.luma.plugins.statusBar().then(setPluginStatus);
+    void window.luma.plugins.views().then(setPluginViews);
     const offStatus = window.luma.plugins.onStatusBarChanged(setPluginStatus);
+    const offViews = window.luma.plugins.onViewsChanged(setPluginViews);
+    // Wtyczka może poprosić o terminal w katalogu (uprawnienie terminal.write) — otwarcie
+    // robi renderer, bo to on trzyma zakładki.
+    const offTerm = window.luma.plugins.onOpenTerminal(({ cwd, label }) => {
+      const shell = shells[0];
+      const spec: Extract<SessionSpec, { kind: 'pty' }> = { kind: 'pty', cwd };
+      if (shell) spec.shellId = shell.id;
+      open(spec, label ?? `${shell?.label ?? 'terminal'} — ${nazwaKatalogu(cwd)}`);
+    });
     const offCommands = window.luma.plugins.onCommandsChanged(setPluginCommands);
     const offNotify = window.luma.plugins.onNotification((n) => {
       setNotification(n);
@@ -251,8 +273,10 @@ export function App(): React.JSX.Element {
       offCommands();
       offNotify();
       offStatus();
+      offViews();
+      offTerm();
     };
-  }, []);
+  }, [shells, open]);
 
   const polaczSsh = (request: SshConnectRequest): void => {
     setSshOpen(false);
@@ -580,6 +604,15 @@ export function App(): React.JSX.Element {
       { id: 'panel.whatsnew', title: 'Nowości', keywords: "co nowego what's new zmiany", run: () => openPanel('whatsnew') },
       { id: 'panel.about', title: 'O aplikacji', keywords: 'about o aplikacji wersja', run: () => openPanel('about') }
     );
+    // Widoki wtyczek otwierane jako zakładki.
+    for (const view of pluginViews) {
+      list.push({
+        id: `plugin-view:${view.pluginId}:${view.id}`,
+        title: `${view.title} (${view.pluginName})`,
+        keywords: 'wtyczka plugin widok drzewo panel',
+        run: () => openPluginView(view.pluginId, view.id, view.title)
+      });
+    }
     // Komendy wtyczek — uruchamiane przez RPC do izolowanego hosta.
     for (const cmd of pluginCommands) {
       list.push({
@@ -591,7 +624,7 @@ export function App(): React.JSX.Element {
     }
     return list;
     // Zależymy od danych (shells, ports, profiles, tabs, activeId, komendy wtyczek).
-  }, [shells, ports, profiles, tabs, activeId, pluginCommands]);
+  }, [shells, ports, profiles, tabs, activeId, pluginCommands, pluginViews]);
 
   const shortcuts = useMemo<ShortcutMap>(() => {
     const map: ShortcutMap = {
@@ -790,6 +823,37 @@ export function App(): React.JSX.Element {
                       {tab.panel === 'about' && <AboutPanel onClose={close} />}
                       {tab.panel === 'shortcuts' && <ShortcutsPanel onClose={close} />}
                       {tab.panel === 'whatsnew' && <WhatsNewPanel onClose={close} />}
+                    </Suspense>
+                  </div>
+                </div>
+              );
+            }
+
+            if (tab.kind === 'plugin') {
+              const view = pluginViews.find((v) => v.pluginId === tab.pluginId && v.id === tab.viewId);
+              return (
+                <div key={tab.id} className={cls}>
+                  <div className="panel-view">
+                    <Suspense fallback={<div className="panel-card__loading">ładowanie…</div>}>
+                      {view ? (
+                        <PluginTreeView view={view} onClose={() => closeTab(tab.id)} />
+                      ) : (
+                        // Wtyczka mogła zostać wyłączona przy otwartej zakładce — mówimy to
+                        // wprost zamiast pokazywać puste drzewo.
+                        <div className="panel">
+                          <header className="panel__header">
+                            <span className="panel__title">{tab.title.toUpperCase()}</span>
+                            <button className="panel__close" onClick={() => closeTab(tab.id)} aria-label="Zamknij">
+                              ✕
+                            </button>
+                          </header>
+                          <div className="panel__body">
+                            <div className="panel__hint">
+                              Widok jest niedostępny — wtyczka, która go dostarcza, nie działa.
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </Suspense>
                   </div>
                 </div>

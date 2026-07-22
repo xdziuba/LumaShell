@@ -17,6 +17,7 @@ import {
   IpcEvent,
   type InstalledPlugin,
   type PluginStatusItem,
+  type PluginView,
   type PluginToolInfo
 } from '@shared/types/ipc';
 import { createPluginHost, sendToHost } from './plugin-host';
@@ -63,6 +64,8 @@ const discovered = new Map<string, { manifest: PluginManifest; code: string; ent
 const plugins = new Map<string, LoadedPlugin>();
 /** Elementy paska statusu dodane przez wtyczki: klucz `pluginId::itemId`. */
 const elementyPaska = new Map<string, PluginStatusItem>();
+/** Widoki zgłoszone przez wtyczki (gotowe do otwarcia jako zakładka): klucz `pluginId::viewId`. */
+const widoki = new Map<string, PluginView>();
 let mainWindow: BrowserWindow | undefined;
 
 /**
@@ -220,6 +223,7 @@ async function zatrzymajNode(pluginId: string): Promise<void> {
   await zatrzymaj(pluginId);
   plugins.delete(pluginId);
   usunElementyPaska(pluginId);
+  usunWidoki(pluginId);
   notifyRenderer();
   notifyToolsChanged();
 }
@@ -244,6 +248,28 @@ function kontekstWtyczki(pluginId: string): KontekstWtyczki | undefined {
         notifyRenderer();
       }
       return true;
+    },
+    zarejestrujWidok: (viewId) => {
+      const declared = plugin.manifest.contributes.views?.find((v) => v.id === viewId);
+      if (!declared) return false;
+      widoki.set(`${pluginId}::${viewId}`, {
+        pluginId,
+        pluginName: plugin.manifest.name,
+        id: declared.id,
+        title: declared.title
+      });
+      notifyViews();
+      return true;
+    },
+    odswiezWidok: (viewId) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IpcEvent.PluginViewRefresh, { pluginId, viewId });
+      }
+    },
+    otworzTerminal: (cwd, label) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IpcEvent.PluginOpenTerminal, { cwd, label });
+      }
     },
     ustawElementPaska: (item) => {
       const klucz = `${pluginId}::${item.id}`;
@@ -284,6 +310,29 @@ function allCommands(): Array<{ pluginId: string; id: string; title: string }> {
 /** Elementy paska statusu ze wszystkich wtyczek — kolejność stabilna (po kluczu). */
 function statusItems(): PluginStatusItem[] {
   return [...elementyPaska.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, item]) => item);
+}
+
+/** Widoki wszystkich wtyczek — kolejność stabilna. */
+function viewList(): PluginView[] {
+  return [...widoki.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
+}
+
+function notifyViews(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IpcEvent.PluginViewsChanged, viewList());
+  }
+}
+
+/** Zdejmuje widoki wyłączanej wtyczki — jej zakładki nie mają skąd brać danych. */
+function usunWidoki(pluginId: string): void {
+  let zmiana = false;
+  for (const klucz of [...widoki.keys()]) {
+    if (klucz.startsWith(`${pluginId}::`)) {
+      widoki.delete(klucz);
+      zmiana = true;
+    }
+  }
+  if (zmiana) notifyViews();
 }
 
 function notifyStatusBar(): void {
@@ -533,6 +582,35 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
 
   // Narzędzia AI z wtyczek (AI-6).
   ipcMain.handle(IpcChannel.PluginStatusBar, () => statusItems());
+  ipcMain.handle(IpcChannel.PluginViews, () => viewList());
+
+  // Zawartość drzewa: renderer pyta o dzieci węzła, my pytamy wtyczkę. Bramka jest ta sama
+  // co wszędzie — widok musi być zgłoszony przez ŻYWĄ wtyczkę.
+  ipcMain.handle(IpcChannel.PluginViewChildren, async (_event, pluginId: unknown, viewId: unknown, nodeId: unknown) => {
+    if (typeof pluginId !== 'string' || typeof viewId !== 'string') return [];
+    if (!widoki.has(`${pluginId}::${viewId}`)) return [];
+    const wynik = await zadaj(pluginId, 'view.getChildren', {
+      viewId,
+      nodeId: typeof nodeId === 'string' ? nodeId : null
+    }).catch((error: unknown) => {
+      console.warn(`[plugins] ${pluginId}: widok ${viewId} nie oddał dzieci:`, (error as Error).message);
+      return [];
+    });
+    return Array.isArray(wynik) ? wynik.slice(0, 2000) : [];
+  });
+
+  // Komenda przypisana do węzła drzewa — wołana z identyfikatorem węzła.
+  ipcMain.handle(IpcChannel.PluginRunNodeCommand, async (_event, pluginId: unknown, commandId: unknown, nodeId: unknown) => {
+    if (typeof pluginId !== 'string' || typeof commandId !== 'string') return;
+    const plugin = plugins.get(pluginId);
+    if (!plugin || !plugin.manifest.contributes.commands.some((c) => c.id === commandId)) return;
+    await zadaj(pluginId, 'command.invoke', {
+      commandId,
+      nodeId: typeof nodeId === 'string' ? nodeId : undefined
+    }).catch((error: unknown) => {
+      console.warn(`[plugins] ${pluginId}: komenda ${commandId} nie wykonana:`, (error as Error).message);
+    });
+  });
   ipcMain.handle(IpcChannel.PluginListTools, () => pluginTools());
   ipcMain.handle(IpcChannel.PluginRunTool, (_event, pluginId: unknown, toolId: unknown, args: unknown) => {
     if (typeof pluginId !== 'string' || typeof toolId !== 'string') {

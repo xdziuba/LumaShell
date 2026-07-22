@@ -19,6 +19,8 @@ import type {
   PluginCommand,
   PluginNotification,
   PluginStatusItem,
+  PluginTreeNode,
+  PluginView,
   PluginToolInfo,
   SessionSpec,
   ShellInfo,
@@ -151,6 +153,16 @@ export interface LumaApi {
     /** Elementy paska statusu dodane przez wtyczki. */
     statusBar(): Promise<PluginStatusItem[]>;
     onStatusBarChanged(callback: (items: PluginStatusItem[]) => void): Unsubscribe;
+    /** Widoki (drzewa) wystawione przez wtyczki — otwierane jako zakładki. */
+    views(): Promise<PluginView[]>;
+    onViewsChanged(callback: (views: PluginView[]) => void): Unsubscribe;
+    /** Dzieci węzła drzewa; `nodeId === null` to korzeń. Wczytywane leniwie. */
+    viewChildren(pluginId: string, viewId: string, nodeId: string | null): Promise<PluginTreeNode[]>;
+    onViewRefresh(callback: (event: { pluginId: string; viewId: string }) => void): Unsubscribe;
+    /** Uruchamia komendę przypisaną do węzła drzewa. */
+    runNodeCommand(pluginId: string, commandId: string, nodeId: string): void;
+    /** Wtyczka prosi o otwarcie terminala w katalogu (uprawnienie terminal.write). */
+    onOpenTerminal(callback: (event: { cwd: string; label?: string }) => void): Unsubscribe;
   };
 
   paths: {

@@ -28,6 +28,8 @@ import {
   type PluginCommand,
   type PluginNotification,
   type PluginStatusItem,
+  type PluginTreeNode,
+  type PluginView,
   type PluginToolInfo,
   type SessionSpec,
   type ShellInfo,
@@ -152,7 +154,19 @@ export const api: LumaApi = {
     openLog: (id: string): void => void ipcRenderer.invoke(IpcChannel.PluginOpenLog, id),
     statusBar: (): Promise<PluginStatusItem[]> => ipcRenderer.invoke(IpcChannel.PluginStatusBar),
     onStatusBarChanged: (callback: (items: PluginStatusItem[]) => void): Unsubscribe =>
-      subscribe(IpcEvent.PluginStatusBarChanged, callback)
+      subscribe(IpcEvent.PluginStatusBarChanged, callback),
+    views: (): Promise<PluginView[]> => ipcRenderer.invoke(IpcChannel.PluginViews),
+    onViewsChanged: (callback: (views: PluginView[]) => void): Unsubscribe =>
+      subscribe(IpcEvent.PluginViewsChanged, callback),
+    viewChildren: (pluginId: string, viewId: string, nodeId: string | null): Promise<PluginTreeNode[]> =>
+      ipcRenderer.invoke(IpcChannel.PluginViewChildren, pluginId, viewId, nodeId),
+    onViewRefresh: (callback: (event: { pluginId: string; viewId: string }) => void): Unsubscribe =>
+      subscribe(IpcEvent.PluginViewRefresh, callback),
+    runNodeCommand: (pluginId: string, commandId: string, nodeId: string): void => {
+      void ipcRenderer.invoke(IpcChannel.PluginRunNodeCommand, pluginId, commandId, nodeId);
+    },
+    onOpenTerminal: (callback: (event: { cwd: string; label?: string }) => void): Unsubscribe =>
+      subscribe(IpcEvent.PluginOpenTerminal, callback)
   },
 
   paths: {

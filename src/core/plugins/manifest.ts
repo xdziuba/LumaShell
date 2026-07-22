@@ -20,7 +20,13 @@ export const PERMISSIONS = [
    * więc jest to uprawnienie: obok zawsze pokazujemy, która wtyczka go dodała, a długość
    * jest przycinana — pasek nie może udawać komunikatu LumaShella.
    */
-  'ui.statusBar'
+  'ui.statusBar',
+  /**
+   * Własny widok (drzewo) otwierany jako zakładka. Wtyczka nie rysuje niczego sama —
+   * dostarcza DANE, a rysuje je LumaShell w swoim motywie. Uprawnienie jest po to, żeby
+   * w menedżerze było widać, że wtyczka dokłada coś do interfejsu.
+   */
+  'ui.views'
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -35,6 +41,15 @@ export interface CommandContribution {
  * wejścia. `risky` = akcja: pętla agenta poprosi wtedy o zgodę użytkownika (jak przy
  * wbudowanych akcjach z AI-3).
  */
+/**
+ * Widok wtyczki — drzewo pokazywane jako zakładka. Zawartość dostarcza wtyczka przez
+ * `registerTreeDataProvider`, a renderuje ją aplikacja.
+ */
+export interface ViewContribution {
+  id: string;
+  title: string;
+}
+
 export interface ToolContribution {
   id: string;
   description: string;
@@ -78,6 +93,8 @@ export interface PluginManifest {
     commands: CommandContribution[];
     /** Narzędzia AI (opcjonalne) — wymagają uprawnienia `ai.tools`. */
     tools?: ToolContribution[];
+    /** Widoki-drzewa (opcjonalne) — wymagają uprawnienia `ui.views`. */
+    views?: ViewContribution[];
   };
 }
 

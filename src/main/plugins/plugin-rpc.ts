@@ -21,6 +21,12 @@ import { userDirs } from '../user-dirs';
 /** Co bramka musi wiedzieć o wtyczce, żeby podjąć decyzję. */
 export interface KontekstWtyczki {
   manifest: PluginManifest;
+  /** Zgłasza widok wtyczki jako gotowy do otwarcia; `false`, gdy nie zadeklarowany. */
+  zarejestrujWidok: (viewId: string) => boolean;
+  /** Prosi interfejs o przeładowanie zawartości widoku. */
+  odswiezWidok: (viewId: string) => void;
+  /** Otwiera terminal we wskazanym katalogu (żądanie idzie do renderera). */
+  otworzTerminal: (cwd: string, label?: string) => void;
   /** Ustawia albo usuwa element paska statusu tej wtyczki. */
   ustawElementPaska: (item: { id: string; text: string; tooltip?: string; command?: string } | { id: string; usun: true }) => void;
   /** Dopisuje komendę do listy widocznej w palecie; zwraca `false`, gdy nie zadeklarowana. */
@@ -159,6 +165,37 @@ const ZDOLNOSCI: Record<string, Zdolnosc> = {
         item.command = commandId;
       }
       ctx.ustawElementPaska(item);
+      return true;
+    }
+  },
+
+  'ui.views.register': {
+    permission: 'ui.views',
+    wykonaj: (ctx, params) => {
+      const viewId = tekst(params, 'viewId', 80);
+      if (!ctx.zarejestrujWidok(viewId)) {
+        throw new BladZdolnosci(RpcError.Denied, `widok ${viewId} nie jest zadeklarowany w manifeście`);
+      }
+      return true;
+    }
+  },
+
+  'ui.views.refresh': {
+    permission: 'ui.views',
+    wykonaj: (ctx, params) => {
+      ctx.odswiezWidok(tekst(params, 'viewId', 80));
+      return true;
+    }
+  },
+
+  'workspace.openTerminal': {
+    permission: 'terminal.write',
+    wykonaj: (ctx, params) => {
+      // Katalog jest tylko tekstem — istnienie sprawdzi dopiero spawn powłoki, tak samo
+      // jak przy otwarciu terminala z interfejsu.
+      const cwd = tekst(params, 'cwd', 512);
+      const label = typeof params['label'] === 'string' ? params['label'].slice(0, 120) : undefined;
+      ctx.otworzTerminal(cwd, label);
       return true;
     }
   },

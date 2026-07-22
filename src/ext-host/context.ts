@@ -8,6 +8,21 @@
 
 import { naZadanie, naZdarzenie, wywolaj } from './rpc';
 
+/** Węzeł drzewa oddawany aplikacji. Bez HTML-a i stylów — rysuje LumaShell. */
+export interface WezelDrzewa {
+  id: string;
+  label: string;
+  description?: string;
+  expandable?: boolean;
+  /** Komenda wtyczki wołana po dwukliku; dostanie `nodeId` tego węzła. */
+  command?: string;
+}
+
+/** Dostawca zawartości drzewa. `nodeId === null` oznacza korzeń. */
+export interface DostawcaDrzewa {
+  getChildren(nodeId: string | null): WezelDrzewa[] | Promise<WezelDrzewa[]>;
+}
+
 /** Zwięzły opis aktywnej zakładki — tyle, ile aplikacja chce o sobie powiedzieć. */
 export interface AktywnaZakladka {
   title: string;
@@ -32,8 +47,14 @@ export interface LumaContext {
   };
 
   commands: {
-    /** Komenda musi być zadeklarowana w manifeście — inaczej aplikacja ją odrzuci. */
-    registerCommand(commandId: string, handler: () => unknown | Promise<unknown>): Promise<void>;
+    /**
+     * Komenda musi być zadeklarowana w manifeście — inaczej aplikacja ją odrzuci.
+     * `nodeId` jest podawany, gdy komendę uruchomiono z węzła drzewa.
+     */
+    registerCommand(
+      commandId: string,
+      handler: (nodeId?: string) => unknown | Promise<unknown>
+    ): Promise<void>;
   };
 
   notifications: {
@@ -45,6 +66,8 @@ export interface LumaContext {
     getActiveTab(): Promise<AktywnaZakladka | null>;
     /** Nasłuch zmiany aktywnej zakładki; zwraca funkcję wypisującą. */
     onDidChangeActiveTab(callback: (tab: AktywnaZakladka | null) => void): () => void;
+    /** Otwiera terminal we wskazanym katalogu (wymaga uprawnienia terminal.write). */
+    openTerminal(cwd: string, label?: string): Promise<void>;
   };
 
   ui: {
@@ -54,6 +77,14 @@ export interface LumaContext {
      */
     setStatusBarItem(item: { id: string; text: string; tooltip?: string; command?: string }): Promise<void>;
     removeStatusBarItem(id: string): Promise<void>;
+    /**
+     * Wystawia drzewo pod widokiem zadeklarowanym w manifeście. Aplikacja pyta o dzieci
+     * dopiero wtedy, gdy użytkownik rozwinie węzeł — całe drzewo nigdy nie jest budowane
+     * z góry.
+     */
+    registerTreeDataProvider(viewId: string, provider: DostawcaDrzewa): Promise<void>;
+    /** Mówi aplikacji, że zawartość widoku się zmieniła i trzeba ją wczytać ponownie. */
+    refreshView(viewId: string): Promise<void>;
   };
 
   /** Trwały magazyn wtyczki: jeden plik JSON na wtyczkę w katalogu danych aplikacji. */
@@ -67,14 +98,24 @@ export interface LumaContext {
 
 export function zbudujKontekst(pluginId: string, permissions: string[]): LumaContext {
   /** Handlery komend wtyczki; aplikacja woła je po `command.invoke`. */
-  const komendy = new Map<string, () => unknown | Promise<unknown>>();
+  const komendy = new Map<string, (nodeId?: string) => unknown | Promise<unknown>>();
+  /** Dostawcy drzew pod identyfikatorami widoków. */
+  const drzewa = new Map<string, DostawcaDrzewa>();
 
   naZadanie('command.invoke', async (params) => {
-    const id = (params as { commandId?: string } | undefined)?.commandId;
-    const handler = id ? komendy.get(id) : undefined;
-    if (!handler) throw new Error(`komenda ${String(id)} nie jest zarejestrowana`);
-    await handler();
+    const p = params as { commandId?: string; nodeId?: string } | undefined;
+    const handler = p?.commandId ? komendy.get(p.commandId) : undefined;
+    if (!handler) throw new Error(`komenda ${String(p?.commandId)} nie jest zarejestrowana`);
+    await handler(p?.nodeId);
     return true;
+  });
+
+  naZadanie('view.getChildren', async (params) => {
+    const p = params as { viewId?: string; nodeId?: string | null } | undefined;
+    const provider = p?.viewId ? drzewa.get(p.viewId) : undefined;
+    if (!provider) throw new Error(`widok ${String(p?.viewId)} nie ma dostawcy danych`);
+    const dzieci = await provider.getChildren(p?.nodeId ?? null);
+    return Array.isArray(dzieci) ? dzieci : [];
   });
 
   return {
@@ -102,7 +143,10 @@ export function zbudujKontekst(pluginId: string, permissions: string[]): LumaCon
     workspace: {
       getActiveTab: () => wywolaj('workspace.activeTab') as Promise<AktywnaZakladka | null>,
       onDidChangeActiveTab: (callback) =>
-        naZdarzenie('workspace.activeTabChanged', (payload) => callback(payload as AktywnaZakladka | null))
+        naZdarzenie('workspace.activeTabChanged', (payload) => callback(payload as AktywnaZakladka | null)),
+      openTerminal: async (cwd, label) => {
+        await wywolaj('workspace.openTerminal', label === undefined ? { cwd } : { cwd, label });
+      }
     },
 
     ui: {
@@ -111,6 +155,13 @@ export function zbudujKontekst(pluginId: string, permissions: string[]): LumaCon
       },
       async removeStatusBarItem(id) {
         await wywolaj('ui.statusBar.remove', { id });
+      },
+      async registerTreeDataProvider(viewId, provider) {
+        drzewa.set(viewId, provider);
+        await wywolaj('ui.views.register', { viewId });
+      },
+      async refreshView(viewId) {
+        await wywolaj('ui.views.refresh', { viewId });
       }
     },
 

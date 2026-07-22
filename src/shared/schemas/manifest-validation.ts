@@ -10,7 +10,8 @@ import type {
   Permission,
   PluginManifest,
   PluginRuntime,
-  ToolContribution
+  ToolContribution,
+  ViewContribution
 } from '@core/plugins/manifest';
 
 /**
@@ -36,7 +37,8 @@ const ALLOWED_PERMISSIONS: readonly Permission[] = [
   'terminal.read',
   'terminal.write',
   'ai.tools',
-  'ui.statusBar'
+  'ui.statusBar',
+  'ui.views'
 ];
 
 export class ManifestValidationError extends Error {
@@ -103,6 +105,12 @@ export function parseManifest(payload: unknown): PluginManifest {
     return tool;
   });
 
+  const rawViews = Array.isArray(contributes['views']) ? contributes['views'] : [];
+  const views: ViewContribution[] = rawViews.map((raw) => {
+    const v = record(raw, 'view');
+    return { id: safeString(v, 'id', 80), title: safeString(v, 'title', 120) };
+  });
+
   // Wersja API jest teraz SPRAWDZANA. Wcześniej pole było czytane i z niczym nieporównywane,
   // więc wtyczka pisana pod nowsze API ładowała się w połowie i psuła w losowym miejscu.
   const apiVersion = safeString(src, 'apiVersion', 8);
@@ -131,7 +139,11 @@ export function parseManifest(payload: unknown): PluginManifest {
     runtime,
     main: safeMain(src),
     permissions,
-    contributes: tools.length > 0 ? { commands, tools } : { commands }
+    contributes: {
+      commands,
+      ...(tools.length > 0 ? { tools } : {}),
+      ...(views.length > 0 ? { views } : {})
+    }
   };
   if (typeof src['description'] === 'string' && src['description'].length > 0) {
     manifest.description = src['description'].slice(0, 500);

@@ -39,7 +39,19 @@ export interface PanelTab {
   panel: PanelKind;
 }
 
-export type Tab = SessionTab | PanelTab;
+/**
+ * Zakładka-widok wtyczki (Plugin API v2). Treść dostarcza wtyczka jako DANE, rysuje ją
+ * aplikacja — dlatego wystarczy tu wskazać, czyj to widok.
+ */
+export interface PluginTab {
+  kind: 'plugin';
+  id: string;
+  pluginId: string;
+  viewId: string;
+  title: string;
+}
+
+export type Tab = SessionTab | PanelTab | PluginTab;
 
 /** Identyfikatory lokalne dla okna — licznik wystarcza, bez UUID. */
 let nextId = 1;
@@ -86,6 +98,8 @@ interface WorkspaceState {
   open: (spec: SessionSpec, label: string) => string;
   /** Otwiera panel jako zakładkę; jeśli taki już jest — tylko go aktywuje. */
   openPanel: (panel: PanelKind) => void;
+  /** Otwiera widok wtyczki jako zakładkę; drugie otwarcie tylko ją aktywuje. */
+  openPluginView: (pluginId: string, viewId: string, title: string) => void;
   closeTab: (id: string) => void;
   activate: (id: string) => void;
   restore: (tabs: WorkspaceTab[], activeIndex: number) => void;
@@ -117,6 +131,16 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       const existing = state.tabs.find((tab) => tab.kind === 'panel' && tab.panel === panel);
       if (existing) return { activeId: existing.id };
       const tab: PanelTab = { kind: 'panel', id: genId('tab'), panel };
+      return { tabs: [...state.tabs, tab], activeId: tab.id };
+    }),
+
+  openPluginView: (pluginId, viewId, title) =>
+    set((state) => {
+      const existing = state.tabs.find(
+        (tab) => tab.kind === 'plugin' && tab.pluginId === pluginId && tab.viewId === viewId
+      );
+      if (existing) return { activeId: existing.id };
+      const tab: PluginTab = { kind: 'plugin', id: genId('tab'), pluginId, viewId, title };
       return { tabs: [...state.tabs, tab], activeId: tab.id };
     }),
 

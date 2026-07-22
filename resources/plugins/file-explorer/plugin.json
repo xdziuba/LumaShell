@@ -1,20 +1,19 @@
 {
   "id": "com.lumashell.file-explorer",
   "name": "File Explorer",
-  "version": "0.1.0",
-  "apiVersion": "1",
+  "version": "2.0.0",
+  "apiVersion": "2",
+  "runtime": "node",
   "main": "dist/index.js",
-  "permissions": ["commands.register", "notifications.show"],
+  "description": "Drzewo plików w zakładce: przeglądanie katalogów, rozmiary, otwarcie terminala w wybranym folderze. Czyta dysk bezpośrednio (node:fs) — nie wysyła niczego na zewnątrz.",
+  "permissions": ["commands.register", "notifications.show", "ui.views", "ui.statusBar", "terminal.write"],
   "contributes": {
+    "views": [{ "id": "pliki", "title": "Pliki" }],
     "commands": [
-      {
-        "id": "fileExplorer.open",
-        "title": "Pliki: Otwórz eksplorator"
-      },
-      {
-        "id": "fileExplorer.showRequirements",
-        "title": "Pliki: Sprawdź wymagania API"
-      }
+      { "id": "fileExplorer.open", "title": "Pliki: otwórz drzewo plików" },
+      { "id": "fileExplorer.setRoot", "title": "Pliki: ustaw katalog główny (z aktywnej zakładki)" },
+      { "id": "fileExplorer.openTerminal", "title": "Pliki: otwórz terminal w tym folderze" },
+      { "id": "fileExplorer.refresh", "title": "Pliki: odśwież drzewo" }
     ]
   }
 }
