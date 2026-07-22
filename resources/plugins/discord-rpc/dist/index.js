@@ -192,6 +192,7 @@ async function polacz() {
     return;
   }
 
+  ostatniBlad = '';
   const s = await polaczZGniazdem(sciezkiGniazd(), 0);
   if (!s) {
     ostatniBlad = 'nie znaleziono działającego Discorda';
@@ -248,7 +249,8 @@ exports.activate = async function activate(context) {
   const info = await ctx.app.getInfo().catch(() => null);
   if (info) startSesji = info.startedAt;
 
-  clientId = (await ctx.storage.get('clientId')) || '';
+  const zapisanyId = await ctx.storage.get('clientId');
+  clientId = typeof zapisanyId === 'string' ? zapisanyId.trim() : '';
   const zapisanaOpcja = await ctx.storage.get('pokazujNazwyZakladek');
   if (typeof zapisanaOpcja === 'boolean') pokazujZakladki = zapisanaOpcja;
 
@@ -285,7 +287,22 @@ exports.activate = async function activate(context) {
       timerPonowienia = null;
     }
     opoznieniePonowienia = 5000;
+    // Client ID czytamy PONOWNIE: typowy przebieg to „wpisz go w pliku i połącz ponownie",
+    // a bez tego komenda używałaby wartości sprzed edycji i wyglądała na zepsutą.
+    const swiezy = await ctx.storage.get('clientId');
+    if (typeof swiezy === 'string' && swiezy.trim()) clientId = swiezy.trim();
+    if (!clientId) {
+      const gdzie = await ctx.storage.path();
+      await ctx.notifications.show(`Discord: najpierw wpisz Application ID w pole "clientId" w ${gdzie}`, 'warn');
+      return;
+    }
     await polacz();
+    // Uzgodnienie jest wysłane, ale READY przychodzi chwilę później — bez tego meldunek
+    // mówiłby „brak połączenia" w momencie, w którym połączenie właśnie się udaje.
+    for (let i = 0; i < 20 && gniazdo && !polaczone; i += 1) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    await odswiezWskaznik();
     await ctx.notifications.show(polaczone ? 'Discord: połączono' : `Discord: ${ostatniBlad || 'próbuję dalej…'}`);
   });
 
@@ -294,10 +311,29 @@ exports.activate = async function activate(context) {
 
   if (!clientId) {
     // Rich Presence wymaga aplikacji założonej w Discord Developer Portal — bez jej
-    // identyfikatora Discord odrzuci uzgodnienie. Mówimy to wprost i podajemy gdzie.
+    // identyfikatora Discord odrzuci uzgodnienie.
+    //
+    // Sam ODCZYT magazynu nie tworzy pliku, więc zakładamy go tutaj z pustym szablonem.
+    // Inaczej użytkownik dostaje ścieżkę do pliku, którego nie ma, i musi się domyślić
+    // zarówno nazwy pola, jak i formatu.
     const gdzie = await ctx.storage.path();
-    loguj('brak Client ID — ustaw pole "clientId" w pliku', gdzie);
-    await ctx.notifications.show(`Discord RPC: ustaw clientId w ${gdzie} (szczegóły w README wtyczki)`, 'warn');
+    // Uwaga: magazyn wraca przez RPC, a JSON nie zna `undefined` — brak wartości przychodzi
+    // jako `null`. Dlatego pytamy o TYP, a nie o `=== undefined`.
+    if (typeof zapisanyId !== 'string') {
+      await ctx.storage.set('clientId', '');
+      await ctx.storage.set(
+        '_jakUstawic',
+        'Wklej Application ID aplikacji z https://discord.com/developers/applications w pole ' +
+          'clientId (same cyfry, w cudzysłowie), zapisz plik i uruchom komendę ' +
+          '"Discord: połącz ponownie" z palety (Ctrl+Shift+P).'
+      );
+      loguj('utworzono plik ustawień z szablonem:', gdzie);
+    }
+    loguj('brak Client ID — uzupełnij pole "clientId" w pliku', gdzie);
+    await ctx.notifications.show(
+      `Discord RPC: wpisz Application ID w pole "clientId" w pliku ${gdzie}, potem komenda „Discord: połącz ponownie"`,
+      'warn'
+    );
     return;
   }
 

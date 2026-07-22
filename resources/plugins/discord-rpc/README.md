@@ -18,9 +18,9 @@ odrzuci połączenie. To wymóg Discorda, nie LumaShella.
    **`lumashell`** — pod tym kluczem wtyczka prosi o duże logo. Bez tego status pojawi się
    bez ikony (reszta działa).
 4. Włącz wtyczkę w LumaShellu (**Wtyczki → Discord Rich Presence → Włączona**). Przy
-   pierwszym uruchomieniu bez identyfikatora wtyczka pokaże powiadomienie ze ścieżką pliku
-   ustawień.
-5. Wpisz identyfikator do tego pliku:
+   pierwszym uruchomieniu wtyczka **zakłada plik ustawień z pustym szablonem** i pokazuje
+   powiadomienie z jego ścieżką.
+5. Wpisz identyfikator do tego pliku (pole `clientId` już tam czeka):
 
 ```json
 { "clientId": "1234567890123456789" }
