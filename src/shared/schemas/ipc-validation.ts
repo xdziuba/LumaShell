@@ -201,7 +201,15 @@ function parseSessionSpec(value: unknown): SessionSpec {
     if (tool !== 'codex' && tool !== 'claude') {
       throw new IpcValidationError(`nieznane narzędzie AI CLI: ${String(tool)}`);
     }
-    return { kind: 'ai-cli', tool, label: requireString(source, 'label', 120) };
+    const cli: Extract<SessionSpec, { kind: 'ai-cli' }> = {
+      kind: 'ai-cli',
+      tool,
+      label: requireString(source, 'label', 120)
+    };
+    // Katalog roboczy: zwykły tekst jak przy powłoce. Nieistniejąca ścieżka wywali spawn,
+    // a błąd wróci do panelu — nie udajemy tu sprawdzania systemu plików.
+    if (source['cwd'] !== undefined) cli.cwd = requireString(source, 'cwd', 512);
+    return cli;
   }
 
   throw new IpcValidationError(`nieznany rodzaj sesji: ${String(kind)}`);

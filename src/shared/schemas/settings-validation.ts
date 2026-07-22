@@ -72,8 +72,27 @@ export function parseSettings(payload: unknown): TerminalSettings {
         SETTINGS_LIMITS.scrollback.max
       )
     ),
-    serialMacros: makra(source['serialMacros'])
+    serialMacros: makra(source['serialMacros']),
+    recentDirs: katalogi(source['recentDirs'])
   };
+}
+
+/**
+ * Ostatnie katalogi: teksty przycięte co do długości i liczby, bez duplikatów.
+ *
+ * To tylko podpowiedź dla interfejsu — istnienie katalogu sprawdza dopiero spawn powłoki,
+ * a ścieżka i tak przechodzi przez walidację SessionSpec przy tworzeniu sesji.
+ */
+function katalogi(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string' || entry.length === 0) continue;
+    const path = entry.slice(0, SETTINGS_LIMITS.dirMaxLength);
+    if (!out.includes(path)) out.push(path);
+    if (out.length >= SETTINGS_LIMITS.recentDirsMaxCount) break;
+  }
+  return out;
 }
 
 /** Makra: tablica niepustych tekstów, przycięta co do długości i liczby. */

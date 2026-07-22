@@ -30,6 +30,11 @@ export default function CommandPalette({ commands, onClose }: CommandPaletteProp
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const activeRef = useRef<HTMLLIElement>(null);
+  // Nawigacja klawiaturą wyłącza chwilowo reakcję na najechanie myszą: lista przewija się
+  // pod NIERUCHOMYM kursorem, więc `mouseenter` odpalałby się sam i odbierał zaznaczenie
+  // strzałkom. Prawdziwy ruch myszy przywraca sterowanie kursorowi.
+  const klawiatura = useRef(false);
 
   const filtered = useMemo(
     () => commands.filter((cmd) => pasuje(`${cmd.title} ${cmd.keywords ?? ''}`, query)),
@@ -40,6 +45,12 @@ export default function CommandPalette({ commands, onClose }: CommandPaletteProp
   useEffect(() => inputRef.current?.focus(), []);
   useEffect(() => setIndex(0), [query]);
 
+  // Zaznaczenie musi zostać w widoku — bez tego strzałki schodziły poza obszar listy,
+  // a scroll stał w miejscu i nie było widać, co jest wybrane.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [index, filtered.length]);
+
   const wykonaj = (cmd: Command | undefined): void => {
     if (!cmd) return;
     onClose();
@@ -49,10 +60,20 @@ export default function CommandPalette({ commands, onClose }: CommandPaletteProp
   const onKeyDown = (event: React.KeyboardEvent): void => {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
+      klawiatura.current = true;
       setIndex((i) => Math.min(i + 1, filtered.length - 1));
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
+      klawiatura.current = true;
       setIndex((i) => Math.max(i - 1, 0));
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      klawiatura.current = true;
+      setIndex(0);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      klawiatura.current = true;
+      setIndex(Math.max(0, filtered.length - 1));
     } else if (event.key === 'Enter') {
       event.preventDefault();
       wykonaj(filtered[index]);
@@ -74,13 +95,16 @@ export default function CommandPalette({ commands, onClose }: CommandPaletteProp
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onKeyDown}
         />
-        <ul className="palette__list">
+        <ul className="palette__list" onMouseMove={() => (klawiatura.current = false)}>
           {filtered.length === 0 && <li className="palette__empty">Brak pasujących poleceń</li>}
           {filtered.map((cmd, i) => (
             <li
               key={cmd.id}
+              ref={i === index ? activeRef : undefined}
               className={`palette__item${i === index ? ' is-active' : ''}`}
-              onMouseEnter={() => setIndex(i)}
+              onMouseEnter={() => {
+                if (!klawiatura.current) setIndex(i);
+              }}
               onClick={() => wykonaj(cmd)}
             >
               <span className="palette__title">{cmd.title}</span>

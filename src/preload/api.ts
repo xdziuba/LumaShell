@@ -35,6 +35,7 @@ import {
   type TerminalCreateResult,
   type TerminalDataEvent,
   type TerminalExitEvent,
+  type UserDirs,
   type WhatsNewEntry,
   type WorkspaceSnapshot
 } from '@shared/types/ipc';
@@ -86,6 +87,11 @@ export const api: LumaApi = {
     pickWallpaper: (): Promise<string | null> => ipcRenderer.invoke(IpcChannel.ThemePickWallpaper)
   },
 
+  dialogs: {
+    pickDirectory: (defaultPath?: string): Promise<string | null> =>
+      ipcRenderer.invoke(IpcChannel.DialogPickDirectory, defaultPath)
+  },
+
   workspace: {
     get: (): Promise<WorkspaceSnapshot> => ipcRenderer.invoke(IpcChannel.WorkspaceGet),
     save: (snapshot: WorkspaceSnapshot): Promise<void> =>
@@ -135,7 +141,13 @@ export const api: LumaApi = {
     runTool: (pluginId: string, toolId: string, args: Record<string, unknown>): Promise<string> =>
       ipcRenderer.invoke(IpcChannel.PluginRunTool, pluginId, toolId, args),
     onToolsChanged: (callback: (tools: PluginToolInfo[]) => void): Unsubscribe =>
-      subscribe(IpcEvent.PluginToolsChanged, callback)
+      subscribe(IpcEvent.PluginToolsChanged, callback),
+    rescan: (): Promise<InstalledPlugin[]> => ipcRenderer.invoke(IpcChannel.PluginRescan)
+  },
+
+  paths: {
+    get: (): Promise<UserDirs> => ipcRenderer.invoke(IpcChannel.AppPaths),
+    open: (kind: keyof UserDirs): void => void ipcRenderer.invoke(IpcChannel.AppOpenDir, kind)
   },
 
   whatsNew: (): Promise<WhatsNewEntry[]> => ipcRenderer.invoke(IpcChannel.AppWhatsNew),

@@ -21,6 +21,7 @@ import {
   selectTheme
 } from '../themes-store';
 import { parseTheme } from '@shared/schemas/theme-validation';
+import { isUserDirKind, userDirs } from '../user-dirs';
 import { IpcChannel, IpcEvent } from '@shared/types/ipc';
 
 export function registerWindowIpc(window: BrowserWindow): void {
@@ -70,6 +71,15 @@ export function registerWindowIpc(window: BrowserWindow): void {
     return JSON.parse(await readFile(join(app.getAppPath(), 'resources', 'whatsnew.json'), 'utf8'));
   });
 
+  // Katalogi użytkownika: ścieżki do pokazania w UI i otwarcie ich w eksploratorze.
+  // Renderer podaje wyłącznie RODZAJ katalogu, nigdy ścieżkę — dzięki temu `shell.openPath`
+  // nie da się namówić na dowolne miejsce w systemie.
+  ipcMain.handle(IpcChannel.AppPaths, () => userDirs());
+  ipcMain.handle(IpcChannel.AppOpenDir, (_event, kind: unknown) => {
+    if (!isUserDirKind(kind)) return;
+    return shell.openPath(userDirs()[kind]);
+  });
+
   // Diagnostyka: otwarcie katalogu logów, zgłoszenie problemu i zapis błędu z renderera.
   ipcMain.handle(IpcChannel.AppOpenLogs, () => shell.openPath(logsDir()));
   ipcMain.handle(IpcChannel.AppReportProblem, () => {
@@ -105,6 +115,19 @@ export function registerWindowIpc(window: BrowserWindow): void {
     if (result.canceled || !result.filePath) return false;
     await writeFile(result.filePath, JSON.stringify(theme, null, 2), 'utf8');
     return true;
+  });
+
+  // Wybór katalogu roboczego dla nowej sesji (terminal / CLI AI). Ścieżkę wskazuje
+  // użytkownik w natywnym oknie, więc jest zaufana — ale gdy wróci tu jako część
+  // SessionSpec, i tak przechodzi przez walidację jak każdy ładunek z renderera.
+  ipcMain.handle(IpcChannel.DialogPickDirectory, async (_event, defaultPath: unknown): Promise<string | null> => {
+    const result = await dialog.showOpenDialog(window, {
+      title: 'Wybierz katalog roboczy',
+      properties: ['openDirectory', 'createDirectory'],
+      defaultPath: typeof defaultPath === 'string' && defaultPath.length > 0 ? defaultPath : undefined
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0]!;
   });
 
   // Wybór tapety: wczytaj obraz i zwróć jako data URL (self-contained w motywie).

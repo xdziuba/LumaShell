@@ -25,6 +25,7 @@ export const IpcChannel = {
   ThemeImport: 'themes:import',
   ThemeExport: 'themes:export',
   ThemePickWallpaper: 'themes:pickWallpaper',
+  DialogPickDirectory: 'dialog:pickDirectory',
   WorkspaceGet: 'workspace:get',
   WorkspaceSave: 'workspace:save',
   ShellList: 'shell:list',
@@ -45,7 +46,10 @@ export const IpcChannel = {
   PluginSetEnabled: 'plugin:setEnabled',
   PluginListTools: 'plugin:listTools',
   PluginRunTool: 'plugin:runTool',
+  PluginRescan: 'plugin:rescan',
   AppWhatsNew: 'app:whatsNew',
+  AppPaths: 'app:paths',
+  AppOpenDir: 'app:openDir',
   AppOpenLogs: 'app:openLogs',
   AppReportProblem: 'app:reportProblem',
   AppReportError: 'app:reportError',
@@ -196,6 +200,19 @@ export interface InstalledPlugin {
   enabled: boolean;
 }
 
+/**
+ * Katalogi użytkownika pokazywane w interfejsie.
+ *
+ * Renderer dostaje same ścieżki do wyświetlenia; otwarcie katalogu zamawia po RODZAJU
+ * (kluczu), nigdy po ścieżce — inaczej byłby to kanał na otwarcie czegokolwiek w systemie.
+ */
+export interface UserDirs {
+  userData: string;
+  plugins: string;
+  themes: string;
+  logs: string;
+}
+
 /** Wpis „Nowości" (What's New) — jedno wydanie. */
 export interface WhatsNewEntry {
   version: string;
@@ -300,7 +317,7 @@ export type SessionSpec =
    * kontem użytkownika (subskrypcja), samo trzyma tokeny — my ich nie dotykamy
    * (docs/architecture/09-agent-ai.md, Tryb B).
    */
-  | { kind: 'ai-cli'; tool: AiCliTool; label: string };
+  | { kind: 'ai-cli'; tool: AiCliTool; label: string; cwd?: string };
 
 /** Oficjalne narzędzia AI CLI, które umiemy uruchomić w terminalu. */
 export type AiCliTool = 'codex' | 'claude';

@@ -3,6 +3,11 @@
  *
  * Liść to jedna sesja terminala; split dzieli obszar na dwoje z przeciąganą granicą.
  * Struktura drzewa i jej zmiany są w `core/workspace/pane-tree`; tu tylko render.
+ *
+ * UWAGA: przy podziale liść zmienia się w tym samym miejscu drzewa na split, więc React
+ * kasuje tu całe poddrzewo i montuje je od nowa. Dlatego terminal NIE może być własnością
+ * komponentu — instancja żyje pod `paneId` w `terminal-instance` i przemontowanie tylko ją
+ * przypina z powrotem.
  */
 
 import { useRef } from 'react';
@@ -35,6 +40,7 @@ export function PaneView({ node, cb }: { node: Pane; cb: PaneCallbacks }): React
         onMouseDown={() => cb.onFocus(node.id)}
       >
         <TerminalView
+          paneId={node.id}
           spec={node.spec}
           settings={cb.settings}
           active={cb.tabActive}

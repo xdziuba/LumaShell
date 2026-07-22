@@ -56,10 +56,13 @@ export function detectAiClis(): AiCliAvailability {
  * Rzuca, gdy narzędzia nie ma w PATH — jawny błąd „zainstaluj codex/claude", nie ciche
  * uruchomienie nie tego, co trzeba. Narzędzie startuje bez argumentów: pierwsze uruchomienie
  * samo poprowadzi logowanie kontem.
+ *
+ * `cwd` jest tu kluczowe: oba narzędzia pracują na projekcie z katalogu, w którym wstały,
+ * więc bez niego lądowały w katalogu domowym i nie widziały żadnego repozytorium.
  */
 export function createAiCliTransport(
   id: string,
-  options: { tool: AiCliTool; columns: number; rows: number }
+  options: { tool: AiCliTool; cwd?: string; columns: number; rows: number }
 ): TerminalTransport {
   const name = CLI_NAME[options.tool];
   const cli = findOnPath(name);
@@ -72,6 +75,7 @@ export function createAiCliTransport(
   return new LocalPtyTransport(id, {
     shell: cli,
     args: [],
+    cwd: options.cwd,
     columns: options.columns,
     rows: options.rows
   });

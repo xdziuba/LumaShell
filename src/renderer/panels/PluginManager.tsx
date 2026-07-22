@@ -15,11 +15,18 @@ import type { InstalledPlugin } from '@shared/types/ipc';
 export default function PluginManager({ onClose }: { onClose: () => void }): React.JSX.Element {
   const [plugins, setPlugins] = useState<InstalledPlugin[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [katalog, setKatalog] = useState('');
 
   useEffect(() => {
     void window.luma.plugins.installed().then(setPlugins);
+    void window.luma.paths.get().then((paths) => setKatalog(paths.plugins));
     return window.luma.plugins.onPluginsChanged(setPlugins);
   }, []);
+
+  const odswiez = (): void => {
+    setPlugins(null);
+    void window.luma.plugins.rescan().then(setPlugins);
+  };
 
   const toggle = (id: string, enabled: boolean): void => {
     void window.luma.plugins.setEnabled(id, enabled).then(setPlugins);
@@ -31,6 +38,18 @@ export default function PluginManager({ onClose }: { onClose: () => void }): Rea
     <div className="panel">
       <header className="panel__header">
         <span className="panel__title">WTYCZKI</span>
+        <div className="panel__header-actions">
+          <button className="panel__link" onClick={odswiez} title="Przeskanuj katalogi wtyczek">
+            Odśwież
+          </button>
+          <button
+            className="panel__link"
+            onClick={() => window.luma.paths.open('plugins')}
+            title={katalog}
+          >
+            Otwórz katalog
+          </button>
+        </div>
         <button className="panel__close" onClick={onClose} aria-label="Zamknij">
           ✕
         </button>
@@ -39,7 +58,12 @@ export default function PluginManager({ onClose }: { onClose: () => void }): Rea
       <div className="panel__body plugins">
         <div className="plugins__list">
           {plugins === null && <div className="panel__hint">ładowanie…</div>}
-          {plugins?.length === 0 && <div className="panel__hint">Brak zainstalowanych wtyczek.</div>}
+          {plugins?.length === 0 && (
+            <div className="panel__hint">
+              Brak zainstalowanych wtyczek. Wrzuć katalog wtyczki (z plikiem plugin.json) do
+              katalogu wtyczek i kliknij „Odśwież".
+            </div>
+          )}
           {plugins?.map((p) => (
             <button
               key={p.id}
@@ -105,6 +129,15 @@ export default function PluginManager({ onClose }: { onClose: () => void }): Rea
             <section className="plugins__section">
               <h4 className="plugins__section-title">Konfiguracja</h4>
               <div className="panel__hint">Ta wtyczka nie ma opcji do skonfigurowania.</div>
+            </section>
+
+            <section className="plugins__section">
+              <h4 className="plugins__section-title">Katalog wtyczek</h4>
+              <div className="panel__hint">
+                Własne wtyczki wrzucasz tutaj — wbudowane siedzą w archiwum aplikacji i są tylko
+                do odczytu.
+              </div>
+              <code className="plugins__path">{katalog || '…'}</code>
             </section>
           </div>
         )}

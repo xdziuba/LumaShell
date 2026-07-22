@@ -15,6 +15,7 @@ import { parseManifest } from '@shared/schemas/manifest-validation';
 import { IpcChannel, IpcEvent, type InstalledPlugin, type PluginToolInfo } from '@shared/types/ipc';
 import { createPluginHost, sendToHost } from './plugin-host';
 import { isDisabled, setDisabled } from './plugin-state-store';
+import { userDirs } from '../user-dirs';
 
 interface LoadedPlugin {
   manifest: PluginManifest;
@@ -36,12 +37,33 @@ const discovered = new Map<string, { manifest: PluginManifest; code: string }>()
 const plugins = new Map<string, LoadedPlugin>();
 let mainWindow: BrowserWindow | undefined;
 
-/** Katalogi, w których szukamy wtyczek: wbudowane w zasobach + własne w userData. */
+/**
+ * Katalogi, w których szukamy wtyczek: wbudowane w zasobach + własne w userData.
+ *
+ * Ten pierwszy w wersji zainstalowanej leży wewnątrz app.asar (tylko do odczytu), więc
+ * katalog użytkownika jest JEDYNYM miejscem, gdzie da się dorzucić własną wtyczkę. Zakłada
+ * go `ensureUserDirs()` na starcie — wcześniej nie istniał i skan go po cichu pomijał.
+ */
 function pluginDirs(): string[] {
-  return [
-    join(app.getAppPath(), 'resources', 'plugins'),
-    join(app.getPath('userData'), 'plugins')
-  ];
+  return [join(app.getAppPath(), 'resources', 'plugins'), userDirs().plugins];
+}
+
+/** Skanuje katalogi wtyczek i zwraca to, co udało się wczytać (manifest + kod). */
+async function scanPlugins(): Promise<Array<{ manifest: PluginManifest; code: string }>> {
+  const found: Array<{ manifest: PluginManifest; code: string }> = [];
+  for (const dir of pluginDirs()) {
+    let entries: string[] = [];
+    try {
+      entries = await readdir(dir);
+    } catch {
+      continue; // katalog może nie istnieć
+    }
+    for (const name of entries) {
+      const loaded = await readPlugin(join(dir, name));
+      if (loaded) found.push(loaded);
+    }
+  }
+  return found;
 }
 
 /** Wczytuje manifest i kod jednej wtyczki z katalogu. */
@@ -254,6 +276,45 @@ function setPluginEnabled(id: string, enabled: boolean): InstalledPlugin[] {
   return installedList();
 }
 
+/**
+ * Ponowny skan katalogów — wtyczkę wrzuconą do `userData/plugins` widać bez restartu.
+ *
+ * Kod wtyczki jest wykonywany w JEDNYM realmie hosta i nie ma czegoś takiego jak wyładowanie
+ * modułu, więc odświeżenie oznacza: wyzerować zebrane wkłady (komendy, narzędzia) i wykonać
+ * kod jeszcze raz. Wtyczka usunięta z dysku znika z listy i przestaje przyjmować wywołania,
+ * ale jej ewentualne timery dożywają do zamknięcia aplikacji — to ograniczenie obecnego
+ * modelu izolacji, nie przeoczenie.
+ */
+async function rescanPlugins(): Promise<InstalledPlugin[]> {
+  const found = await scanPlugins();
+  const seen = new Set(found.map((entry) => entry.manifest.id));
+
+  // Wtyczki skasowane z dysku: przestają istnieć dla palety, narzędzi i invoke.
+  for (const id of [...discovered.keys()]) {
+    if (!seen.has(id)) {
+      discovered.delete(id);
+      plugins.delete(id);
+    }
+  }
+
+  for (const entry of found) {
+    const id = entry.manifest.id;
+    discovered.set(id, entry);
+    if (isDisabled(id)) {
+      plugins.delete(id);
+      continue;
+    }
+    // Świeży wpis: komendy i narzędzia zgłoszą się na nowo przy activate().
+    plugins.set(id, { manifest: entry.manifest, commands: [], tools: [] });
+    sendToHost({ type: 'load', pluginId: id, code: entry.code });
+  }
+
+  notifyRenderer();
+  notifyToolsChanged();
+  notifyPluginsChanged();
+  return installedList();
+}
+
 /** Inicjalizacja: host, IPC i załadowanie wykrytych wtyczek. */
 export async function initPlugins(window: BrowserWindow): Promise<void> {
   mainWindow = window;
@@ -289,24 +350,16 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
     return runPluginTool(pluginId, toolId, safeArgs);
   });
 
+  ipcMain.handle(IpcChannel.PluginRescan, () => rescanPlugins());
+
   await ready;
 
-  for (const dir of pluginDirs()) {
-    let entries: string[] = [];
-    try {
-      entries = await readdir(dir);
-    } catch {
-      continue; // katalog może nie istnieć
-    }
-    for (const name of entries) {
-      const loaded = await readPlugin(join(dir, name));
-      if (!loaded) continue;
-      const id = loaded.manifest.id;
-      discovered.set(id, { manifest: loaded.manifest, code: loaded.code });
-      // Wyłączone wtyczki są znane menedżerowi, ale nie trafiają do hosta.
-      if (isDisabled(id)) continue;
-      plugins.set(id, { manifest: loaded.manifest, commands: [], tools: [] });
-      sendToHost({ type: 'load', pluginId: id, code: loaded.code });
-    }
+  for (const loaded of await scanPlugins()) {
+    const id = loaded.manifest.id;
+    discovered.set(id, loaded);
+    // Wyłączone wtyczki są znane menedżerowi, ale nie trafiają do hosta.
+    if (isDisabled(id)) continue;
+    plugins.set(id, { manifest: loaded.manifest, commands: [], tools: [] });
+    sendToHost({ type: 'load', pluginId: id, code: loaded.code });
   }
 }
