@@ -40,7 +40,13 @@ files:
   - resources/**/*
   - package.json
 
+# Pliki, ktore MUSZA istniec fizycznie na dysku, a nie tylko wewnatrz archiwum:
+# - ext-host.js uruchamia utilityProcess.fork, a ten spawnuje prawdziwy proces systemowy
+#   i nie widzi nakladki Electrona na asar (objaw: proces bez PID-u, bez bledu, bez niczego),
+# - wbudowane wtyczki sa ladowane przez `require` w procesie wtyczki, z tego samego powodu.
 asarUnpack:
+  - 'out/main/ext-host.js'
+  - 'resources/plugins/**'
   - '**/node_modules/node-pty/**'
   - '**/node_modules/serialport/**'
   - '**/node_modules/@serialport/**'

@@ -11,12 +11,13 @@
  * ~30 MB prywatnej pamięci na proces (zmierzone) cena jest do przyjęcia.
  */
 
-import { createWriteStream, type WriteStream } from 'node:fs';
+import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { utilityProcess, type UtilityProcess } from 'electron';
 import type { PluginManifest } from '@core/plugins/manifest';
 import type { ChildMessage, HostControl, HostStatus } from '@core/plugins/protocol';
 import { userDirs } from '../user-dirs';
+import { pozaAsarem } from '../asar';
 
 /** Po tylu awariach w oknie czasu wtyczka trafia do kwarantanny i nie jest wznawiana. */
 const MAX_AWARII = 3;
@@ -56,9 +57,15 @@ export function ustawObserwatora(callback: () => void): void {
   onZmiana = callback;
 }
 
-/** Ścieżka pliku wykonawczego hosta wtyczek (bundlowany razem z procesem głównym). */
+/**
+ * Ścieżka pliku wykonawczego hosta wtyczek (bundlowany razem z procesem głównym).
+ *
+ * MUSI wskazywać prawdziwy plik na dysku: `utilityProcess.fork` uruchamia osobny proces
+ * systemowy, a ten nie widzi nakładki Electrona na archiwum asar. Plik jest w `asarUnpack`,
+ * więc wystarczy przełożyć ścieżkę na katalog rozpakowany.
+ */
 function extHostEntry(): string {
-  return join(__dirname, 'ext-host.js');
+  return pozaAsarem(join(__dirname, 'ext-host.js'));
 }
 
 function logFile(pluginId: string): string {
@@ -102,25 +109,49 @@ export function wyrejestruj(pluginId: string): void {
  */
 export async function uruchom(pluginId: string): Promise<ExtHostInfo | undefined> {
   const wpis = wpisy.get(pluginId);
-  if (!wpis) return undefined;
-  if (wpis.proces) return wpis.info;
-  if (wpis.info.stan === 'kwarantanna') return wpis.info;
+  if (!wpis) {
+    console.warn(`[plugins] ${pluginId}: brak wpisu w nadzorcy — nie uruchamiam`);
+    return undefined;
+  }
+  if (wpis.proces) {
+    console.log(`[plugins] ${pluginId}: proces już działa (pid ${wpis.proces.pid ?? '?'})`);
+    return wpis.info;
+  }
+  if (wpis.info.stan === 'kwarantanna') {
+    console.warn(`[plugins] ${pluginId}: kwarantanna — nie uruchamiam`);
+    return wpis.info;
+  }
+  console.log(`[plugins] ${pluginId}: uruchamiam proces, moduł ${wpis.entry}`);
 
-  const { mkdir } = await import('node:fs/promises');
-  await mkdir(join(userDirs().logs, 'plugins'), { recursive: true }).catch(() => undefined);
+  try {
+    mkdirSync(join(userDirs().logs, 'plugins'), { recursive: true });
+  } catch {
+    // Brak katalogu logów nie może zablokować uruchomienia wtyczki.
+  }
 
   wpis.info.stan = 'startuje';
   wpis.info.blad = undefined;
   wpis.zatrzymywana = false;
   onZmiana();
 
-  const proces = utilityProcess.fork(extHostEntry(), [], {
-    serviceName: `LumaShell Plugin: ${wpis.manifest.name}`,
-    stdio: 'pipe',
-    // Katalog wtyczki jako cwd: ścieżki względne w kodzie wtyczki znaczą to, czego autor
-    // się spodziewa, a nie „katalog, z którego uruchomiono aplikację".
-    cwd: dirname(wpis.entry)
-  });
+  let proces: UtilityProcess;
+  try {
+    proces = utilityProcess.fork(extHostEntry(), [], {
+      serviceName: `LumaShell Plugin: ${wpis.manifest.name}`,
+      stdio: 'pipe',
+      // Katalog wtyczki jako cwd: ścieżki względne w kodzie wtyczki znaczą to, czego autor
+      // się spodziewa, a nie „katalog, z którego uruchomiono aplikację".
+      cwd: dirname(pozaAsarem(wpis.entry))
+    });
+  } catch (error) {
+    // Nieudany start MUSI być widoczny. Cicha porażka tutaj oznacza wtyczkę, która „jest
+    // włączona", a nie działa — i nie ma jak tego zauważyć.
+    wpis.info.stan = 'blad';
+    wpis.info.blad = `Nie udało się uruchomić procesu wtyczki: ${error instanceof Error ? error.message : String(error)}`;
+    console.error(`[plugins] ${pluginId}: ${wpis.info.blad}`);
+    onZmiana();
+    return wpis.info;
+  }
   wpis.proces = proces;
 
   // Log wtyczki do pliku — dziś błędy wtyczek ginęły w konsoli procesu głównego, której
@@ -139,12 +170,15 @@ export async function uruchom(pluginId: string): Promise<ExtHostInfo | undefined
         const control: HostControl = {
           kind: 'ctl',
           action: 'load',
-          entry: wpis.entry,
+          // Kod wtyczki też musi być prawdziwym plikiem — `require` w procesie potomnym
+          // rozwiązuje ścieżkę sam, bez pośrednictwa nakładki asar procesu głównego.
+          entry: pozaAsarem(wpis.entry),
           pluginId,
           permissions: wpis.manifest.permissions
         };
         proces.postMessage(control);
       } else if (status.status === 'loaded') {
+        console.log(`[plugins] ${pluginId}: wtyczka aktywowana (pid ${proces.pid ?? '?'})`);
         wpis.info.stan = 'dziala';
         wpis.info.pid = proces.pid;
         onZmiana();
@@ -153,6 +187,7 @@ export async function uruchom(pluginId: string): Promise<ExtHostInfo | undefined
         // trzyma pętlę zdarzeń), więc kończymy go OD RAZU zamiast czekać na twardy limit.
         proces.kill();
       } else if (status.status === 'error') {
+        console.error(`[plugins] ${pluginId}: błąd wtyczki: ${status.message ?? ''}`);
         wpis.info.stan = 'blad';
         wpis.info.blad = status.message?.slice(0, 500);
         strumien.write(`[host] błąd wtyczki: ${status.message ?? ''}\n`);

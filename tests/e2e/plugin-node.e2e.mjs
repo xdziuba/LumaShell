@@ -51,6 +51,18 @@ const sprawdz = (n, ok, d = '') => wyniki.push({ n, ok, d });
 const wtyczka = async () =>
   ev(`window.luma.plugins.installed().then(l => l.find(p => p.id === ${JSON.stringify(ID)}))`);
 
+// Wtyczki są ładowane PO pokazaniu okna, więc ich IPC pojawia się z opóźnieniem — na
+// zimnym starcie (świeżo zbudowana paczka, skanowanie antywirusem) potrafi to potrwać.
+// Bez tego czekania test bije w niezarejestrowany kanał i wywraca się bez powodu.
+let gotowe = false;
+for (let i = 0; i < 60 && !gotowe; i += 1) {
+  gotowe = Boolean(
+    await ev(`window.luma.plugins.installed().then(l => l.some(p => p.id === ${JSON.stringify(ID)})).catch(() => false)`)
+  );
+  if (!gotowe) await sleep(500);
+}
+sprawdz('API wtyczek gotowe', gotowe);
+
 // --- stan wyjściowy: znaleziona, ale NIE uruchomiona ---
 // Test zaczyna od czystego stanu: jeśli poprzedni przebieg zostawił zgodę, cofamy ją.
 await ev(`window.luma.plugins.setEnabled(${JSON.stringify(ID)}, false)`);
