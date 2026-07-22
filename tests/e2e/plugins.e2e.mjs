@@ -85,6 +85,46 @@ if (hostTarget) {
   sprawdz('host: process niedostępne', (await hev(`typeof process`)) === 'undefined');
   // Most RPC jest jedynym oknem na świat.
   sprawdz('host: most pluginHost dostępny', (await hev(`typeof window.pluginHost`)) === 'object');
+
+  // --- Brak sieci: egzekwowany na SESJI, nie przez CSP ---
+  //
+  // CSP dokumentu blokuje fetch w samym dokumencie, ale NIE obejmuje Web Workerów: worker
+  // utworzony na stronie file:// wychodzi do sieci mimo `default-src 'none'`. Dlatego host
+  // ma własną sesję z `webRequest` anulującym wszystko poza plikami aplikacji. Serwer stoi
+  // lokalnie, więc test nie zależy od internetu.
+  const { createServer } = await import('node:http');
+  const srv = createServer((_req, res) => res.end('SIEC-DZIALA'));
+  const port = await new Promise((r) => srv.listen(0, '127.0.0.1', () => r(srv.address().port)));
+  const cel = `http://127.0.0.1:${port}/sonda`;
+
+  const hevAsync = (expr) =>
+    h.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }).then(
+      (r) => r.result?.result?.value
+    );
+
+  const zDokumentu = await hevAsync(
+    `fetch(${JSON.stringify(cel)}).then(r => r.text()).catch(e => 'ZABLOKOWANE')`
+  );
+  sprawdz('host: fetch z dokumentu zablokowany', zDokumentu === 'ZABLOKOWANE', String(zDokumentu));
+
+  const zWorkera = await hevAsync(`(() => new Promise((resolve) => {
+    const kod = 'self.onmessage = () => { fetch(' + ${JSON.stringify(JSON.stringify(cel))} + ')' +
+      '.then(r => r.text()).then(t => self.postMessage(t)).catch(() => self.postMessage("ZABLOKOWANE")); };';
+    let w;
+    try { w = new Worker(URL.createObjectURL(new Blob([kod], { type: 'text/javascript' }))); }
+    catch (e) { resolve('WORKER NIEDOSTEPNY'); return; }
+    const t = setTimeout(() => resolve('BRAK ODPOWIEDZI'), 5000);
+    w.onmessage = (ev) => { clearTimeout(t); resolve(ev.data); };
+    w.onerror = () => { clearTimeout(t); resolve('BLAD WORKERA'); };
+    w.postMessage(1);
+  }))()`);
+  // Uwaga na interpretację: dziś CSP hosta nie pozwala nawet UTWORZYĆ workera (brak
+  // `worker-src`), więc ten przypadek kończy się błędem workera. Asercja mówi więc tyle,
+  // ile faktycznie sprawdza: tą drogą sieć nie wychodzi. Że anuluje ją także blokada sesji,
+  // zweryfikowano osobno na hoście z luźniejszym CSP — patrz komentarz w plugin-host.ts.
+  sprawdz('host: sieć nie wychodzi z Web Workera', zWorkera !== 'SIEC-DZIALA', String(zWorkera));
+
+  srv.close();
   h.close();
 }
 
