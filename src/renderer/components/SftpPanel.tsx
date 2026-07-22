@@ -86,7 +86,9 @@ export default function SftpPanel({ sessionId, onClose }: SftpPanelProps): React
   const [nadPanelem, setNadPanelem] = useState(false);
   const [edytujSciezke, setEdytujSciezke] = useState(false);
   const [sciezkaDraft, setSciezkaDraft] = useState('');
-  const listaRef = useRef<HTMLDivElement>(null);
+  // Fokus na panelu od razu po otwarciu — inaczej skróty (F2, Delete, F5) wymagałyby
+  // najpierw kliknięcia w listę.
+  const panelRef = useRef<HTMLElement>(null);
 
   const wczytaj = useCallback(
     async (target: string): Promise<void> => {
@@ -113,6 +115,7 @@ export default function SftpPanel({ sessionId, onClose }: SftpPanelProps): React
 
   // Start w katalogu domowym (realpath z '.').
   useEffect(() => {
+    panelRef.current?.focus();
     void window.luma.sftp
       .realpath(sessionId, '.')
       .then((home) => wczytaj(home))
@@ -265,7 +268,7 @@ export default function SftpPanel({ sessionId, onClose }: SftpPanelProps): React
       className={`sftp${nadPanelem ? ' sftp--drop' : ''}`}
       onKeyDown={naKlawisz}
       tabIndex={0}
-      ref={listaRef}
+      ref={panelRef}
       onDragOver={(e) => {
         e.preventDefault();
         setNadPanelem(true);
