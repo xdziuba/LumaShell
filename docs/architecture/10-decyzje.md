@@ -303,3 +303,59 @@ przez deskryptor w procesie głównym jak SSH, (2) jak zrobić Docker/K8s bez ci
 | Telnet odsiewa IAC i poprawnie negocjuje (DO ECHO, WILL SGA) | asercja na bajtach odpowiedzi do serwera |
 | Walidacja: protokół, host, port, ścieżka, nazwa celu, wstrzyknięcie flagi | `npm run test:net-validation`, 19/19 |
 | Pełny obieg TCP przez prawdziwą aplikację (IPC → transport → zdarzenie) | `tests/e2e/network.e2e.mjs` przez CDP, 5/5 |
+
+## D6 — Terminal żyje poza drzewem Reacta
+
+### Kontekst
+
+Podział panelu resetował trwającą powłokę, a zamknięcie sąsiada robiło to samo ocalałemu
+panelowi. Przyczyna nie leżała w store ani w drzewie paneli: `splitLeaf` zachowuje referencję
+i identyfikator dzielonego liścia, więc zależności efektu się nie zmieniają. Winna była
+rekoncyliacja Reacta — `PaneView` na tej samej pozycji zwraca raz element hosta
+`<div class="pane">`, a raz komponent `<SplitView>`. Zmiana typu elementu kasuje całe
+poddrzewo, więc `TerminalView` był odmontowywany, a jego funkcja sprzątająca zamykała sesję
+(`terminal.dispose()` → `transport.disconnect()` → `pty.kill()`).
+
+Klucze (`key`) tego nie naprawiają: rozstrzygają dopasowanie rodzeństwa w listach, a tu liść
+przenosi się o poziom głębiej w drzewie i musi zostać odmontowany.
+
+### Decyzja
+
+Instancja terminala (xterm + sesja + obsługa schowka + własny scrollbar + `ResizeObserver`)
+mieszka w module `renderer/terminal/terminal-instance.ts`, pod kluczem PANELU, poza drzewem
+Reacta. Komponent `TerminalView` jest cienką warstwą: montowanie **przypina** elementy DOM
+instancji do tafli, odmontowanie je **odpina**. Sesja przeżywa jedno i drugie.
+
+Skoro odmontowanie nie zamyka już sesji, sprzątanie musi wynikać ze STANU, a nie z cyklu
+życia komponentu: `disposeTerminalsExcept()` w `App` zamyka wszystko, czego nie ma już
+w drzewie zakładek (zamknięty panel, zamknięta zakładka, odtworzenie układu), a
+`beforeunload` domyka resztę.
+
+### Konsekwencje
+
+* podział panelu i zamknięcie sąsiada nie dotykają trwających powłok,
+* znika podwójny start sesji w trybie deweloperskim (`StrictMode` woła efekty dwukrotnie —
+  drugie wywołanie tylko przypina istniejący terminal),
+* świeży komponent dostaje odtworzone ostatnie zdarzenie sesji (gotowa / zakończona / błąd),
+  bo inaczej panel po podziale wisiałby w stanie „uruchamianie",
+* po ponownym przypięciu wymuszamy `refresh()` — płótno WebGL zostaje inaczej puste,
+* kolory terminala porównujemy po WARTOŚCI, nie po tożsamości obiektu: `App` składa obiekt
+  kolorów przy każdym renderze, a podmiana motywu xterm czyści atlas tekstur.
+
+### Odrzucone warianty
+
+* **Płaska, kluczowana lista liści pozycjonowana CSS-em** — działa, ale wymaga przeliczania
+  geometrii drzewa i przepisania podziałów; ta sama korzyść mniejszym kosztem.
+* **Portale Reacta do kontenerów paneli** — zmiana kontenera portalu i tak przemontowuje
+  dzieci, więc problem wraca.
+
+### Weryfikacja
+
+| Sprawdzone | Jak |
+| --- | --- |
+| podział nie zabija sesji | liczba instancji ConPTY 4 → 5, wszystkie pierwotne nietknięte |
+| zamknięcie nowego panelu zamyka WŁAŚCIWĄ sesję | 5 → 4, ginie dokładnie nowa |
+| przełączanie zakładek nic nie zmienia | 4 → 4 |
+| zamknięcie zakładki z dwoma panelami zwalnia obie sesje | 4 → 2, zero wycieków |
+| ten sam element DOM i płótno po podziale | `document.body.contains(host)` przez CDP |
+| terminal maluje się po przepięciu | zrzut ekranu + `echo` wykonane w tej samej powłoce |

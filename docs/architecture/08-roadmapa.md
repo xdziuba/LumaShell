@@ -283,3 +283,25 @@ Wersja 1.0 dodatkowo zawiera:
 * automatyczne aktualizacje,
 * wersję portable,
 * przywracanie aplikacji po awarii.
+
+## Po 1.0 — poprawki z użytkowania
+
+Pierwsze uruchomienia wersji 1.0 wskazały zestaw rzeczy do naprawienia. Wykonane:
+
+* **sesja przeżywa zmiany układu** — podział panelu i zamknięcie sąsiada nie zabijają już
+  powłoki (decyzja D6),
+* **katalog roboczy sesji** — powłoka i CLI AI startują we wskazanym folderze; ostatnie
+  katalogi są zapamiętywane,
+* **katalogi użytkownika** — `userData/plugins` i `userData/themes` powstają przy starcie,
+  są widoczne w interfejsie i można je otworzyć jednym kliknięciem; wtyczki da się
+  przeskanować bez restartu, a motyw wystarczy wrzucić jako plik `.json`,
+* **menedżer plików SFTP** — zamiast listy do pobierania: zaznaczanie wielu pozycji,
+  tworzenie katalogów, zmiana nazwy, kopiowanie, przenoszenie, usuwanie rekurencyjne,
+  uprawnienia, transfery z postępem i przeciąganie plików z pulpitu,
+* **interfejs** — nazwa zakładki w pasku tytułu, koniec skakania paska zakładek, wspólny
+  scrollbar w całej aplikacji, paleta komend przewijana strzałkami,
+* **nazwa procesu** — Menedżer zadań pokazuje „LumaShell", a nie opis z `package.json`.
+
+Kolejny duży krok to **Plugin API v2**: wtyczki mają realnie rozszerzać aplikację (własne
+panele i widoki, dostęp do plików, sieć, gniazda lokalne), a nie tylko dokładać komendy do
+palety. Wtyczka Discord Rich Presence jest testem akceptacyjnym tej zmiany.
