@@ -84,6 +84,15 @@ let timerWysylki = null;
 let opoznieniePonowienia = 5000;
 let ostatniBlad = '';
 let ostatniaWysylka = 0;
+/** Klucz zasobu z Developer Portal. Pusty = wysyłamy status BEZ grafiki. */
+let assetKey = 'lumashell';
+/** Co poszło i co wróciło — do komendy „diagnostyka" i do logu. */
+let ostatniLadunek = null;
+let ostatniaOdpowiedz = null;
+/** Czy Discord POTWIERDZIŁ przyjęcie statusu (samo połączenie to za mało). */
+let statusPrzyjety = false;
+/** Ochrona przed pętlą: po odrzuceniu próbujemy raz bez grafiki. */
+let probaBezGrafiki = false;
 
 function loguj(...args) {
   console.log('[discord]', ...args);
@@ -95,10 +104,12 @@ async function odswiezWskaznik() {
   await ctx.ui
     .setStatusBarItem({
       id: 'stan',
-      text: polaczone ? 'Discord ●' : 'Discord ○',
-      tooltip: polaczone
-        ? `Połączono. Nazwy zakładek: ${pokazujZakladki ? 'widoczne' : 'ukryte'}.`
-        : `Brak połączenia${ostatniBlad ? ` — ${ostatniBlad}` : ''}. Kliknij, aby spróbować ponownie.`,
+      text: !polaczone ? 'Discord ○' : statusPrzyjety ? 'Discord ●' : 'Discord ◐',
+      tooltip: !polaczone
+        ? `Brak połączenia${ostatniBlad ? ` — ${ostatniBlad}` : ''}. Kliknij, aby spróbować ponownie.`
+        : statusPrzyjety
+          ? `Status ustawiony${probaBezGrafiki ? ' (bez grafiki)' : ''}. Nazwy zakładek: ${pokazujZakladki ? 'widoczne' : 'ukryte'}.`
+          : `Połączono, ale Discord nie potwierdził statusu${ostatniBlad ? ` — ${ostatniBlad}` : ''}. Uruchom „Discord: diagnostyka".`,
       command: 'discord.reconnect'
     })
     .catch(() => undefined);
@@ -106,13 +117,20 @@ async function odswiezWskaznik() {
 
 /** Aktywność pokazywana w Discordzie. `details` to górna linia, `state` dolna. */
 function zbudujAktywnosc(info) {
+  // Discord wymaga, żeby `details` i `state` miały co najmniej 2 znaki — krótsza nazwa
+  // zakładki wywróciłaby cały ładunek, a status po prostu by się nie pokazał.
+  const nazwa = pokazujZakladki && aktywnaZakladka ? aktywnaZakladka.title.slice(0, 120) : 'Terminal';
   const aktywnosc = {
     details: 'LumaShell',
-    state: pokazujZakladki && aktywnaZakladka ? aktywnaZakladka.title.slice(0, 120) : 'Terminal',
+    state: nazwa.length >= 2 ? nazwa : `${nazwa} `,
     timestamps: { start: startSesji },
-    assets: { large_image: 'lumashell', large_text: `LumaShell ${info.version}` },
     instance: false
   };
+  // Grafika jest opcjonalna: klucz musi istnieć w Developer Portal, a jego brak potrafi
+  // sprawić, że Discord odrzuci CAŁY ładunek i status nie pojawi się wcale.
+  if (assetKey && !probaBezGrafiki) {
+    aktywnosc.assets = { large_image: assetKey, large_text: `LumaShell ${info.version}` };
+  }
   return aktywnosc;
 }
 
@@ -124,6 +142,8 @@ async function wyslijStatus() {
     args: { pid: process.pid, activity: zbudujAktywnosc(info) },
     nonce: `${Date.now()}-${Math.floor(process.hrtime()[1] % 100000)}`
   };
+  ostatniLadunek = ladunek;
+  loguj('wysyłam SET_ACTIVITY:', JSON.stringify(ladunek.args.activity));
   gniazdo.write(ramka(OP.FRAME, ladunek));
 }
 
@@ -193,6 +213,8 @@ async function polacz() {
   }
 
   ostatniBlad = '';
+  statusPrzyjety = false;
+  probaBezGrafiki = false;
   const s = await polaczZGniazdem(sciezkiGniazd(), 0);
   if (!s) {
     ostatniBlad = 'nie znaleziono działającego Discorda';
@@ -216,8 +238,25 @@ async function polacz() {
         void wyslijStatus();
         void odswiezWskaznik();
       } else if (op === OP.FRAME && dane?.evt === 'ERROR') {
-        ostatniBlad = `Discord odrzucił: ${dane?.data?.message ?? 'nieznany błąd'}`;
-        loguj(ostatniBlad);
+        ostatniaOdpowiedz = dane;
+        statusPrzyjety = false;
+        ostatniBlad = `Discord odrzucił: ${dane?.data?.message ?? 'nieznany błąd'} (kod ${dane?.data?.code ?? '?'})`;
+        loguj(ostatniBlad, '| pełna odpowiedź:', JSON.stringify(dane));
+        // Najczęstsza przyczyna odrzucenia to klucz grafiki, którego nie ma w Developer
+        // Portal. Próbujemy raz bez niej, zamiast zostawiać użytkownika z pustym statusem.
+        if (!probaBezGrafiki && assetKey) {
+          probaBezGrafiki = true;
+          loguj('ponawiam BEZ grafiki — sprawdź, czy w Developer Portal jest zasób o kluczu', assetKey);
+          void wyslijStatus();
+        }
+        void odswiezWskaznik();
+      } else if (op === OP.FRAME && dane?.cmd === 'SET_ACTIVITY') {
+        // Potwierdzenie: dopiero teraz wiadomo, że status naprawdę poszedł.
+        ostatniaOdpowiedz = dane;
+        statusPrzyjety = true;
+        ostatniBlad = '';
+        loguj('Discord przyjął status', probaBezGrafiki ? '(bez grafiki)' : '');
+        void odswiezWskaznik();
       } else if (op === OP.CLOSE) {
         ostatniBlad = `Discord zamknął połączenie: ${dane?.message ?? ''}`;
         rozlacz();
@@ -253,6 +292,8 @@ exports.activate = async function activate(context) {
   clientId = typeof zapisanyId === 'string' ? zapisanyId.trim() : '';
   const zapisanaOpcja = await ctx.storage.get('pokazujNazwyZakladek');
   if (typeof zapisanaOpcja === 'boolean') pokazujZakladki = zapisanaOpcja;
+  const zapisanyAsset = await ctx.storage.get('assetKey');
+  if (typeof zapisanyAsset === 'string') assetKey = zapisanyAsset.trim();
 
   aktywnaZakladka = await ctx.workspace.getActiveTab().catch(() => null);
   ctx.workspace.onDidChangeActiveTab((tab) => {
@@ -277,6 +318,36 @@ exports.activate = async function activate(context) {
     await odswiezWskaznik();
     await ctx.notifications.show(
       pokazujZakladki ? 'Discord: nazwy zakładek będą widoczne' : 'Discord: nazwy zakładek ukryte'
+    );
+  });
+
+  await ctx.commands.registerCommand('discord.diagnostyka', async () => {
+    // Cały stan w jednym miejscu: co wysłano, co wróciło i czego szukać po stronie
+    // Discorda. Bez tego „połączono, a statusu nie widać" jest nie do rozstrzygnięcia.
+    const gdzie = await ctx.storage.path();
+    const raport = [
+      '--- diagnostyka Discord RPC ---',
+      `gniazdo:            ${gniazdo ? 'otwarte' : 'zamknięte'}`,
+      `uzgodnienie (READY): ${polaczone ? 'tak' : 'nie'}`,
+      `status potwierdzony: ${statusPrzyjety ? 'tak' : 'NIE'}`,
+      `client ID:          ${clientId ? `${clientId.slice(0, 4)}…${clientId.slice(-4)} (${clientId.length} znaków)` : 'BRAK'}`,
+      `klucz grafiki:      ${assetKey || '(brak — status bez obrazka)'}${probaBezGrafiki ? ' [wyłączony po odrzuceniu]' : ''}`,
+      `nazwy zakładek:     ${pokazujZakladki ? 'widoczne' : 'ukryte'}`,
+      `ostatni błąd:       ${ostatniBlad || '(brak)'}`,
+      `ostatnio wysłane:   ${ostatniLadunek ? JSON.stringify(ostatniLadunek.args.activity) : '(nic)'}`,
+      `ostatnia odpowiedź: ${ostatniaOdpowiedz ? JSON.stringify(ostatniaOdpowiedz) : '(brak)'}`,
+      `plik ustawień:      ${gdzie}`,
+      '',
+      'Jeśli status jest potwierdzony, a w Discordzie go nie widać, sprawdź w Discordzie:',
+      'Ustawienia → Aktywność (Activity Privacy) → „Wyświetlaj bieżącą aktywność jako status".',
+      'To ustawienie jest po stronie Discorda i żadna wtyczka go nie obejdzie.'
+    ].join('\n');
+    console.log(raport);
+    await ctx.notifications.show(
+      statusPrzyjety
+        ? 'Discord: status POTWIERDZONY przez Discorda — jeśli go nie widać, włącz w Discordzie „Wyświetlaj bieżącą aktywność jako status". Szczegóły w logu wtyczki.'
+        : `Discord: status NIE potwierdzony${ostatniBlad ? ` — ${ostatniBlad}` : ''}. Szczegóły w logu wtyczki.`,
+      statusPrzyjety ? 'info' : 'warn'
     );
   });
 

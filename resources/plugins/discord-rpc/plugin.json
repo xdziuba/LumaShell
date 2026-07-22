@@ -11,7 +11,8 @@
     "commands": [
       { "id": "discord.status", "title": "Discord: pokaż stan połączenia" },
       { "id": "discord.toggleTabNames", "title": "Discord: przełącz pokazywanie nazw zakładek" },
-      { "id": "discord.reconnect", "title": "Discord: połącz ponownie" }
+      { "id": "discord.reconnect", "title": "Discord: połącz ponownie" },
+      { "id": "discord.diagnostyka", "title": "Discord: diagnostyka" }
     ]
   }
 }

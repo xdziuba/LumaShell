@@ -39,6 +39,29 @@ Plik leży w `%APPDATA%\lumashell\plugins-data\com.lumashell.discord-rpc.json`.
 | `Discord: przełącz pokazywanie nazw zakładek` | patrz „Prywatność" |
 | `Discord: połącz ponownie` | wymusza próbę połączenia bez czekania na ponowienie |
 
+## Nie widzę statusu, choć wtyczka pisze „połączono"
+
+Wskaźnik na pasku statusu rozróżnia trzy stany:
+
+| Wskaźnik | Znaczenie |
+| --- | --- |
+| `Discord ○` | brak połączenia (podpowiedź mówi dlaczego) |
+| `Discord ◐` | połączono, ale Discord **nie potwierdził** statusu |
+| `Discord ●` | status ustawiony i potwierdzony |
+
+Przy `●`, gdy statusu i tak nie widać, przyczyna jest po stronie Discorda:
+**Ustawienia → Aktywność (Activity Privacy) → „Wyświetlaj bieżącą aktywność jako status"**.
+Gdy to jest wyłączone, Discord przyjmuje status i nikomu go nie pokazuje — żadna wtyczka
+tego nie obejdzie.
+
+Komenda **„Discord: diagnostyka"** wypisuje do logu wtyczki pełny stan: czy było uzgodnienie,
+czy status został potwierdzony, co dokładnie wysłano i co Discord odpowiedział.
+
+Jeśli Discord odrzuci ładunek z grafiką (najczęstsza przyczyna: w Developer Portal nie ma
+zasobu o kluczu `lumashell`), wtyczka **automatycznie ponawia bez grafiki** i zapisuje to
+w logu — status pojawi się wtedy bez obrazka. Własny klucz można ustawić polem `assetKey`
+w pliku ustawień; puste pole = status bez grafiki.
+
 ## Prywatność
 
 Nazwa zakładki bywa nazwą hosta SSH (`root@prod-db-01`), a status Discorda widzą inni.
