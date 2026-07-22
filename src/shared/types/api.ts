@@ -80,6 +80,11 @@ export interface LumaApi {
     pickWallpaper(): Promise<string | null>;
   };
 
+  dialogs: {
+    /** Natywne okno wyboru katalogu; zwraca ścieżkę albo null przy anulowaniu. */
+    pickDirectory(defaultPath?: string): Promise<string | null>;
+  };
+
   workspace: {
     /** Zapamiętany układ zakładek; puste `tabs`, gdy nic nie zapisano. */
     get(): Promise<WorkspaceSnapshot>;

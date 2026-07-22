@@ -107,6 +107,19 @@ export function registerWindowIpc(window: BrowserWindow): void {
     return true;
   });
 
+  // Wybór katalogu roboczego dla nowej sesji (terminal / CLI AI). Ścieżkę wskazuje
+  // użytkownik w natywnym oknie, więc jest zaufana — ale gdy wróci tu jako część
+  // SessionSpec, i tak przechodzi przez walidację jak każdy ładunek z renderera.
+  ipcMain.handle(IpcChannel.DialogPickDirectory, async (_event, defaultPath: unknown): Promise<string | null> => {
+    const result = await dialog.showOpenDialog(window, {
+      title: 'Wybierz katalog roboczy',
+      properties: ['openDirectory', 'createDirectory'],
+      defaultPath: typeof defaultPath === 'string' && defaultPath.length > 0 ? defaultPath : undefined
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0]!;
+  });
+
   // Wybór tapety: wczytaj obraz i zwróć jako data URL (self-contained w motywie).
   ipcMain.handle(IpcChannel.ThemePickWallpaper, async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog(window, {

@@ -85,6 +85,15 @@ export function IconProfile({ className }: IconProps): React.JSX.Element {
   );
 }
 
+/** Katalog — otwarcie sesji w wybranym folderze. */
+export function IconFolder({ className }: IconProps): React.JSX.Element {
+  return (
+    <svg {...base} className={className}>
+      <path d="M2 4.5h4l1.2 1.5H14v6.5H2z" />
+    </svg>
+  );
+}
+
 /** Plus — akcje „nowe". */
 export function IconPlus({ className }: IconProps): React.JSX.Element {
   return (

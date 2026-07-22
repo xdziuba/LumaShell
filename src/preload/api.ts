@@ -86,6 +86,11 @@ export const api: LumaApi = {
     pickWallpaper: (): Promise<string | null> => ipcRenderer.invoke(IpcChannel.ThemePickWallpaper)
   },
 
+  dialogs: {
+    pickDirectory: (defaultPath?: string): Promise<string | null> =>
+      ipcRenderer.invoke(IpcChannel.DialogPickDirectory, defaultPath)
+  },
+
   workspace: {
     get: (): Promise<WorkspaceSnapshot> => ipcRenderer.invoke(IpcChannel.WorkspaceGet),
     save: (snapshot: WorkspaceSnapshot): Promise<void> =>

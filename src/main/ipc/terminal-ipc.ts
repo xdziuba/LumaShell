@@ -157,8 +157,8 @@ async function createTransport(
 
   if (spec.kind === 'ai-cli') {
     return {
-      transport: createAiCliTransport(sessionId, { tool: spec.tool, columns, rows }),
-      label: spec.label
+      transport: createAiCliTransport(sessionId, { tool: spec.tool, cwd: spec.cwd, columns, rows }),
+      label: zEtykietaKatalogu(spec.label, spec.cwd)
     };
   }
 
@@ -176,8 +176,21 @@ async function createTransport(
       columns,
       rows
     }),
-    label: shell.label
+    label: zEtykietaKatalogu(shell.label, spec.cwd)
   };
+}
+
+/**
+ * Etykieta sesji wzbogacona o katalog roboczy, gdy został wskazany.
+ *
+ * Nazwa sesji z procesu głównego jest ostateczna — nadpisuje tę ustawioną optymistycznie
+ * w rendererze, więc bez tego zakładka otwarta „w folderze" wracała do samej nazwy powłoki
+ * w chwili zestawienia sesji.
+ */
+function zEtykietaKatalogu(label: string, cwd: string | undefined): string {
+  if (!cwd) return label;
+  const nazwa = basename(cwd);
+  return nazwa ? `${label} — ${nazwa}` : label;
 }
 
 export function registerTerminalIpc(window: BrowserWindow): void {

@@ -16,6 +16,11 @@ export interface TerminalSettings {
   scrollback: number;
   /** Zapamiętane makra portu szeregowego (gotowe komendy). */
   serialMacros: string[];
+  /**
+   * Ostatnio używane katalogi robocze, od najnowszego. Podpowiedź przy otwieraniu terminala
+   * (i CLI AI) „w folderze" — inaczej za każdym razem trzeba by klikać przez natywne okno.
+   */
+  recentDirs: string[];
 }
 
 export const DEFAULT_SETTINGS: TerminalSettings = {
@@ -25,7 +30,8 @@ export const DEFAULT_SETTINGS: TerminalSettings = {
   letterSpacing: 0,
   cursorBlink: true,
   scrollback: 5000,
-  serialMacros: []
+  serialMacros: [],
+  recentDirs: []
 };
 
 /**
@@ -41,5 +47,7 @@ export const SETTINGS_LIMITS = {
   scrollback: { min: 0, max: 200_000 },
   fontFamilyMaxLength: 120,
   macroMaxLength: 512,
-  macroMaxCount: 100
+  macroMaxCount: 100,
+  dirMaxLength: 512,
+  recentDirsMaxCount: 8
 } as const;

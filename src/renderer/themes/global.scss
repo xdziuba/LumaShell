@@ -570,6 +570,44 @@ body {
     }
   }
 
+  // Wiersz z akcją poboczną (np. „otwórz w folderze") — ikona wyjeżdża na hover, żeby
+  // lista powłok pozostała spokojna.
+  &__row {
+    display: flex;
+    align-items: center;
+  }
+
+  &__row-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__row-action {
+    display: flex;
+    align-items: center;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    padding: 4px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    opacity: 0;
+
+    .sidebar__row:hover & {
+      opacity: 1;
+    }
+
+    &:hover {
+      background: rgb(33 230 138 / 0.18);
+      color: var(--text);
+    }
+
+    &:disabled {
+      opacity: 0;
+      cursor: default;
+    }
+  }
+
   &__item {
     color: var(--text-muted);
     padding: 5px 0;
@@ -1287,6 +1325,11 @@ body {
     justify-content: flex-end;
     gap: 8px;
     margin-top: 6px;
+  }
+
+  // Rozpycha akcje: to, co przed nim, ląduje po lewej (np. „Wybierz…"), reszta po prawej.
+  &__spacer {
+    flex: 1;
   }
 
   &__button {

@@ -13,6 +13,7 @@ import { applyTheme } from './theme/apply-theme';
 import {
   IconAi,
   IconContainer,
+  IconFolder,
   IconNetwork,
   IconPlus,
   IconProfile,
@@ -35,7 +36,7 @@ import type {
   ShellInfo,
   SshConnectRequest
 } from '@shared/types/ipc';
-import { DEFAULT_SETTINGS, type TerminalSettings } from '@shared/types/settings';
+import { DEFAULT_SETTINGS, SETTINGS_LIMITS, type TerminalSettings } from '@shared/types/settings';
 
 /** Losowy identyfikator profilu — crypto.randomUUID jest dostępne w rendererze. */
 const newId = (): string => crypto.randomUUID();
@@ -55,6 +56,16 @@ const AI_CLIS: Array<{ tool: AiCliTool; label: string; account: string; install:
 
 // Panele otwierane rzadko ładowane leniwie — poza bundlem startowym
 // (docs/architecture/05-wydajnosc.md).
+/** Ostatni segment ścieżki — krótka etykieta zakładki dla sesji otwartej w katalogu. */
+function nazwaKatalogu(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
+}
+
+/** Czego dotyczy otwarte okno wyboru katalogu roboczego. */
+type ZadanieKatalogu =
+  | { kind: 'shell'; shell: ShellInfo }
+  | { kind: 'ai'; tool: AiCliTool; label: string };
+
 const SettingsPanel = lazy(() => import('./settings/SettingsPanel'));
 const CommandPalette = lazy(() => import('./components/CommandPalette'));
 const SshConnectDialog = lazy(() => import('./components/SshConnectDialog'));
@@ -68,6 +79,7 @@ const AboutPanel = lazy(() => import('./panels/AboutPanel'));
 const ShortcutsPanel = lazy(() => import('./panels/ShortcutsPanel'));
 const WhatsNewPanel = lazy(() => import('./panels/WhatsNewPanel'));
 const PluginManager = lazy(() => import('./panels/PluginManager'));
+const WorkdirDialog = lazy(() => import('./components/WorkdirDialog'));
 const AiPanel = lazy(() => import('./panels/AiPanel'));
 const AiChatPanel = lazy(() => import('./panels/AiChatPanel'));
 
@@ -86,6 +98,8 @@ export function App(): React.JSX.Element {
   const [sftpOpen, setSftpOpen] = useState(false);
   // Ścieżka portu, dla którego otwarty jest dialog konfiguracji (null = zamknięty).
   const [serialDialogPath, setSerialDialogPath] = useState<string | null>(null);
+  // Otwarte okno wyboru katalogu roboczego (null = zamknięte).
+  const [workdir, setWorkdir] = useState<ZadanieKatalogu | null>(null);
   // Identyfikatory sesji z aktywnym zapisem do pliku.
   const [loggingSessions, setLoggingSessions] = useState<Set<string>>(new Set());
   const [pluginCommands, setPluginCommands] = useState<PluginCommand[]>([]);
@@ -297,10 +311,45 @@ export function App(): React.JSX.Element {
   const otworzPowloke = (shell: ShellInfo): void =>
     void open({ kind: 'pty', shellId: shell.id }, shell.label);
 
-  // Uruchomienie oficjalnego CLI AI w nowej zakładce-sesji. Logowanie kontem robi samo
-  // narzędzie przy pierwszym starcie — my nie dotykamy tokenów.
-  const otworzAiCli = (tool: AiCliTool, label: string): void =>
-    void open({ kind: 'ai-cli', tool, label }, label);
+  /**
+   * Uruchomienie oficjalnego CLI AI zawsze przechodzi przez wybór katalogu roboczego:
+   * Codex i Claude Code pracują na projekcie z katalogu startowego, więc domyślny katalog
+   * domowy był dla nich bezużyteczny. Pole jest wypełnione ostatnim katalogiem, więc
+   * zwykle wystarczy Enter. Logowanie kontem robi samo narzędzie — my nie dotykamy tokenów.
+   */
+  const otworzAiCli = (tool: AiCliTool, label: string): void => setWorkdir({ kind: 'ai', tool, label });
+
+  /** Dopisuje katalog na początek listy ostatnich (bez duplikatów) i zapisuje ustawienia. */
+  const zapamietajKatalog = (cwd: string): void => {
+    const recentDirs = [cwd, ...settings.recentDirs.filter((d) => d !== cwd)].slice(
+      0,
+      SETTINGS_LIMITS.recentDirsMaxCount
+    );
+    zmienUstawienia({ ...settings, recentDirs });
+  };
+
+  /** Otwiera sesję zamówioną w oknie katalogu roboczego. Pusta ścieżka = katalog domyślny. */
+  const otworzWKatalogu = (cwd: string): void => {
+    const zadanie = workdir;
+    setWorkdir(null);
+    if (!zadanie) return;
+
+    const sufiks = cwd ? ` — ${nazwaKatalogu(cwd)}` : '';
+    if (zadanie.kind === 'shell') {
+      const spec: Extract<SessionSpec, { kind: 'pty' }> = { kind: 'pty', shellId: zadanie.shell.id };
+      if (cwd) spec.cwd = cwd;
+      open(spec, `${zadanie.shell.label}${sufiks}`);
+    } else {
+      const spec: Extract<SessionSpec, { kind: 'ai-cli' }> = {
+        kind: 'ai-cli',
+        tool: zadanie.tool,
+        label: zadanie.label
+      };
+      if (cwd) spec.cwd = cwd;
+      open(spec, `${zadanie.label}${sufiks}`);
+    }
+    if (cwd) zapamietajKatalog(cwd);
+  };
 
   // Klik portu otwiera dialog konfiguracji; właściwe otwarcie po zatwierdzeniu.
   const otworzPort = (port: SerialPortInfo): void => setSerialDialogPath(port.path);
@@ -404,6 +453,22 @@ export function App(): React.JSX.Element {
         title: `Nowa zakładka: ${shell.label}`,
         keywords: 'nowa terminal powłoka shell',
         run: () => otworzPowloke(shell)
+      });
+      list.push({
+        id: `new-cwd:${shell.id}`,
+        title: `Nowa zakładka w folderze…: ${shell.label}`,
+        keywords: 'katalog folder cwd ścieżka terminal tutaj',
+        run: () => setWorkdir({ kind: 'shell', shell })
+      });
+    }
+    // CLI AI w palecie — do tej pory dało się je uruchomić tylko z paska bocznego i menu.
+    for (const cli of AI_CLIS) {
+      if (!aiClis[cli.tool]) continue;
+      list.push({
+        id: `ai-cli:${cli.tool}`,
+        title: `${cli.label} w folderze…`,
+        keywords: `ai codex claude cli ${cli.account}`,
+        run: () => otworzAiCli(cli.tool, cli.label)
       });
     }
     for (const port of ports) {
@@ -550,14 +615,23 @@ export function App(): React.JSX.Element {
           <div className="sidebar__heading">POWŁOKI</div>
           {shells.length === 0 && <div className="sidebar__item">wykrywanie…</div>}
           {shells.map((shell) => (
-            <button
-              key={shell.id}
-              className="sidebar__item sidebar__item--action"
-              onClick={() => otworzPowloke(shell)}
-            >
-              <IconTerminal className="sidebar__ico" />
-              <span className="sidebar__item-label">{shell.label}</span>
-            </button>
+            <div key={shell.id} className="sidebar__row">
+              <button
+                className="sidebar__item sidebar__item--action sidebar__row-main"
+                onClick={() => otworzPowloke(shell)}
+              >
+                <IconTerminal className="sidebar__ico" />
+                <span className="sidebar__item-label">{shell.label}</span>
+              </button>
+              <button
+                className="sidebar__row-action"
+                onClick={() => setWorkdir({ kind: 'shell', shell })}
+                title={`Otwórz ${shell.label} w wybranym folderze`}
+                aria-label={`Otwórz ${shell.label} w wybranym folderze`}
+              >
+                <IconFolder className="sidebar__ico-sm" />
+              </button>
+            </div>
           ))}
 
           <div className="sidebar__heading sidebar__heading--spaced">ZDALNE</div>
@@ -591,7 +665,7 @@ export function App(): React.JSX.Element {
               disabled={!aiClis[cli.tool]}
               title={
                 aiClis[cli.tool]
-                  ? `Uruchom ${cli.label} — logowanie ${cli.account}`
+                  ? `Uruchom ${cli.label} w wybranym katalogu — logowanie ${cli.account}`
                   : `Nie znaleziono w PATH — zainstaluj: ${cli.install}`
               }
             >
@@ -766,6 +840,21 @@ export function App(): React.JSX.Element {
         </Suspense>
       )}
 
+      {workdir && (
+        <Suspense fallback={null}>
+          <WorkdirDialog
+            title={
+              workdir.kind === 'shell'
+                ? `${workdir.shell.label} w folderze`
+                : `${workdir.label} w folderze`
+            }
+            recent={settings.recentDirs}
+            onConfirm={otworzWKatalogu}
+            onClose={() => setWorkdir(null)}
+          />
+        </Suspense>
+      )}
+
       {serialDialogPath && (
         <Suspense fallback={null}>
           <SerialConnectDialog
@@ -819,6 +908,17 @@ export function App(): React.JSX.Element {
                 <button className="dropup__item" onClick={() => { nowaZakladka(); close(); }}>
                   <span>Nowa zakładka</span>
                   <span className="dropup__hint">Ctrl+T</span>
+                </button>
+                <button
+                  className="dropup__item"
+                  disabled={shells.length === 0}
+                  onClick={() => {
+                    const first = shells[0];
+                    if (first) setWorkdir({ kind: 'shell', shell: first });
+                    close();
+                  }}
+                >
+                  <span>Nowa zakładka w folderze…</span>
                 </button>
                 <div className="dropup__sep" />
                 <button className="dropup__item" onClick={() => { setSshOpen(true); close(); }}>
@@ -878,9 +978,9 @@ export function App(): React.JSX.Element {
                       key={cli.tool}
                       className="dropup__item"
                       onClick={() => { otworzAiCli(cli.tool, cli.label); close(); }}
-                      title={`Uruchom ${cli.label} w terminalu — logowanie ${cli.account}`}
+                      title={`Uruchom ${cli.label} w wybranym katalogu — logowanie ${cli.account}`}
                     >
-                      <span>{cli.label}</span>
+                      <span>{cli.label} w folderze…</span>
                       <span className="dropup__hint">{cli.account}</span>
                     </button>
                   ) : (
