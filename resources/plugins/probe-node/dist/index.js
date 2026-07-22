@@ -36,6 +36,29 @@ exports.activate = function activate(context) {
   console.log('system            :', os.platform(), os.release());
   console.log('-------------------------------------------------------------');
 
+  // Uprawnienia terminal.read i terminal.write przestały być deklaracją bez pokrycia —
+  // te komendy są dowodem, że stoi za nimi realne API.
+  context.commands.registerCommand('probe.terminals', async () => {
+    const sesje = await context.terminal.list();
+    console.log('sesje terminala:', JSON.stringify(sesje));
+    await context.notifications.show(
+      sesje.length === 0 ? 'Brak otwartych sesji' : `Sesje: ${sesje.map((s) => s.label).join(', ')}`
+    );
+  });
+
+  context.commands.registerCommand('probe.read', async () => {
+    const sesje = await context.terminal.list();
+    if (sesje.length === 0) {
+      await context.notifications.show('Brak sesji do odczytu', 'warn');
+      return;
+    }
+    const tekst = await context.terminal.readRecent(sesje[0].sessionId, 10);
+    console.log('ostatnie wiersze sesji ' + sesje[0].label + ':');
+    console.log(tekst);
+    const ile = tekst.split(String.fromCharCode(10)).length;
+    await context.notifications.show('Odczytano ' + ile + ' wierszy z: ' + sesje[0].label);
+  });
+
   // Dowód, że proces ŻYJE dalej, a nie tylko wykonał activate i skończył.
   let tick = 0;
   interwal = setInterval(() => {

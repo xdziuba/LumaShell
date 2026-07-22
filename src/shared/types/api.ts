@@ -144,6 +144,8 @@ export interface LumaApi {
     onToolsChanged(callback: (tools: PluginToolInfo[]) => void): Unsubscribe;
     /** Ponowny skan katalogów wtyczek — bez restartu aplikacji. */
     rescan(): Promise<InstalledPlugin[]>;
+    /** Udostępnia (albo cofa) narzędzia wtyczki agentowi AI — osobna zgoda. */
+    setAiTools(id: string, allowed: boolean): Promise<InstalledPlugin[]>;
     /** Kończy proces wtyczki (tylko runtime: 'node'). */
     stop(id: string): Promise<InstalledPlugin[]>;
     /** Zatrzymuje i uruchamia wtyczkę z bieżącym kodem z dysku. */

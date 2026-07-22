@@ -20,6 +20,14 @@ function statePath(): string {
 interface Stan {
   disabled: Set<string>;
   trusted: Set<string>;
+  /**
+   * Wtyczki, których narzędzia wolno pokazać agentowi AI.
+   *
+   * OSOBNA zgoda, domyślnie pusta — nawet zaufana wtyczka nie trafia do zestawu narzędzi
+   * modelu, dopóki użytkownik tego nie włączy. Powód: agent działa sam, w pętli, i wywoła
+   * narzędzie bez pytania; to zupełnie inne ryzyko niż komenda uruchomiona ręcznie.
+   */
+  aiTools: Set<string>;
 }
 
 let stan: Stan | undefined;
@@ -29,10 +37,14 @@ function load(): Stan {
   const zbior = (value: unknown): Set<string> =>
     new Set(Array.isArray(value) ? value.filter((x): x is string => typeof x === 'string') : []);
   try {
-    const raw = JSON.parse(readFileSync(statePath(), 'utf8')) as { disabled?: unknown; trusted?: unknown };
-    stan = { disabled: zbior(raw.disabled), trusted: zbior(raw.trusted) };
+    const raw = JSON.parse(readFileSync(statePath(), 'utf8')) as {
+      disabled?: unknown;
+      trusted?: unknown;
+      aiTools?: unknown;
+    };
+    stan = { disabled: zbior(raw.disabled), trusted: zbior(raw.trusted), aiTools: zbior(raw.aiTools) };
   } catch {
-    stan = { disabled: new Set(), trusted: new Set() };
+    stan = { disabled: new Set(), trusted: new Set(), aiTools: new Set() };
   }
   return stan;
 }
@@ -42,7 +54,7 @@ function persist(): void {
   try {
     writeFileSync(
       statePath(),
-      JSON.stringify({ disabled: [...s.disabled], trusted: [...s.trusted] }, null, 2),
+      JSON.stringify({ disabled: [...s.disabled], trusted: [...s.trusted], aiTools: [...s.aiTools] }, null, 2),
       'utf8'
     );
   } catch (error) {
@@ -69,6 +81,18 @@ export function setDisabled(id: string, value: boolean): void {
  */
 export function isTrusted(id: string): boolean {
   return load().trusted.has(id);
+}
+
+/** Czy narzędzia tej wtyczki wolno pokazać agentowi AI. Domyślnie NIE. */
+export function aiToolsAllowed(id: string): boolean {
+  return load().aiTools.has(id);
+}
+
+export function setAiToolsAllowed(id: string, value: boolean): void {
+  const s = load();
+  if (value) s.aiTools.add(id);
+  else s.aiTools.delete(id);
+  persist();
 }
 
 export function setTrusted(id: string, value: boolean): void {

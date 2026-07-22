@@ -58,6 +58,7 @@ export const IpcChannel = {
   PluginReload: 'plugin:reload',
   PluginOpenLog: 'plugin:openLog',
   PluginStatusBar: 'plugin:statusBar',
+  PluginSetAiTools: 'plugin:setAiTools',
   PluginViews: 'plugin:views',
   PluginViewChildren: 'plugin:viewChildren',
   PluginRunNodeCommand: 'plugin:runNodeCommand',
@@ -229,6 +230,8 @@ export interface InstalledPlugin {
   /** `sandbox` = izolowany host bez Node (v1); `node` = własny proces z pełnym dostępem. */
   runtime: 'sandbox' | 'node';
   apiVersion: string;
+  /** Czy narzędzia tej wtyczki są udostępnione agentowi AI (osobna zgoda, domyślnie nie). */
+  aiTools: boolean;
   description?: string;
   /** Stan procesu wtyczki — tylko dla `runtime: 'node'`. */
   proces?: {

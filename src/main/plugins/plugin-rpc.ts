@@ -17,6 +17,7 @@ import { app } from 'electron';
 import { hasPermission, type Permission, type PluginManifest } from '@core/plugins/manifest';
 import { RpcError, RPC_TIMEOUT_MS, type RpcMessage, type RpcRequest } from '@core/plugins/protocol';
 import { userDirs } from '../user-dirs';
+import { listaSesji, ostatnieWiersze, wpiszDoSesji } from '../ipc/terminal-ipc';
 
 /** Co bramka musi wiedzieć o wtyczce, żeby podjąć decyzję. */
 export interface KontekstWtyczki {
@@ -202,6 +203,34 @@ const ZDOLNOSCI: Record<string, Zdolnosc> = {
     }
   },
 
+  'terminal.list': {
+    permission: 'terminal.read',
+    wykonaj: () => listaSesji()
+  },
+
+  'terminal.read': {
+    permission: 'terminal.read',
+    wykonaj: (_ctx, params) => {
+      const sessionId = tekst(params, 'sessionId', 80);
+      const ile = typeof params['lines'] === 'number' ? Math.floor(params['lines']) : 50;
+      const wynik = ostatnieWiersze(sessionId, ile);
+      if (wynik === undefined) throw new BladZdolnosci(RpcError.NotFound, 'nie ma takiej sesji');
+      return wynik;
+    }
+  },
+
+  'terminal.write': {
+    permission: 'terminal.write',
+    wykonaj: async (_ctx, params) => {
+      const sessionId = tekst(params, 'sessionId', 80);
+      // Limit długości: wtyczka ma wysyłać komendy, a nie strumieniować megabajty do PTY.
+      const data = tekst(params, 'data', 8000);
+      const ok = await wpiszDoSesji(sessionId, data);
+      if (!ok) throw new BladZdolnosci(RpcError.NotFound, 'nie ma takiej sesji');
+      return true;
+    }
+  },
+
   'workspace.openTerminal': {
     permission: 'terminal.write',
     wykonaj: (ctx, params) => {
@@ -262,13 +291,15 @@ export function obsluzZadanie(pluginId: string, request: RpcRequest, ctx: Kontek
       ? (request.params as Record<string, unknown>)
       : {};
 
-  try {
-    const result = zdolnosc.wykonaj(ctx, params);
-    odpowiedz({ kind: 'res', id: request.id, result: result === undefined ? null : result });
-  } catch (error) {
-    if (error instanceof BladZdolnosci) return blad(error.code, error.message);
-    blad(RpcError.Failed, error instanceof Error ? error.message : String(error));
-  }
+  // Zdolność może być asynchroniczna (np. zapis do sesji) — odpowiadamy dopiero po niej,
+  // żeby wtyczka nie dostawała „gotowe" przed faktem.
+  Promise.resolve()
+    .then(() => zdolnosc.wykonaj(ctx, params))
+    .then((result) => odpowiedz({ kind: 'res', id: request.id, result: result === undefined ? null : result }))
+    .catch((error: unknown) => {
+      if (error instanceof BladZdolnosci) return blad(error.code, error.message);
+      blad(RpcError.Failed, error instanceof Error ? error.message : String(error));
+    });
 }
 
 // --- żądania aplikacja → wtyczka -----------------------------------------------------

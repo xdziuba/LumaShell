@@ -21,7 +21,7 @@ import {
   type PluginToolInfo
 } from '@shared/types/ipc';
 import { createPluginHost, sendToHost } from './plugin-host';
-import { isDisabled, isTrusted, setDisabled, setTrusted } from './plugin-state-store';
+import { aiToolsAllowed, isDisabled, isTrusted, setAiToolsAllowed, setDisabled, setTrusted } from './plugin-state-store';
 import { userDirs } from '../user-dirs';
 import { cofnijUdostepnienie, hostWtyczki, SCHEMAT, udostepnijKatalog } from './plugin-webview';
 import {
@@ -398,6 +398,9 @@ function pluginTools(): PluginToolInfo[] {
   const out: PluginToolInfo[] = [];
   for (const plugin of plugins.values()) {
     if (!hasPermission(plugin.manifest, 'ai.tools')) continue;
+    // Osobna zgoda: narzędzia wtyczki są niewidoczne dla modelu, dopóki użytkownik ich
+    // świadomie nie udostępni. Zaufanie do wtyczki tego NIE obejmuje.
+    if (!aiToolsAllowed(plugin.manifest.id)) continue;
     for (const toolId of plugin.tools) {
       const spec = plugin.manifest.contributes.tools?.find((t) => t.id === toolId);
       if (!spec) continue;
@@ -457,7 +460,8 @@ function installedList(): InstalledPlugin[] {
       // brak zgody znaczy, że jej proces nigdy nie wstał.
       enabled: manifest.runtime === 'node' ? isTrusted(manifest.id) : !isDisabled(manifest.id),
       runtime: manifest.runtime,
-      apiVersion: manifest.apiVersion
+      apiVersion: manifest.apiVersion,
+      aiTools: aiToolsAllowed(manifest.id)
     };
     if (manifest.description) wpis.description = manifest.description;
     const info = manifest.runtime === 'node' ? infoWtyczki(manifest.id) : undefined;
@@ -615,6 +619,13 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
   });
 
   // Narzędzia AI z wtyczek (AI-6).
+  ipcMain.handle(IpcChannel.PluginSetAiTools, (_event, id: unknown, allowed: unknown) => {
+    if (typeof id !== 'string' || typeof allowed !== 'boolean') return installedList();
+    setAiToolsAllowed(id, allowed);
+    notifyToolsChanged();
+    notifyPluginsChanged();
+    return installedList();
+  });
   ipcMain.handle(IpcChannel.PluginStatusBar, () => statusItems());
   ipcMain.handle(IpcChannel.PluginViews, () => viewList());
 

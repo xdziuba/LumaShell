@@ -91,6 +91,15 @@ export interface LumaContext {
     onViewMessage(viewId: string, callback: (payload: unknown) => void): () => void;
   };
 
+  terminal: {
+    /** Otwarte sesje (uprawnienie terminal.read). */
+    list(): Promise<Array<{ sessionId: string; label: string; kind: string }>>;
+    /** Ostatnie wiersze wyjścia sesji, bez sekwencji sterujących (terminal.read). */
+    readRecent(sessionId: string, lines?: number): Promise<string>;
+    /** Wysyła tekst do sesji, tak jakby wpisał go użytkownik (terminal.write). */
+    write(sessionId: string, data: string): Promise<void>;
+  };
+
   /** Trwały magazyn wtyczki: jeden plik JSON na wtyczkę w katalogu danych aplikacji. */
   storage: {
     get<T = unknown>(key: string): Promise<T | undefined>;
@@ -193,6 +202,16 @@ export function zbudujKontekst(pluginId: string, permissions: string[]): LumaCon
           const i = biezaca?.indexOf(callback) ?? -1;
           if (biezaca && i !== -1) biezaca.splice(i, 1);
         };
+      }
+    },
+
+    terminal: {
+      list: () =>
+        wywolaj('terminal.list') as Promise<Array<{ sessionId: string; label: string; kind: string }>>,
+      readRecent: (sessionId, lines = 50) =>
+        wywolaj('terminal.read', { sessionId, lines }) as Promise<string>,
+      write: async (sessionId, data) => {
+        await wywolaj('terminal.write', { sessionId, data });
       }
     },
 

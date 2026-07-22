@@ -43,9 +43,31 @@ import {
  */
 const FLUSH_INTERVAL_MS = 16;
 
+/** OSC: ESC ] … zakończone BEL albo ESC \ (tytuł okna, sekwencje powłoki). */
+const OSC = /\u001B\][^\u0007\u001B]*(?:\u0007|\u001B\\)/g;
+/** CSI: ESC [ … litera (kolory, ruch kursora, czyszczenie ekranu). */
+const CSI = /\u001B\[[0-9;?]*[ -\/]*[@-~]/g;
+const CR = '\r';
+const LF = '\n';
+
+/** Ile ostatnich wierszy każdej sesji trzymamy dla wtyczek i diagnostyki. */
+const PIERSCIEN_WIERSZY = 400;
+
 interface Session {
   transport: TerminalTransport;
   pending: Uint8Array[];
+  /** Etykieta sesji — wtyczka musi wiedzieć, którą sesję widzi, a nie tylko jej UUID. */
+  label: string;
+  /** Rodzaj sesji (pty/ssh/serial/…) — do rozróżnienia po stronie wtyczki. */
+  kind: string;
+  /**
+   * Pierścień ostatnich wierszy wyjścia. Trzymamy TEKST, nie bajty: wtyczka i tak dostaje
+   * tekst, a przechowywanie surowych porcji wymagałoby powtarzania dekodowania UTF-8
+   * rozjechanego między porcjami.
+   */
+  ostatnie: string[];
+  /** Niedokończony wiersz — sklejany z następną porcją. */
+  ogon: string;
   timer: NodeJS.Timeout | undefined;
   /** Ustawione dla sesji SSH — deskryptor połączenia do sprzątnięcia przy zamknięciu. */
   connectionId?: string;
@@ -253,12 +275,17 @@ export function registerTerminalIpc(window: BrowserWindow): void {
       transport,
       pending: [],
       timer: undefined,
+      label,
+      kind: spec.kind,
+      ostatnie: [],
+      ogon: '',
       connectionId: spec.kind === 'ssh' ? spec.connectionId : undefined
     });
 
     transport.onData((data) => {
       const session = sessions.get(sessionId);
       session?.pending.push(data);
+      if (session) zapiszWPierscieniu(session, data);
       // Zapis do pliku surowych bajtów sesji — dokładnie tego, co przyszło z transportu.
       session?.logStream?.write(Buffer.from(data));
       schedule(sessionId, window);
@@ -305,6 +332,52 @@ export function registerTerminalIpc(window: BrowserWindow): void {
 }
 
 /** Zamknięcie wszystkich PTY — inaczej procesy powłok przeżyją aplikację. */
+/**
+ * Dopisuje porcję wyjścia do pierścienia wierszy.
+ *
+ * Sekwencje sterujące terminala (kolory, pozycjonowanie kursora) są usuwane — wtyczka chce
+ * TREŚĆ, a nie strumień sterujący. To celowo prosty filtr: pełna emulacja terminala jest po
+ * stronie xterm w rendererze, tu wystarczy czytelny tekst.
+ */
+function zapiszWPierscieniu(session: Session, data: Uint8Array): void {
+  const tekst = session.ogon + new TextDecoder().decode(data);
+  // Sekwencje sterujące terminala (kolory, pozycjonowanie kursora) są usuwane — wtyczka
+  // chce TREŚĆ, a nie strumień sterujący.
+  const czysty = tekst
+    .replace(OSC, '')
+    .replace(CSI, '')
+    .split(CR)
+    .join('');
+  const linie = czysty.split(LF);
+  session.ogon = linie.pop() ?? '';
+  for (const linia of linie) session.ostatnie.push(linia);
+  if (session.ostatnie.length > PIERSCIEN_WIERSZY) {
+    session.ostatnie.splice(0, session.ostatnie.length - PIERSCIEN_WIERSZY);
+  }
+}
+
+/** Lista otwartych sesji — dla wtyczek z uprawnieniem terminal.read. */
+export function listaSesji(): Array<{ sessionId: string; label: string; kind: string }> {
+  return [...sessions.entries()].map(([sessionId, s]) => ({ sessionId, label: s.label, kind: s.kind }));
+}
+
+/** Ostatnie wiersze wyjścia sesji. `undefined`, gdy sesji nie ma. */
+export function ostatnieWiersze(sessionId: string, ile: number): string | undefined {
+  const session = sessions.get(sessionId);
+  if (!session) return undefined;
+  const wiersze = session.ostatnie.slice(-Math.max(1, Math.min(ile, PIERSCIEN_WIERSZY)));
+  // Ogon to niedokończony wiersz — dokładamy go, a puste końcówki obcinamy.
+  return [...wiersze, session.ogon].join(LF).trimEnd();
+}
+
+/** Zapis do sesji w imieniu wtyczki (uprawnienie terminal.write). */
+export async function wpiszDoSesji(sessionId: string, data: string): Promise<boolean> {
+  const session = sessions.get(sessionId);
+  if (!session) return false;
+  await session.transport.write(data);
+  return true;
+}
+
 export function disposeAllSessions(): void {
   for (const sessionId of [...sessions.keys()]) disposeSession(sessionId);
 }

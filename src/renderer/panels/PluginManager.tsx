@@ -185,6 +185,28 @@ export default function PluginManager({ onClose }: { onClose: () => void }): Rea
               )}
             </section>
 
+            {selected.permissions.includes('ai.tools') && (
+              <section className="plugins__section plugins__section--warn">
+                <h4 className="plugins__section-title">Narzędzia dla agenta AI</h4>
+                <div className="panel__hint">
+                  Agent działa sam, w pętli, i wywoła narzędzie wtyczki <b>bez pytania</b> — to
+                  inne ryzyko niż komenda uruchomiona ręcznie. Dlatego zgoda jest osobna od
+                  włączenia wtyczki i domyślnie wyłączona.
+                </div>
+                <label className="plugins__toggle" title="Udostępnij narzędzia tej wtyczki modelowi">
+                  <input
+                    type="checkbox"
+                    checked={selected.aiTools}
+                    onChange={(e) => void window.luma.plugins.setAiTools(selected.id, e.target.checked).then(setPlugins)}
+                  />
+                  <span className="plugins__toggle-track" />
+                  <span className="plugins__toggle-label">
+                    {selected.aiTools ? 'Widoczne dla modelu' : 'Ukryte przed modelem'}
+                  </span>
+                </label>
+              </section>
+            )}
+
             <section className="plugins__section">
               <h4 className="plugins__section-title">Komendy</h4>
               {selected.commands.length === 0 ? (
