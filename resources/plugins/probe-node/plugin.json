@@ -1,0 +1,13 @@
+{
+  "id": "com.lumashell.probe-node",
+  "name": "Sonda Node",
+  "version": "1.0.0",
+  "apiVersion": "2",
+  "runtime": "node",
+  "main": "dist/index.js",
+  "description": "Wtyczka diagnostyczna: sprawdza, co widzi kod działający we własnym procesie wtyczki. Nic nie zmienia i nic nie wysyła — tylko zapisuje wynik do swojego logu.",
+  "permissions": [],
+  "contributes": {
+    "commands": []
+  }
+}

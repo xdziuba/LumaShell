@@ -11,6 +11,7 @@ import { registerWindowIpc } from './ipc/window-ipc';
 import { disposeAllSessions, registerTerminalIpc } from './ipc/terminal-ipc';
 import { registerAiIpc } from './ipc/ai-ipc';
 import { initPlugins } from './plugins/plugin-manager';
+import { zatrzymajWszystkie } from './plugins/ext-host-supervisor';
 import { initAutoUpdater } from './updater/auto-updater';
 import { initErrorReporter } from './error-reporter';
 import { ensureUserDirs } from './user-dirs';
@@ -50,8 +51,12 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   disposeAllSessions();
+  zatrzymajWszystkie();
   if (process.platform !== 'darwin') app.quit();
 });
 
-// Sieć powłok nie może przeżyć aplikacji nawet przy nagłym zamknięciu.
-app.on('before-quit', disposeAllSessions);
+// Ani powłoki, ani procesy wtyczek nie mogą przeżyć aplikacji — nawet przy nagłym zamknięciu.
+app.on('before-quit', () => {
+  disposeAllSessions();
+  zatrzymajWszystkie();
+});

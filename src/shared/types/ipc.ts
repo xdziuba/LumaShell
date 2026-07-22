@@ -54,6 +54,9 @@ export const IpcChannel = {
   PluginListTools: 'plugin:listTools',
   PluginRunTool: 'plugin:runTool',
   PluginRescan: 'plugin:rescan',
+  PluginStop: 'plugin:stop',
+  PluginReload: 'plugin:reload',
+  PluginOpenLog: 'plugin:openLog',
   AppWhatsNew: 'app:whatsNew',
   AppPaths: 'app:paths',
   AppOpenDir: 'app:openDir',
@@ -207,6 +210,18 @@ export interface InstalledPlugin {
   permissions: string[];
   commands: Array<{ id: string; title: string }>;
   enabled: boolean;
+  /** `sandbox` = izolowany host bez Node (v1); `node` = własny proces z pełnym dostępem. */
+  runtime: 'sandbox' | 'node';
+  apiVersion: string;
+  description?: string;
+  /** Stan procesu wtyczki — tylko dla `runtime: 'node'`. */
+  proces?: {
+    stan: 'zatrzymana' | 'startuje' | 'dziala' | 'blad' | 'kwarantanna';
+    pid?: number;
+    awarie: number;
+    blad?: string;
+    logPath?: string;
+  };
 }
 
 /**

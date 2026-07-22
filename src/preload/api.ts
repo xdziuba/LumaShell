@@ -143,7 +143,10 @@ export const api: LumaApi = {
       ipcRenderer.invoke(IpcChannel.PluginRunTool, pluginId, toolId, args),
     onToolsChanged: (callback: (tools: PluginToolInfo[]) => void): Unsubscribe =>
       subscribe(IpcEvent.PluginToolsChanged, callback),
-    rescan: (): Promise<InstalledPlugin[]> => ipcRenderer.invoke(IpcChannel.PluginRescan)
+    rescan: (): Promise<InstalledPlugin[]> => ipcRenderer.invoke(IpcChannel.PluginRescan),
+    stop: (id: string): Promise<InstalledPlugin[]> => ipcRenderer.invoke(IpcChannel.PluginStop, id),
+    reload: (id: string): Promise<InstalledPlugin[]> => ipcRenderer.invoke(IpcChannel.PluginReload, id),
+    openLog: (id: string): void => void ipcRenderer.invoke(IpcChannel.PluginOpenLog, id)
   },
 
   paths: {

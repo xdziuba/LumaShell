@@ -12,6 +12,15 @@
 import { useEffect, useState } from 'react';
 import type { InstalledPlugin } from '@shared/types/ipc';
 
+/** Stan procesu wtyczki po ludzku — użytkownik nie ma znać nazw wewnętrznych. */
+const STAN_OPIS: Record<string, string> = {
+  zatrzymana: 'proces zatrzymany',
+  startuje: 'uruchamianie…',
+  dziala: 'proces działa',
+  blad: 'błąd',
+  kwarantanna: 'kwarantanna (za dużo awarii)'
+};
+
 export default function PluginManager({ onClose }: { onClose: () => void }): React.JSX.Element {
   const [plugins, setPlugins] = useState<InstalledPlugin[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -72,6 +81,11 @@ export default function PluginManager({ onClose }: { onClose: () => void }): Rea
             >
               <span className={`plugins__dot${p.enabled ? ' is-on' : ''}`} />
               <span className="plugins__name">{p.name}</span>
+              {p.runtime === 'node' && (
+                <span className="plugins__badge" title="Własny proces z pełnym dostępem">
+                  node
+                </span>
+              )}
               <span className="plugins__ver">v{p.version}</span>
             </button>
           ))}
@@ -84,16 +98,77 @@ export default function PluginManager({ onClose }: { onClose: () => void }): Rea
                 <div className="plugins__detail-name">{selected.name}</div>
                 <div className="plugins__detail-id">{selected.id}</div>
               </div>
-              <label className="plugins__toggle" title={selected.enabled ? 'Wyłącz' : 'Włącz'}>
+              <label
+                className="plugins__toggle"
+                title={
+                  selected.runtime === 'node'
+                    ? 'Włączenie oznacza zgodę na uruchomienie programu z pełnym dostępem do komputera'
+                    : selected.enabled
+                      ? 'Wyłącz'
+                      : 'Włącz'
+                }
+              >
                 <input
                   type="checkbox"
                   checked={selected.enabled}
                   onChange={(e) => toggle(selected.id, e.target.checked)}
                 />
                 <span className="plugins__toggle-track" />
-                <span className="plugins__toggle-label">{selected.enabled ? 'Włączona' : 'Wyłączona'}</span>
+                <span className="plugins__toggle-label">
+                  {selected.enabled
+                    ? 'Włączona'
+                    : selected.runtime === 'node'
+                      ? 'Wyłączona (wymaga zgody)'
+                      : 'Wyłączona'}
+                </span>
               </label>
             </div>
+
+            {selected.runtime === 'node' && (
+              <section className="plugins__section plugins__section--warn">
+                <h4 className="plugins__section-title">Pełny dostęp do komputera</h4>
+                <div className="panel__hint">
+                  Ta wtyczka działa we własnym procesie z pełnym Node.js. Znaczy to dokładnie tyle:
+                  jest programem uruchomionym na Twoim koncie i może czytać oraz zmieniać Twoje
+                  pliki, łączyć się z siecią i uruchamiać inne programy. LumaShell tego{' '}
+                  <b>nie ogranicza</b> — ogranicza tylko dostęp do własnych zasobów (terminal,
+                  zakładki, sekrety, narzędzia AI). Dlatego jej proces nie startuje, dopóki jej nie
+                  włączysz.
+                </div>
+                <div className="plugins__proc">
+                  <span className={`plugins__proc-stan is-${selected.proces?.stan ?? 'zatrzymana'}`}>
+                    {STAN_OPIS[selected.proces?.stan ?? 'zatrzymana']}
+                  </span>
+                  {selected.proces?.pid !== undefined && (
+                    <span className="plugins__proc-pid">PID {selected.proces.pid}</span>
+                  )}
+                  {(selected.proces?.awarie ?? 0) > 0 && (
+                    <span className="plugins__proc-pid">awarie: {selected.proces?.awarie}</span>
+                  )}
+                </div>
+                {selected.proces?.blad && <div className="plugins__proc-blad">{selected.proces.blad}</div>}
+                <div className="plugins__proc-akcje">
+                  <button
+                    className="panel__link"
+                    onClick={() => void window.luma.plugins.reload(selected.id).then(setPlugins)}
+                    disabled={!selected.enabled}
+                    title="Zatrzymaj i uruchom z bieżącym kodem z dysku"
+                  >
+                    Przeładuj
+                  </button>
+                  <button
+                    className="panel__link"
+                    onClick={() => void window.luma.plugins.stop(selected.id).then(setPlugins)}
+                    disabled={selected.proces?.stan !== 'dziala' && selected.proces?.stan !== 'startuje'}
+                  >
+                    Zatrzymaj proces
+                  </button>
+                  <button className="panel__link" onClick={() => window.luma.plugins.openLog(selected.id)}>
+                    Log wtyczki
+                  </button>
+                </div>
+              </section>
+            )}
 
             <section className="plugins__section">
               <h4 className="plugins__section-title">Uprawnienia</h4>
