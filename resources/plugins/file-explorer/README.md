@@ -1,47 +1,58 @@
-# LumaShell File Explorer
+# LumaShell File Explorer 2.0
 
-Samodzielny plugin zgodny z aktualnym Plugin API v1. Plugin rejestruje dwie komendy:
+Drzewo plików jako zakładka LumaShella: przeglądanie katalogów, rozmiary plików i otwarcie
+terminala w wybranym folderze.
 
-* `Pliki: Otwórz eksplorator`,
-* `Pliki: Sprawdź wymagania API`.
+## Dlaczego wersja 2.0 wygląda inaczej niż 1.0
 
-## Stan implementacji
+Wersja 1.0 tej wtyczki **nie mogła istnieć**. Plugin API v1 dawało wyłącznie komendy,
+powiadomienia i narzędzia AI — bez dostępu do plików i bez możliwości narysowania czegokolwiek
+w interfejsie. Zamiast eksploratora był w niej więc wykrywacz brakujących zdolności, który
+uczciwie mówił, czego brakuje, zamiast udawać działającą funkcję.
 
-Drzewo katalogów i edytor nie mogą obecnie zostać uruchomione wyłącznie z kodu pluginu.
-LumaShell wykonuje pluginy w sandboxie bez Node.js, a aktualny host przekazuje do
-`activate(context)` tylko:
+W Plugin API v2 wtyczka działa we **własnym procesie z pełnym Node**, więc katalogi czyta
+wprost przez `node:fs` — bez żadnego pośredniczącego API do plików (decyzja D7 w
+`docs/architecture/10-decyzje.md`).
 
-* `context.commands`,
-* `context.notifications`,
-* `context.tools`.
+## Jak to działa
 
-To celowe zabezpieczenie: plugin nie ma dostępu do `fs`, DOM-u głównego okna ani
-wewnętrznego store zakładek. Nie należy go obchodzić przez `require`, `window.open` lub
-prywatne kanały IPC.
+Wtyczka **nie rysuje niczego**. Oddaje węzły drzewa (nazwa, rozmiar, czy da się rozwinąć),
+a rysuje je LumaShell — w swoim motywie, ze swoim zaznaczaniem i nawigacją klawiaturą.
+Dlatego widok wygląda jak reszta aplikacji, a w tej wtyczce nie ma ani linii HTML-a i CSS-a.
 
-## API wymagane przez pełną wersję
-
-Pełna funkcja wymaga publicznego, egzekwowanego na granicy RPC kontraktu obejmującego:
-
-```text
-filesystem.listDirectory(path)
-filesystem.readFile(path)
-filesystem.writeFile(path, content)
-ui.createPanel(...)
-workspace.openTab(...)
+```js
+await ctx.ui.registerTreeDataProvider('pliki', {
+  getChildren: (nodeId) => /* nodeId to ścieżka katalogu albo null dla korzenia */
+});
 ```
 
-oraz odpowiadających mu uprawnień `filesystem.read`, `filesystem.write`,
-`ui.createPanel` i `workspace.modify`. Dokumentacja projektowa wymienia te zdolności, ale
-walidator manifestu i runtime Plugin Hosta jeszcze ich nie implementują.
+Dzieci są pobierane **leniwie**, dopiero przy rozwinięciu węzła — drzewo katalogów potrafi
+mieć dziesiątki tysięcy pozycji i budowanie go z góry nie miałoby sensu.
 
-Po udostępnieniu i opisaniu sygnatur tych metod plugin może dostać właściwy widok drzewa,
-otwieranie pliku w osobnej zakładce, edycję tekstu, zapis oraz ostrzeżenie o niezapisanych
-zmianach. Do tego czasu komendy pokazują stan możliwości zamiast udawać działającą funkcję
-lub naruszać izolację bezpieczeństwa LumaShell.
+## Obsługa
 
-## Instalacja deweloperska
+| Czynność | Efekt |
+| --- | --- |
+| paleta → **Pliki (File Explorer)** | otwiera drzewo jako zakładkę |
+| klik na katalogu | rozwija/zwija |
+| **dwuklik** na katalogu | otwiera terminal w tym katalogu |
+| `F5` albo **Odśwież** | wczytuje drzewo od nowa |
+| paleta → **Pliki: ustaw katalog główny** | ustawia korzeń drzewa |
 
-Katalog znajduje się w `resources/plugins`, więc LumaShell wykrywa go tak samo jak
-wbudowane przykłady `hello` i `toolbox`. Bundle `dist/index.js` jest samowystarczalnym
-CommonJS bez zależności rozwiązywanych w czasie działania.
+Katalog główny to domyślnie katalog domowy. Można go zmienić polem `katalogGlowny` w pliku
+`%APPDATA%\lumashell\plugins-data\com.lumashell.file-explorer.json`.
+
+## Uprawnienia
+
+`ui.views` (własny widok), `ui.statusBar` (wskaźnik katalogu), `terminal.write` (otwarcie
+terminala), `commands.register`, `notifications.show`.
+
+Wtyczka działa z `runtime: "node"`, więc ma pełny dostęp do plików — i dlatego jej włączenie
+wymaga świadomej zgody w menedżerze wtyczek. Nic nie wysyła na zewnątrz: czyta katalogi
+i tyle.
+
+## Czego jeszcze nie ma
+
+Edycji plików — do tego potrzebny jest webview (dowolny komponent wtyczki w zakładce), który
+jest kolejnym etapem Plugin API. Wtedy dwuklik na PLIKU otworzy edytor, a nie tylko dwuklik
+na katalogu otworzy terminal.

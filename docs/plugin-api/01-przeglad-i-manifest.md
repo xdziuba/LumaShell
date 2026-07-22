@@ -48,7 +48,37 @@ context.workspace.onDidChangeActiveTab(cb): () => void
 context.storage.get<T>(key): Promise<T | undefined>
 context.storage.set(key, value): Promise<void>
 context.storage.path(): Promise<string>
+
+context.workspace.openTerminal(cwd, label?): Promise<void>   // wymaga terminal.write
+context.ui.setStatusBarItem({ id, text, tooltip?, command? }): Promise<void>
+context.ui.removeStatusBarItem(id): Promise<void>
+context.ui.registerTreeDataProvider(viewId, provider): Promise<void>  // wymaga ui.views
+context.ui.refreshView(viewId): Promise<void>
 ```
+
+### Widoki (drzewa) jako zakładki
+
+Wtyczka deklaruje widok w manifeście i dostarcza mu DANE — rysowaniem zajmuje się aplikacja:
+
+```json
+"contributes": {
+  "views": [{ "id": "pliki", "title": "Pliki" }]
+}
+```
+
+```ts
+await context.ui.registerTreeDataProvider('pliki', {
+  // `nodeId === null` to korzeń; dzieci są pobierane dopiero przy rozwinięciu węzła
+  getChildren: (nodeId) => [
+    { id: 'a', label: 'katalog', expandable: true, command: 'moja.komenda' },
+    { id: 'b', label: 'plik.txt', description: '1,2 KB' }
+  ]
+});
+```
+
+Węzeł nie niesie HTML-a ani stylów — LumaShell rysuje go w bieżącym motywie, ze swoim
+zaznaczaniem i nawigacją klawiaturą. Komenda węzła dostaje jego `id` jako pierwszy argument
+handlera, więc identyfikatorem warto zrobić coś użytecznego (np. ścieżkę).
 
 Każde wywołanie idzie przez bramkę uprawnień w procesie głównym i **ma odpowiedź**: brak
 uprawnienia to czytelny błąd `EPERM`, a nie ciche nic. Komenda musi być zadeklarowana
