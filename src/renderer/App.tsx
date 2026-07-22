@@ -82,6 +82,7 @@ const ShortcutsPanel = lazy(() => import('./panels/ShortcutsPanel'));
 const WhatsNewPanel = lazy(() => import('./panels/WhatsNewPanel'));
 const PluginManager = lazy(() => import('./panels/PluginManager'));
 const PluginTreeView = lazy(() => import('./plugins/PluginTreeView'));
+const PluginWebview = lazy(() => import('./plugins/PluginWebview'));
 const WorkdirDialog = lazy(() => import('./components/WorkdirDialog'));
 const AiPanel = lazy(() => import('./panels/AiPanel'));
 const AiChatPanel = lazy(() => import('./panels/AiChatPanel'));
@@ -836,7 +837,11 @@ export function App(): React.JSX.Element {
                   <div className="panel-view">
                     <Suspense fallback={<div className="panel-card__loading">ładowanie…</div>}>
                       {view ? (
-                        <PluginTreeView view={view} onClose={() => closeTab(tab.id)} />
+                        view.type === 'webview' ? (
+                          <PluginWebview view={view} onClose={() => closeTab(tab.id)} />
+                        ) : (
+                          <PluginTreeView view={view} onClose={() => closeTab(tab.id)} />
+                        )
                       ) : (
                         // Wtyczka mogła zostać wyłączona przy otwartej zakładce — mówimy to
                         // wprost zamiast pokazywać puste drzewo.

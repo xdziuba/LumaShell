@@ -15,9 +15,14 @@ import { zatrzymajWszystkie } from './plugins/ext-host-supervisor';
 import { initAutoUpdater } from './updater/auto-updater';
 import { initErrorReporter } from './error-reporter';
 import { ensureUserDirs } from './user-dirs';
+import { obsluzSchemat, zarejestrujSchemat } from './plugins/plugin-webview';
 
 // Handlery błędów jak najwcześniej — żeby złapać także wyjątki podczas startu.
 initErrorReporter();
+
+// Schemat widoków wtyczek MUSI być zarejestrowany przed gotowością aplikacji — Chromium
+// czyta listę uprzywilejowanych schematów raz, przy starcie.
+zarejestrujSchemat();
 
 /** Znacznik do pomiaru czasu startu — raportowany po pokazaniu okna. */
 const startedAt = Date.now();
@@ -42,6 +47,7 @@ app.whenReady().then(() => {
   // Katalogi użytkownika przed czymkolwiek innym: skan wtyczek i lista motywów zakładają,
   // że istnieją, a przy pierwszym uruchomieniu ich nie ma.
   ensureUserDirs();
+  obsluzSchemat();
   bootstrap();
 
   app.on('activate', () => {

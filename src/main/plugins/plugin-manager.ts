@@ -8,7 +8,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { app, ipcMain, shell, type BrowserWindow } from 'electron';
 import { hasPermission, type PluginManifest } from '@core/plugins/manifest';
 import { parseManifest } from '@shared/schemas/manifest-validation';
@@ -23,6 +23,7 @@ import {
 import { createPluginHost, sendToHost } from './plugin-host';
 import { isDisabled, isTrusted, setDisabled, setTrusted } from './plugin-state-store';
 import { userDirs } from '../user-dirs';
+import { cofnijUdostepnienie, hostWtyczki, SCHEMAT, udostepnijKatalog } from './plugin-webview';
 import {
   dzialajaceWtyczki,
   infoWtyczki,
@@ -215,7 +216,16 @@ function handleHostMessage(raw: unknown): void {
 async function uruchomNode(manifest: PluginManifest, entry: string): Promise<void> {
   zarejestruj(manifest, entry);
   plugins.set(manifest.id, { manifest, commands: [], tools: [] });
+  // Widoki-strony nie mają dostawcy danych — są dostępne od chwili, gdy wtyczka działa.
+  for (const view of manifest.contributes.views ?? []) {
+    if (view.type === 'webview') dodajWidok(manifest, view, dirname(dirname(entry)));
+  }
   await uruchom(manifest.id);
+}
+
+/** Katalog wtyczki (rodzic katalogu z modułem wejściowym). */
+function katalogWtyczki(pluginId: string): string {
+  return dirname(dirname(discovered.get(pluginId)?.entry ?? ''));
 }
 
 /** Wyłączenie: proces ginie, a wtyczka przestaje istnieć dla palety i bramki RPC. */
@@ -252,14 +262,13 @@ function kontekstWtyczki(pluginId: string): KontekstWtyczki | undefined {
     zarejestrujWidok: (viewId) => {
       const declared = plugin.manifest.contributes.views?.find((v) => v.id === viewId);
       if (!declared) return false;
-      widoki.set(`${pluginId}::${viewId}`, {
-        pluginId,
-        pluginName: plugin.manifest.name,
-        id: declared.id,
-        title: declared.title
-      });
-      notifyViews();
+      dodajWidok(plugin.manifest, declared, katalogWtyczki(pluginId));
       return true;
+    },
+    wyslijDoWidoku: (viewId, payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IpcEvent.PluginToView, { pluginId, viewId, payload });
+      }
     },
     odswiezWidok: (viewId) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -312,6 +321,30 @@ function statusItems(): PluginStatusItem[] {
   return [...elementyPaska.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, item]) => item);
 }
 
+/**
+ * Dopisuje widok wtyczki do listy dostępnych.
+ *
+ * Drzewo trafia tu dopiero, gdy wtyczka zgłosi dostawcę danych (bez niego nie ma czego
+ * pokazać). Widok-strona (`webview`) nie ma dostawcy — istnieje od chwili, gdy wtyczka
+ * działa, bo cała jego treść jest jej plikiem.
+ */
+function dodajWidok(manifest: PluginManifest, declared: NonNullable<PluginManifest['contributes']['views']>[number], katalogWtyczki: string): void {
+  const wpis: PluginView = {
+    pluginId: manifest.id,
+    pluginName: manifest.name,
+    id: declared.id,
+    title: declared.title,
+    type: declared.type === 'webview' ? 'webview' : 'tree'
+  };
+  if (wpis.type === 'webview' && declared.entry) {
+    udostepnijKatalog(manifest.id, katalogWtyczki);
+    // W adresie separatorem jest zawsze ukośnik, także gdy manifest podał backslash.
+    wpis.url = `${SCHEMAT}://${hostWtyczki(manifest.id)}/${declared.entry.replace(/\\/g, '/')}`;
+  }
+  widoki.set(`${manifest.id}::${declared.id}`, wpis);
+  notifyViews();
+}
+
 /** Widoki wszystkich wtyczek — kolejność stabilna. */
 function viewList(): PluginView[] {
   return [...widoki.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
@@ -325,6 +358,7 @@ function notifyViews(): void {
 
 /** Zdejmuje widoki wyłączanej wtyczki — jej zakładki nie mają skąd brać danych. */
 function usunWidoki(pluginId: string): void {
+  cofnijUdostepnienie(pluginId);
   let zmiana = false;
   for (const klucz of [...widoki.keys()]) {
     if (klucz.startsWith(`${pluginId}::`)) {
@@ -583,6 +617,16 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
   // Narzędzia AI z wtyczek (AI-6).
   ipcMain.handle(IpcChannel.PluginStatusBar, () => statusItems());
   ipcMain.handle(IpcChannel.PluginViews, () => viewList());
+
+  // Wiadomość z ramki widoku do procesu wtyczki. Bramka jest ta sama: widok musi być
+  // zgłoszony przez żywą wtyczkę, inaczej wiadomość nigdzie nie trafia.
+  ipcMain.handle(IpcChannel.PluginViewMessage, async (_event, pluginId: unknown, viewId: unknown, payload: unknown) => {
+    if (typeof pluginId !== 'string' || typeof viewId !== 'string') return;
+    if (!widoki.has(`${pluginId}::${viewId}`)) return;
+    await zadaj(pluginId, 'view.message', { viewId, payload }).catch((error: unknown) => {
+      console.warn(`[plugins] ${pluginId}: widok ${viewId} nie przyjął wiadomości:`, (error as Error).message);
+    });
+  });
 
   // Zawartość drzewa: renderer pyta o dzieci węzła, my pytamy wtyczkę. Bramka jest ta sama
   // co wszędzie — widok musi być zgłoszony przez ŻYWĄ wtyczkę.

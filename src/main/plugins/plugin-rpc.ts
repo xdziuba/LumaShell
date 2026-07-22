@@ -25,6 +25,8 @@ export interface KontekstWtyczki {
   zarejestrujWidok: (viewId: string) => boolean;
   /** Prosi interfejs o przeładowanie zawartości widoku. */
   odswiezWidok: (viewId: string) => void;
+  /** Wysyła wiadomość do ramki widoku (webview). */
+  wyslijDoWidoku: (viewId: string, payload: unknown) => void;
   /** Otwiera terminal we wskazanym katalogu (żądanie idzie do renderera). */
   otworzTerminal: (cwd: string, label?: string) => void;
   /** Ustawia albo usuwa element paska statusu tej wtyczki. */
@@ -184,6 +186,18 @@ const ZDOLNOSCI: Record<string, Zdolnosc> = {
     permission: 'ui.views',
     wykonaj: (ctx, params) => {
       ctx.odswiezWidok(tekst(params, 'viewId', 80));
+      return true;
+    }
+  },
+
+  'ui.views.post': {
+    permission: 'ui.views',
+    wykonaj: (ctx, params) => {
+      // Ładunek jest przekazywany bez interpretacji — to prywatny protokół wtyczki i jej
+      // własnej strony. Rozmiar ograniczamy, żeby jedna wtyczka nie zapchała IPC.
+      const json = JSON.stringify(params['payload'] ?? null);
+      if (json.length > 256_000) throw new BladZdolnosci(RpcError.Invalid, 'wiadomość za duża (limit 256 kB)');
+      ctx.wyslijDoWidoku(tekst(params, 'viewId', 80), JSON.parse(json));
       return true;
     }
   },

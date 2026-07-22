@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <title>Edytor pliku</title>
+    <!--
+      To jest własna strona wtyczki, serwowana ze schematu luma-view://. Nagłówek CSP
+      ustawia APLIKACJA (plugin-webview.ts), więc nie da się jej stąd poluzować: skrypty
+      wyłącznie z tego pochodzenia, zero sieci, zero Node.
+    -->
+    <link rel="stylesheet" href="./edytor.css" />
+  </head>
+  <body>
+    <div class="pasek">
+      <span id="sciezka" class="sciezka">(nie wybrano pliku)</span>
+      <span id="stan" class="stan"></span>
+      <button id="zapisz" class="btn" disabled>Zapisz</button>
+    </div>
+    <textarea id="tresc" class="tresc" spellcheck="false" disabled></textarea>
+    <script src="/__luma/api.js"></script>
+    <script src="./edytor.js"></script>
+  </body>
+</html>

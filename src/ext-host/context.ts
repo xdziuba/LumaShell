@@ -85,6 +85,10 @@ export interface LumaContext {
     registerTreeDataProvider(viewId: string, provider: DostawcaDrzewa): Promise<void>;
     /** Mówi aplikacji, że zawartość widoku się zmieniła i trzeba ją wczytać ponownie. */
     refreshView(viewId: string): Promise<void>;
+    /** Wysyła wiadomość do własnej strony widoku (`type: "webview"`). */
+    postToView(viewId: string, payload: unknown): Promise<void>;
+    /** Nasłuch wiadomości OD strony widoku; zwraca funkcję wypisującą. */
+    onViewMessage(viewId: string, callback: (payload: unknown) => void): () => void;
   };
 
   /** Trwały magazyn wtyczki: jeden plik JSON na wtyczkę w katalogu danych aplikacji. */
@@ -101,6 +105,20 @@ export function zbudujKontekst(pluginId: string, permissions: string[]): LumaCon
   const komendy = new Map<string, (nodeId?: string) => unknown | Promise<unknown>>();
   /** Dostawcy drzew pod identyfikatorami widoków. */
   const drzewa = new Map<string, DostawcaDrzewa>();
+  /** Nasłuchy wiadomości ze stron widoków (webview). */
+  const odbiorcyWidokow = new Map<string, Array<(payload: unknown) => void>>();
+
+  naZadanie('view.message', (params) => {
+    const p = params as { viewId?: string; payload?: unknown } | undefined;
+    for (const cb of odbiorcyWidokow.get(p?.viewId ?? '') ?? []) {
+      try {
+        cb(p?.payload);
+      } catch (error) {
+        console.error('[wtyczka] błąd obsługi wiadomości z widoku:', error);
+      }
+    }
+    return true;
+  });
 
   naZadanie('command.invoke', async (params) => {
     const p = params as { commandId?: string; nodeId?: string } | undefined;
@@ -162,6 +180,19 @@ export function zbudujKontekst(pluginId: string, permissions: string[]): LumaCon
       },
       async refreshView(viewId) {
         await wywolaj('ui.views.refresh', { viewId });
+      },
+      async postToView(viewId, payload) {
+        await wywolaj('ui.views.post', { viewId, payload });
+      },
+      onViewMessage(viewId, callback) {
+        const lista = odbiorcyWidokow.get(viewId) ?? [];
+        lista.push(callback);
+        odbiorcyWidokow.set(viewId, lista);
+        return () => {
+          const biezaca = odbiorcyWidokow.get(viewId);
+          const i = biezaca?.indexOf(callback) ?? -1;
+          if (biezaca && i !== -1) biezaca.splice(i, 1);
+        };
       }
     },
 

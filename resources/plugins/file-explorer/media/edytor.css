@@ -1,0 +1,104 @@
+/* Styl edytora wtyczki. Świadomie zbliżony do LumaShella, ale to WŁASNE style wtyczki —
+   aplikacja nie narzuca tu wyglądu, bo o to właśnie chodzi w webview. */
+
+:root {
+  color-scheme: dark;
+  --tlo: #08150f;
+  --tekst: #d7f5e6;
+  --przygaszony: #7fa593;
+  --akcent: #21e68a;
+  --ramka: #1c3a2c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  color: var(--tekst);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.pasek {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ramka);
+}
+
+.sciezka {
+  flex: 1;
+  min-width: 0;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--przygaszony);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
+.stan {
+  font-size: 11px;
+  color: var(--przygaszony);
+  white-space: nowrap;
+}
+
+.stan.zmieniony {
+  color: #ffbe5a;
+}
+
+.stan.zapisany {
+  color: var(--akcent);
+}
+
+.btn {
+  border: 1px solid var(--ramka);
+  background: transparent;
+  color: var(--tekst);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 4px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  background: rgba(33, 230, 138, 0.12);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tresc {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: none;
+  padding: 12px;
+  background: transparent;
+  color: var(--tekst);
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.tresc:disabled {
+  color: var(--przygaszony);
+}

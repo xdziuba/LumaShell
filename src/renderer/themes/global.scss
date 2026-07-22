@@ -2742,3 +2742,19 @@ body {
     white-space: nowrap;
   }
 }
+
+// Ramka widoku wtyczki (webview). Wypełnia panel; tło zostawiamy wtyczce, ale ramka i
+// zaokrąglenie są aplikacji, żeby widok nie „wylewał się" poza kartę.
+.pview {
+  padding: 0;
+  display: flex;
+  min-height: 0;
+
+  &__frame {
+    flex: 1;
+    border: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+  }
+}

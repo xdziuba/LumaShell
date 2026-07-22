@@ -1,19 +1,52 @@
 {
   "id": "com.lumashell.file-explorer",
   "name": "File Explorer",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "apiVersion": "2",
   "runtime": "node",
   "main": "dist/index.js",
-  "description": "Drzewo plików w zakładce: przeglądanie katalogów, rozmiary, otwarcie terminala w wybranym folderze. Czyta dysk bezpośrednio (node:fs) — nie wysyła niczego na zewnątrz.",
-  "permissions": ["commands.register", "notifications.show", "ui.views", "ui.statusBar", "terminal.write"],
+  "description": "Drzewo plików w zakładce plus prosty edytor tekstu: przeglądanie katalogów, otwarcie pliku do edycji i terminal w wybranym folderze. Czyta i zapisuje dysk bezpośrednio (node:fs) — nie wysyła niczego na zewnątrz.",
+  "permissions": [
+    "commands.register",
+    "notifications.show",
+    "ui.views",
+    "ui.statusBar",
+    "terminal.write"
+  ],
   "contributes": {
-    "views": [{ "id": "pliki", "title": "Pliki" }],
+    "views": [
+      {
+        "id": "pliki",
+        "title": "Pliki"
+      },
+      {
+        "id": "edytor",
+        "title": "Edytor",
+        "type": "webview",
+        "entry": "edytor.html"
+      }
+    ],
     "commands": [
-      { "id": "fileExplorer.open", "title": "Pliki: otwórz drzewo plików" },
-      { "id": "fileExplorer.setRoot", "title": "Pliki: ustaw katalog główny (z aktywnej zakładki)" },
-      { "id": "fileExplorer.openTerminal", "title": "Pliki: otwórz terminal w tym folderze" },
-      { "id": "fileExplorer.refresh", "title": "Pliki: odśwież drzewo" }
+      {
+        "id": "fileExplorer.open",
+        "title": "Pliki: otwórz drzewo plików"
+      },
+      {
+        "id": "fileExplorer.setRoot",
+        "title": "Pliki: ustaw katalog główny (z aktywnej zakładki)"
+      },
+      {
+        "id": "fileExplorer.openTerminal",
+        "title": "Pliki: otwórz terminal w tym folderze"
+      },
+      {
+        "id": "fileExplorer.refresh",
+        "title": "Pliki: odśwież drzewo"
+      },
+      {
+        "id": "fileExplorer.openFile",
+        "title": "Pliki: otwórz plik w edytorze"
+      }
     ]
   }
 }

@@ -163,6 +163,10 @@ export interface LumaApi {
     runNodeCommand(pluginId: string, commandId: string, nodeId: string): void;
     /** Wtyczka prosi o otwarcie terminala w katalogu (uprawnienie terminal.write). */
     onOpenTerminal(callback: (event: { cwd: string; label?: string }) => void): Unsubscribe;
+    /** Wiadomość ze strony widoku (webview) do procesu wtyczki. */
+    postToView(pluginId: string, viewId: string, payload: unknown): void;
+    /** Wiadomość od wtyczki do jej strony widoku. */
+    onViewMessage(callback: (event: { pluginId: string; viewId: string; payload: unknown }) => void): Unsubscribe;
   };
 
   paths: {

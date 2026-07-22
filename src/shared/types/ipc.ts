@@ -61,6 +61,7 @@ export const IpcChannel = {
   PluginViews: 'plugin:views',
   PluginViewChildren: 'plugin:viewChildren',
   PluginRunNodeCommand: 'plugin:runNodeCommand',
+  PluginViewMessage: 'plugin:viewMessage',
   WorkspaceActiveTab: 'workspace:activeTab',
   AppWhatsNew: 'app:whatsNew',
   AppPaths: 'app:paths',
@@ -113,6 +114,8 @@ export const IpcEvent = {
   PluginViewRefresh: 'plugin:viewRefresh',
   /** Wtyczka prosi o otwarcie terminala w danym katalogu. */
   PluginOpenTerminal: 'plugin:openTerminal',
+  /** Wiadomość od wtyczki do jej webview. */
+  PluginToView: 'plugin:toView',
   /** Postęp operacji plikowej SFTP (transfer, kopiowanie, usuwanie). */
   SftpProgress: 'sftp:progress'
 } as const;
@@ -274,6 +277,10 @@ export interface PluginView {
   pluginName: string;
   id: string;
   title: string;
+  /** `tree` — rysuje aplikacja; `webview` — własna strona wtyczki w izolowanej ramce. */
+  type: 'tree' | 'webview';
+  /** Pełny adres strony widoku (schemat luma-view) — tylko dla `webview`. */
+  url?: string;
 }
 
 /**

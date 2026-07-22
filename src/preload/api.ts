@@ -166,7 +166,13 @@ export const api: LumaApi = {
       void ipcRenderer.invoke(IpcChannel.PluginRunNodeCommand, pluginId, commandId, nodeId);
     },
     onOpenTerminal: (callback: (event: { cwd: string; label?: string }) => void): Unsubscribe =>
-      subscribe(IpcEvent.PluginOpenTerminal, callback)
+      subscribe(IpcEvent.PluginOpenTerminal, callback),
+    postToView: (pluginId: string, viewId: string, payload: unknown): void => {
+      void ipcRenderer.invoke(IpcChannel.PluginViewMessage, pluginId, viewId, payload);
+    },
+    onViewMessage: (
+      callback: (event: { pluginId: string; viewId: string; payload: unknown }) => void
+    ): Unsubscribe => subscribe(IpcEvent.PluginToView, callback)
   },
 
   paths: {

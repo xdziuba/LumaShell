@@ -48,6 +48,13 @@ export interface CommandContribution {
 export interface ViewContribution {
   id: string;
   title: string;
+  /**
+   * `tree` (domyślne) — dane rysuje aplikacja.
+   * `webview` — wtyczka dostaje własną stronę w izolowanej ramce; `entry` wskazuje plik
+   * w jej katalogu `media/`.
+   */
+  type?: 'tree' | 'webview';
+  entry?: string;
 }
 
 export interface ToolContribution {

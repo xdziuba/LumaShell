@@ -21,11 +21,16 @@ const path = require('node:path');
 const os = require('node:os');
 
 const WIDOK = 'pliki';
+const EDYTOR = 'edytor';
+/** Nie wciągamy do edytora plików binarnych ani ogromnych — to edytor tekstu. */
+const LIMIT_EDYCJI = 2 * 1024 * 1024;
 /** Limit pozycji w jednym katalogu — węzeł z 200 tysiącami plików nikomu nie pomoże. */
 const LIMIT_WPISOW = 2000;
 
 let ctx;
 let katalogGlowny = os.homedir();
+/** Plik czekający na otwarcie, gdy strona edytora jeszcze nie wstała. */
+let oczekujacyPlik = null;
 
 function rozmiar(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -74,7 +79,7 @@ async function dzieci(nodeId) {
       } catch {
         opis = '—';
       }
-      pliki.push({ id: pelna, label: wpis.name, description: opis });
+      pliki.push({ id: pelna, label: wpis.name, description: opis, command: 'fileExplorer.openFile' });
     }
   }
 
@@ -120,6 +125,49 @@ exports.activate = async function activate(context) {
   await ctx.commands.registerCommand('fileExplorer.openTerminal', async (nodeId) => {
     const cel = nodeId || katalogGlowny;
     await ctx.workspace.openTerminal(cel);
+  });
+
+  // Dwuklik na PLIKU otwiera go w edytorze (widok typu webview). Treść wczytuje wtyczka
+  // w swoim procesie — ramka nie ma dostępu do dysku i mieć nie powinna.
+  await ctx.commands.registerCommand('fileExplorer.openFile', async (nodeId) => {
+    if (!nodeId) return;
+    try {
+      const info = await fs.stat(nodeId);
+      if (info.size > LIMIT_EDYCJI) {
+        await ctx.notifications.show(`Plik za duży do edycji (${rozmiar(info.size)}, limit ${rozmiar(LIMIT_EDYCJI)})`, 'warn');
+        return;
+      }
+      const tresc = await fs.readFile(nodeId, 'utf8');
+      oczekujacyPlik = { sciezka: nodeId, tresc };
+      // Strona mogła jeszcze nie wstać — wtedy wyśle „gotowy" i dostanie plik wtedy.
+      await ctx.ui.postToView(EDYTOR, { typ: 'otworz', sciezka: nodeId, tresc });
+      await ctx.notifications.show(`Otwarto w edytorze: ${path.basename(nodeId)} — zakładka „Edytor"`);
+    } catch (error) {
+      await ctx.notifications.show(`Nie udało się otworzyć pliku: ${error.message}`, 'error');
+    }
+  });
+
+  // Rozmowa ze stroną edytora: prosty protokół prywatny dla tej wtyczki.
+  ctx.ui.onViewMessage(EDYTOR, async (wiadomosc) => {
+    if (!wiadomosc || typeof wiadomosc !== 'object') return;
+    if (wiadomosc.typ === 'gotowy') {
+      if (oczekujacyPlik) await ctx.ui.postToView(EDYTOR, { typ: 'otworz', ...oczekujacyPlik });
+      return;
+    }
+    if (wiadomosc.typ === 'zapisz') {
+      try {
+        // Zapis atomowy: najpierw plik tymczasowy, potem podmiana. Przerwany zapis nie
+        // zostawia wtedy pliku uciętego w połowie.
+        const tymczasowy = `${wiadomosc.sciezka}.luma-tmp`;
+        await fs.writeFile(tymczasowy, wiadomosc.tresc, 'utf8');
+        await fs.rename(tymczasowy, wiadomosc.sciezka);
+        oczekujacyPlik = { sciezka: wiadomosc.sciezka, tresc: wiadomosc.tresc };
+        await ctx.ui.postToView(EDYTOR, { typ: 'zapisano' });
+        await ctx.ui.refreshView(WIDOK);
+      } catch (error) {
+        await ctx.ui.postToView(EDYTOR, { typ: 'blad', komunikat: error.message });
+      }
+    }
   });
 
   await ctx.commands.registerCommand('fileExplorer.setRoot', async () => {

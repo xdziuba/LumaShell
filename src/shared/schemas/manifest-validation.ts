@@ -108,7 +108,20 @@ export function parseManifest(payload: unknown): PluginManifest {
   const rawViews = Array.isArray(contributes['views']) ? contributes['views'] : [];
   const views: ViewContribution[] = rawViews.map((raw) => {
     const v = record(raw, 'view');
-    return { id: safeString(v, 'id', 80), title: safeString(v, 'title', 120) };
+    const view: ViewContribution = { id: safeString(v, 'id', 80), title: safeString(v, 'title', 120) };
+    if (v['type'] === 'webview') {
+      view.type = 'webview';
+      // Plik startowy jest ścieżką WZGLĘDNĄ w katalogu media wtyczki — te same reguły co
+      // dla `main`, bo tak samo decyduje o tym, co zostanie wczytane.
+      const entry = safeString(v, 'entry', 256);
+      if (entry.startsWith('/') || entry.startsWith('\\') || entry.includes('..') || /^[a-zA-Z]:/.test(entry)) {
+        throw new ManifestValidationError('"entry" widoku musi być ścieżką względną w katalogu media');
+      }
+      view.entry = entry;
+    } else if (v['type'] !== undefined && v['type'] !== 'tree') {
+      throw new ManifestValidationError(`nieznany typ widoku: ${String(v['type'])}`);
+    }
+    return view;
   });
 
   // Wersja API jest teraz SPRAWDZANA. Wcześniej pole było czytane i z niczym nieporównywane,
