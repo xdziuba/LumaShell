@@ -1433,16 +1433,23 @@ body {
   }
 }
 
+// Menedżer plików SFTP — wypełnia kartę panelu (nie jest już wąskim paskiem z boku).
 .sftp {
-  width: 280px;
-  flex: 0 0 auto;
+  position: relative;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--border);
-  font-size: 12px;
+  flex: 1;
+  min-width: 0;
   min-height: 0;
+  font-size: 12px;
+  outline: none;
 
   @include glass(0.42, 0.3, var(--bg-panel));
+
+  // Podświetlenie przy przeciąganiu plików z pulpitu.
+  &--drop {
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
 
   &--loading {
     padding: 14px;
@@ -1452,6 +1459,7 @@ body {
   &__header {
     display: flex;
     align-items: center;
+    gap: 10px;
     padding: 12px 14px 8px;
   }
 
@@ -1460,6 +1468,11 @@ body {
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.6px;
+  }
+
+  &__count {
+    color: var(--text-muted);
+    font-size: 11px;
   }
 
   &__close {
@@ -1477,8 +1490,15 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-wrap: wrap;
     padding: 0 14px 8px;
-    border-bottom: 1px solid var(--border);
+  }
+
+  &__sep {
+    width: 1px;
+    align-self: stretch;
+    background: var(--border);
+    margin: 2px 2px;
   }
 
   &__btn {
@@ -1487,48 +1507,100 @@ body {
     color: var(--text);
     font: inherit;
     font-size: 11px;
-    padding: 3px 7px;
+    padding: 3px 8px;
     border-radius: 4px;
     cursor: pointer;
+    white-space: nowrap;
     &:hover:not(:disabled) {
       background: rgba(90, 255, 170, 0.1);
     }
     &:disabled {
       opacity: 0.35;
+      cursor: default;
+    }
+    &--danger:hover:not(:disabled) {
+      background: rgba(255, 95, 86, 0.18);
+      color: #fff;
+    }
+    &--primary {
+      border-color: var(--accent);
+      color: var(--accent);
     }
   }
 
+  &__pathbar {
+    padding: 0 14px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
   &__path {
-    flex: 1;
-    min-width: 0;
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 1px solid transparent;
+    background: transparent;
     color: var(--text-muted);
     font-family: 'Cascadia Mono', Consolas, monospace;
     font-size: 11px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    cursor: text;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    direction: rtl; // urwij od lewej, żeby widać było koniec ścieżki
-    text-align: left;
+    &:hover {
+      border-color: var(--border);
+      color: var(--text);
+    }
+  }
+
+  &__path-input {
+    width: 100%;
+    background: var(--term-bg);
+    color: var(--text);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-family: 'Cascadia Mono', Consolas, monospace;
+    font-size: 11px;
+    outline: none;
   }
 
   &__error {
     padding: 8px 14px;
     color: #ff8b84;
     font-size: 11px;
+    cursor: pointer;
+  }
+
+  // Wspólna siatka nagłówka i wierszy — kolumny muszą się zgadzać co do piksela.
+  &__grid-head,
+  &__entry {
+    display: grid;
+    grid-template-columns: 18px 1fr 90px 130px 90px;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__grid-head {
+    grid-template-columns: 1fr 90px 130px 90px;
+    padding: 6px 14px;
+    color: var(--text-muted);
+    font-size: 10px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
   }
 
   &__list {
     list-style: none;
     overflow-y: auto;
     flex: 1;
-    padding: 4px;
+    padding: 4px 8px;
   }
 
   &__entry {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 8px;
+    padding: 4px 6px;
     border-radius: 4px;
     color: var(--text-muted);
     cursor: pointer;
@@ -1542,26 +1614,132 @@ body {
     &--dir {
       color: var(--accent);
     }
+
+    &.is-selected {
+      background: rgba(33, 230, 138, 0.16);
+      color: var(--text);
+    }
+
+    // Wycięte pozycje czekające na wklejenie — przygaszone, jak w eksploratorze.
+    &.is-cut {
+      opacity: 0.5;
+    }
   }
 
   &__icon {
     flex: 0 0 auto;
   }
   &__name {
-    flex: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  &__size {
-    flex: 0 0 auto;
+  &__col-size,
+  &__col-date,
+  &__col-mode {
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: 10.5px;
+    font-family: 'Cascadia Mono', Consolas, monospace;
+    white-space: nowrap;
+  }
+  &__col-size {
+    text-align: right;
   }
 
   &__empty {
     padding: 10px 14px;
     color: var(--text-muted);
+  }
+
+  &__progress {
+    padding: 6px 14px 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  &__progress-label {
+    display: block;
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+
+  &__progress-track {
+    display: block;
+    height: 4px;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.08);
+    overflow: hidden;
+  }
+
+  &__progress-fill {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transition: width 120ms linear;
+  }
+
+  // Pytanie (nazwa / uprawnienia / potwierdzenie usunięcia) — Electron nie ma window.prompt.
+  &__ask {
+    position: absolute;
+    left: 50%;
+    top: 40%;
+    transform: translate(-50%, -50%);
+    width: 340px;
+    max-width: 80%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: linear-gradient(160deg, rgba(20, 55, 40, 0.96), rgba(5, 18, 13, 0.97));
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    z-index: 5;
+  }
+
+  &__ask-title {
+    color: var(--accent-neon);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  &__ask-text {
+    color: var(--text-muted);
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+
+  &__ask-input {
+    background: var(--term-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-family: 'Cascadia Mono', Consolas, monospace;
+    font-size: 12px;
+    outline: none;
+    &:focus {
+      border-color: var(--accent);
+    }
+  }
+
+  &__ask-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  &__dropzone {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(6 21 15 / 0.72);
+    color: var(--accent);
+    font-size: 13px;
+    pointer-events: none;
+    z-index: 4;
   }
 }
 

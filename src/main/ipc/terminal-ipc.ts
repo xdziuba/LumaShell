@@ -7,7 +7,6 @@
 
 import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
-import { readFile, writeFile } from 'node:fs/promises';
 import { createWriteStream, type WriteStream } from 'node:fs';
 import { dialog, ipcMain, type BrowserWindow } from 'electron';
 import type { TerminalTransport } from '@core/transports/transport';
@@ -18,6 +17,7 @@ import { SshTransport } from '@services/ssh/ssh-transport';
 import { createNetworkTransport } from '@services/net/network-transport';
 import { createContainerTransport, listContainers } from '@services/container/container-exec';
 import { createAiCliTransport, detectAiClis } from '@services/ai/ai-cli';
+import { registerSftpIpc } from './sftp-ipc';
 import { dropConnection, registerConnection, resolveOptions } from '../ssh/ssh-connections';
 import { registerHostVerifyIpc } from '../ssh/host-verify';
 import {
@@ -212,19 +212,16 @@ export function registerTerminalIpc(window: BrowserWindow): void {
   // tylko connectionId, którym potem otwiera sesję.
   ipcMain.handle(IpcChannel.SshConnect, (_event, payload) => registerConnection(parseSshConnect(payload)));
 
-  // --- SFTP: tylko dla sesji SSH ---
+  /** Transport SSH danej sesji — wspólny punkt wejścia dla operacji SFTP. */
   const sshSession = (sessionId: unknown): SshTransport => {
     if (typeof sessionId !== 'string') throw new Error('Brak identyfikatora sesji');
     const transport = sessions.get(sessionId)?.transport;
     if (!(transport instanceof SshTransport)) throw new Error('Sesja nie jest połączeniem SSH');
     return transport;
   };
-  const remotePath = (value: unknown): string => {
-    if (typeof value !== 'string' || value.length === 0 || value.length > 4096) {
-      throw new Error('Nieprawidłowa ścieżka zdalna');
-    }
-    return value;
-  };
+
+  // --- SFTP: tylko dla sesji SSH; same operacje mieszkają w sftp-ipc ---
+  registerSftpIpc(window, sshSession);
 
   // --- Logowanie danych sesji do pliku (dowolna sesja) ---
   ipcMain.handle(IpcChannel.SessionLogStart, async (_e, sessionId): Promise<boolean> => {
@@ -245,37 +242,6 @@ export function registerTerminalIpc(window: BrowserWindow): void {
     session.logStream.end();
     session.logStream = undefined;
     return true;
-  });
-
-  ipcMain.handle(IpcChannel.SftpRealpath, (_e, sessionId, path) =>
-    sshSession(sessionId).sftpRealpath(remotePath(path))
-  );
-  ipcMain.handle(IpcChannel.SftpList, (_e, sessionId, path) =>
-    sshSession(sessionId).sftpList(remotePath(path))
-  );
-
-  // Pobranie: czytamy plik zdalny, potem pytamy użytkownika, gdzie zapisać lokalnie.
-  ipcMain.handle(IpcChannel.SftpDownload, async (_e, sessionId, path): Promise<boolean> => {
-    const transport = sshSession(sessionId);
-    const remote = remotePath(path);
-    const result = await dialog.showSaveDialog(window, { defaultPath: basename(remote) });
-    if (result.canceled || !result.filePath) return false;
-    await writeFile(result.filePath, await transport.sftpRead(remote));
-    return true;
-  });
-
-  // Wysłanie: wybieramy plik lokalny, wysyłamy do wskazanego katalogu zdalnego.
-  ipcMain.handle(IpcChannel.SftpUpload, async (_e, sessionId, dir): Promise<string | null> => {
-    const transport = sshSession(sessionId);
-    const target = remotePath(dir);
-    const result = await dialog.showOpenDialog(window, { properties: ['openFile'] });
-    if (result.canceled || result.filePaths.length === 0) return null;
-    const local = result.filePaths[0]!;
-    const name = basename(local);
-    // Złączenie ścieżki POSIX — zdalny host to niemal zawsze uniks.
-    const remote = `${target.replace(/\/$/, '')}/${name}`;
-    await transport.sftpWrite(remote, await readFile(local));
-    return name;
   });
 
   ipcMain.handle(IpcChannel.TerminalCreate, async (_event, payload): Promise<TerminalCreateResult> => {

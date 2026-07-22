@@ -5,7 +5,7 @@
  * dostaje `ipcRenderer` ani niczego z Node.js (docs/security/01-model-procesow.md).
  */
 
-import { ipcRenderer } from 'electron';
+import { ipcRenderer, webUtils } from 'electron';
 import type { SerialPortInfo } from '@core/transports/transport';
 import type { Profile } from '@core/profiles/profile';
 import type { Theme } from '@core/theme/theme';
@@ -31,6 +31,7 @@ import {
   type SessionSpec,
   type ShellInfo,
   type SftpEntry,
+  type SftpProgressEvent,
   type SshConnectRequest,
   type TerminalCreateResult,
   type TerminalDataEvent,
@@ -186,10 +187,35 @@ export const api: LumaApi = {
       ipcRenderer.invoke(IpcChannel.SftpRealpath, sessionId, path),
     list: (sessionId: string, path: string): Promise<SftpEntry[]> =>
       ipcRenderer.invoke(IpcChannel.SftpList, sessionId, path),
-    download: (sessionId: string, path: string): Promise<boolean> =>
-      ipcRenderer.invoke(IpcChannel.SftpDownload, sessionId, path),
-    upload: (sessionId: string, dir: string): Promise<string | null> =>
-      ipcRenderer.invoke(IpcChannel.SftpUpload, sessionId, dir)
+    download: (sessionId: string, paths: string[]): Promise<number> =>
+      ipcRenderer.invoke(IpcChannel.SftpDownload, sessionId, paths),
+    upload: (sessionId: string, dir: string): Promise<number> =>
+      ipcRenderer.invoke(IpcChannel.SftpUpload, sessionId, dir),
+    uploadPaths: (sessionId: string, dir: string, localPaths: string[]): Promise<number> =>
+      ipcRenderer.invoke(IpcChannel.SftpUploadPaths, sessionId, dir, localPaths),
+    mkdir: (sessionId: string, path: string): Promise<void> =>
+      ipcRenderer.invoke(IpcChannel.SftpMkdir, sessionId, path),
+    rename: (sessionId: string, from: string, to: string): Promise<void> =>
+      ipcRenderer.invoke(IpcChannel.SftpRename, sessionId, from, to),
+    delete: (sessionId: string, paths: string[]): Promise<void> =>
+      ipcRenderer.invoke(IpcChannel.SftpDelete, sessionId, paths),
+    copy: (sessionId: string, paths: string[], targetDir: string): Promise<void> =>
+      ipcRenderer.invoke(IpcChannel.SftpCopy, sessionId, paths, targetDir),
+    move: (sessionId: string, paths: string[], targetDir: string): Promise<void> =>
+      ipcRenderer.invoke(IpcChannel.SftpMove, sessionId, paths, targetDir),
+    chmod: (sessionId: string, path: string, mode: number): Promise<void> =>
+      ipcRenderer.invoke(IpcChannel.SftpChmod, sessionId, path, mode),
+    onProgress: (callback: (event: SftpProgressEvent) => void): Unsubscribe =>
+      subscribe(IpcEvent.SftpProgress, callback),
+    // Ścieżka pliku przeciągniętego z pulpitu: od Electrona 32 `File.path` nie istnieje,
+    // a `webUtils.getPathForFile` wolno wołać wyłącznie tutaj, w preloadzie.
+    pathForFile: (file: File): string => {
+      try {
+        return webUtils.getPathForFile(file);
+      } catch {
+        return '';
+      }
+    }
   },
 
   terminal: {
