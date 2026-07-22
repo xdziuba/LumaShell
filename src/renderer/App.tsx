@@ -6,6 +6,7 @@ import { SerialMacros } from './components/SerialMacros';
 import { Dropup } from './components/Dropup';
 import { useShortcuts, type ShortcutMap } from './hooks/useShortcuts';
 import { serializeTab, useWorkspace, type SessionTab } from './store/workspace';
+import { disposeTerminalsExcept } from './terminal/terminal-instance';
 import { PANEL_TITLES } from './panels/kinds';
 import { GITHUB_URL } from './panels/app-meta';
 import { applyTheme } from './theme/apply-theme';
@@ -194,6 +195,19 @@ export function App(): React.JSX.Element {
     }, 500);
     return () => clearTimeout(timer);
   }, [tabs, activeId]);
+
+  // Sprzątanie terminali: instancje xterm i sesje żyją poza Reactem (patrz
+  // terminal-instance.ts), więc ich koniec musi wynikać ze STANU workspace'u, a nie z
+  // odmontowania komponentu — to ostatnie zdarza się także przy podziale panelu, gdzie
+  // sesja ma przeżyć. Wszystko, czego nie ma już w drzewie zakładek, jest zamykane.
+  useEffect(() => {
+    const alive = new Set<string>();
+    for (const tab of tabs) {
+      if (tab.kind !== 'session') continue;
+      for (const leaf of leaves(tab.root)) alive.add(leaf.id);
+    }
+    disposeTerminalsExcept(alive);
+  }, [tabs]);
 
   // Nasłuch próśb o weryfikację klucza hosta — niezależny od cyklu startowego.
   useEffect(() => window.luma.ssh.onHostVerify(setHostVerify), []);
