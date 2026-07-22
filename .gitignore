@@ -4,6 +4,9 @@ dist/
 # Kod dostarczanych wtyczek (nie build aplikacji) — musi być w repo mimo reguły dist/.
 !resources/plugins/*/dist/
 !resources/plugins/*/dist/**
+# electron-builder zapisuje obok ikony jej „naprawiona" wersje przy pakowaniu — to
+# artefakt builda, nie zasob projektu.
+resources/icon-fixed.png
 release/
 *.log
 .DS_Store
