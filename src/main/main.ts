@@ -13,6 +13,7 @@ import { registerAiIpc } from './ipc/ai-ipc';
 import { initPlugins } from './plugins/plugin-manager';
 import { initAutoUpdater } from './updater/auto-updater';
 import { initErrorReporter } from './error-reporter';
+import { ensureUserDirs } from './user-dirs';
 
 // Handlery błędów jak najwcześniej — żeby złapać także wyjątki podczas startu.
 initErrorReporter();
@@ -37,6 +38,9 @@ function bootstrap(): void {
 }
 
 app.whenReady().then(() => {
+  // Katalogi użytkownika przed czymkolwiek innym: skan wtyczek i lista motywów zakładają,
+  // że istnieją, a przy pierwszym uruchomieniu ich nie ma.
+  ensureUserDirs();
   bootstrap();
 
   app.on('activate', () => {

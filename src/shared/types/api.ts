@@ -26,6 +26,7 @@ import type {
   TerminalCreateResult,
   TerminalDataEvent,
   TerminalExitEvent,
+  UserDirs,
   WhatsNewEntry,
   WorkspaceSnapshot
 } from './ipc';
@@ -132,6 +133,15 @@ export interface LumaApi {
     /** Wywołuje narzędzie wtyczki i zwraca jego wynik jako tekst (albo rzuca). */
     runTool(pluginId: string, toolId: string, args: Record<string, unknown>): Promise<string>;
     onToolsChanged(callback: (tools: PluginToolInfo[]) => void): Unsubscribe;
+    /** Ponowny skan katalogów wtyczek — bez restartu aplikacji. */
+    rescan(): Promise<InstalledPlugin[]>;
+  };
+
+  paths: {
+    /** Ścieżki katalogów użytkownika (wtyczki, motywy, logi) do pokazania w UI. */
+    get(): Promise<UserDirs>;
+    /** Otwiera katalog w eksploratorze; renderer podaje rodzaj, nie ścieżkę. */
+    open(kind: keyof UserDirs): void;
   };
 
   /** Nowości/zmiany aplikacji — pobierane z GitHuba, z lokalnym fallbackiem. */

@@ -202,6 +202,15 @@ export default function ThemeEditor({
         <button className="dialog__button" onClick={onImport}>
           Import
         </button>
+        {/* Motyw można też po prostu wrzucić jako plik .json do katalogu motywów —
+            po ponownym otwarciu panelu jest na liście. */}
+        <button
+          className="dialog__button"
+          onClick={() => window.luma.paths.open('themes')}
+          title="Katalog na własne motywy (pliki .json)"
+        >
+          Katalog motywów
+        </button>
         {!isBuiltIn && (
           <button className="dialog__button dialog__button--danger" onClick={() => onDelete(draft.id)}>
             Usuń

@@ -2068,6 +2068,20 @@ body {
     background: rgba(90, 255, 170, 0.12);
     color: var(--accent);
   }
+  // Ścieżka katalogu wtyczek — do przeczytania i skopiowania, więc zawija się i ma krój
+  // o stałej szerokości znaku.
+  &__path {
+    display: block;
+    margin-top: 6px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-family: 'Cascadia Mono', Consolas, monospace;
+    font-size: 11.5px;
+    color: var(--text);
+    word-break: break-all;
+    user-select: text;
+  }
   &__cmds {
     list-style: none;
     display: flex;

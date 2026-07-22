@@ -46,7 +46,10 @@ export const IpcChannel = {
   PluginSetEnabled: 'plugin:setEnabled',
   PluginListTools: 'plugin:listTools',
   PluginRunTool: 'plugin:runTool',
+  PluginRescan: 'plugin:rescan',
   AppWhatsNew: 'app:whatsNew',
+  AppPaths: 'app:paths',
+  AppOpenDir: 'app:openDir',
   AppOpenLogs: 'app:openLogs',
   AppReportProblem: 'app:reportProblem',
   AppReportError: 'app:reportError',
@@ -195,6 +198,19 @@ export interface InstalledPlugin {
   permissions: string[];
   commands: Array<{ id: string; title: string }>;
   enabled: boolean;
+}
+
+/**
+ * Katalogi użytkownika pokazywane w interfejsie.
+ *
+ * Renderer dostaje same ścieżki do wyświetlenia; otwarcie katalogu zamawia po RODZAJU
+ * (kluczu), nigdy po ścieżce — inaczej byłby to kanał na otwarcie czegokolwiek w systemie.
+ */
+export interface UserDirs {
+  userData: string;
+  plugins: string;
+  themes: string;
+  logs: string;
 }
 
 /** Wpis „Nowości" (What's New) — jedno wydanie. */

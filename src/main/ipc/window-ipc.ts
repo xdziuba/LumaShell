@@ -21,6 +21,7 @@ import {
   selectTheme
 } from '../themes-store';
 import { parseTheme } from '@shared/schemas/theme-validation';
+import { isUserDirKind, userDirs } from '../user-dirs';
 import { IpcChannel, IpcEvent } from '@shared/types/ipc';
 
 export function registerWindowIpc(window: BrowserWindow): void {
@@ -68,6 +69,15 @@ export function registerWindowIpc(window: BrowserWindow): void {
       // offline albo pliku jeszcze nie ma w repo — fallback niżej
     }
     return JSON.parse(await readFile(join(app.getAppPath(), 'resources', 'whatsnew.json'), 'utf8'));
+  });
+
+  // Katalogi użytkownika: ścieżki do pokazania w UI i otwarcie ich w eksploratorze.
+  // Renderer podaje wyłącznie RODZAJ katalogu, nigdy ścieżkę — dzięki temu `shell.openPath`
+  // nie da się namówić na dowolne miejsce w systemie.
+  ipcMain.handle(IpcChannel.AppPaths, () => userDirs());
+  ipcMain.handle(IpcChannel.AppOpenDir, (_event, kind: unknown) => {
+    if (!isUserDirKind(kind)) return;
+    return shell.openPath(userDirs()[kind]);
   });
 
   // Diagnostyka: otwarcie katalogu logów, zgłoszenie problemu i zapis błędu z renderera.
