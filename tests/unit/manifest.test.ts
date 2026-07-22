@@ -89,6 +89,58 @@ const base = {
   sprawdz('narzędzie bez id rzuca', rzucil);
 }
 
+// --- Plugin API v2: środowisko wykonania i wersja API ---
+
+// Brak pola `runtime` = piaskownica, czyli zachowanie sprzed v2 (zgodność wstecz).
+{
+  const m = parseManifest(base);
+  sprawdz('brak runtime → sandbox', m.runtime === 'sandbox', m.runtime);
+}
+
+// `runtime: node` oznacza własny proces z pełnym dostępem — wymaga nowego API.
+{
+  const m = parseManifest({ ...base, apiVersion: '2', runtime: 'node' });
+  sprawdz('runtime node przyjęty przy apiVersion 2', m.runtime === 'node', m.runtime);
+}
+
+{
+  let rzucil = false;
+  try {
+    parseManifest({ ...base, apiVersion: '1', runtime: 'node' });
+  } catch (e) {
+    rzucil = e instanceof ManifestValidationError;
+  }
+  sprawdz('runtime node przy apiVersion 1 rzuca', rzucil);
+}
+
+{
+  let rzucil = false;
+  try {
+    parseManifest({ ...base, runtime: 'wasm' });
+  } catch (e) {
+    rzucil = e instanceof ManifestValidationError;
+  }
+  sprawdz('nieznane środowisko wykonania rzuca', rzucil);
+}
+
+// Wersja API jest SPRAWDZANA — wcześniej pole było czytane i z niczym nieporównywane,
+// więc wtyczka pisana pod nowsze API ładowała się w połowie.
+{
+  let rzucil = false;
+  try {
+    parseManifest({ ...base, apiVersion: '9' });
+  } catch (e) {
+    rzucil = e instanceof ManifestValidationError;
+  }
+  sprawdz('nieobsługiwana apiVersion rzuca', rzucil);
+}
+
+// Opis jest opcjonalny i przycinany — trafia do okna zgody, więc nie może być powieścią.
+{
+  const m = parseManifest({ ...base, description: 'x'.repeat(900) });
+  sprawdz('opis przycięty do 500 znaków', m.description?.length === 500, String(m.description?.length));
+}
+
 console.log('WYNIKI (manifest wtyczki)');
 console.log('─'.repeat(52));
 for (const w of wyniki) console.log(`${w.ok ? '  OK  ' : ' BLAD '} ${w.n}${w.d ? `  (${w.d})` : ''}`);

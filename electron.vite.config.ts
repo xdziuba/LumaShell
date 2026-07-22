@@ -14,7 +14,14 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     resolve: { alias },
     build: {
-      rollupOptions: { input: { index: resolve('src/main/main.ts') } }
+      rollupOptions: {
+        input: {
+          index: resolve('src/main/main.ts'),
+          // Wnętrze procesu wtyczki (Plugin API v2). Osobny plik wejściowy, bo `utilityProcess`
+          // uruchamia go jako samodzielny moduł Node — nie jest częścią procesu głównego.
+          'ext-host': resolve('src/ext-host/index.ts')
+        }
+      }
     }
   },
   preload: {

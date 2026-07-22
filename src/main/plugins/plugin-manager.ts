@@ -9,13 +9,22 @@
 import { randomUUID } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { app, ipcMain, type BrowserWindow } from 'electron';
+import { app, ipcMain, shell, type BrowserWindow } from 'electron';
 import { hasPermission, type PluginManifest } from '@core/plugins/manifest';
 import { parseManifest } from '@shared/schemas/manifest-validation';
 import { IpcChannel, IpcEvent, type InstalledPlugin, type PluginToolInfo } from '@shared/types/ipc';
 import { createPluginHost, sendToHost } from './plugin-host';
-import { isDisabled, setDisabled } from './plugin-state-store';
+import { isDisabled, isTrusted, setDisabled, setTrusted } from './plugin-state-store';
 import { userDirs } from '../user-dirs';
+import {
+  infoWtyczki,
+  przeladuj,
+  ustawObserwatora,
+  uruchom,
+  wyrejestruj,
+  zarejestruj,
+  zatrzymaj
+} from './ext-host-supervisor';
 
 interface LoadedPlugin {
   manifest: PluginManifest;
@@ -32,7 +41,7 @@ const TOOL_TIMEOUT_MS = 30_000;
 const pendingTools = new Map<string, { resolve: (result: string) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
 
 /** Wszystkie wykryte wtyczki (włączone i wyłączone) — źródło dla menedżera. */
-const discovered = new Map<string, { manifest: PluginManifest; code: string }>();
+const discovered = new Map<string, { manifest: PluginManifest; code: string; entry: string }>();
 /** Aktualnie AKTYWNE wtyczki (włączone i załadowane do hosta). */
 const plugins = new Map<string, LoadedPlugin>();
 let mainWindow: BrowserWindow | undefined;
@@ -49,8 +58,8 @@ function pluginDirs(): string[] {
 }
 
 /** Skanuje katalogi wtyczek i zwraca to, co udało się wczytać (manifest + kod). */
-async function scanPlugins(): Promise<Array<{ manifest: PluginManifest; code: string }>> {
-  const found: Array<{ manifest: PluginManifest; code: string }> = [];
+async function scanPlugins(): Promise<Array<{ manifest: PluginManifest; code: string; entry: string }>> {
+  const found: Array<{ manifest: PluginManifest; code: string; entry: string }> = [];
   for (const dir of pluginDirs()) {
     let entries: string[] = [];
     try {
@@ -66,13 +75,23 @@ async function scanPlugins(): Promise<Array<{ manifest: PluginManifest; code: st
   return found;
 }
 
-/** Wczytuje manifest i kod jednej wtyczki z katalogu. */
-async function readPlugin(dir: string): Promise<{ manifest: PluginManifest; code: string } | null> {
+/**
+ * Wczytuje manifest jednej wtyczki z katalogu.
+ *
+ * Wtyczka w piaskownicy jest wysyłana do hosta jako TEKST (host nie ma modułów), więc jej
+ * kod czytamy od razu. Wtyczka `runtime: "node"` jest ładowana przez `require` we własnym
+ * procesie — tu wystarczy ścieżka; czytanie jej treści byłoby bez sensu, bo może mieć
+ * własne `node_modules`.
+ */
+async function readPlugin(
+  dir: string
+): Promise<{ manifest: PluginManifest; code: string; entry: string } | null> {
   try {
     const manifest = parseManifest(JSON.parse(await readFile(join(dir, 'plugin.json'), 'utf8')));
     // `main` jest walidowany jako ścieżka względna bez wyjścia z katalogu.
-    const code = await readFile(join(dir, manifest.main), 'utf8');
-    return { manifest, code };
+    const entry = join(dir, manifest.main);
+    const code = manifest.runtime === 'node' ? '' : await readFile(entry, 'utf8');
+    return { manifest, code, entry };
   } catch (error) {
     console.warn(`[plugins] pominięto ${dir}:`, (error as Error).message);
     return null;
@@ -233,14 +252,32 @@ function runPluginTool(pluginId: string, toolId: string, args: Record<string, un
 
 /** Lista zainstalowanych wtyczek dla menedżera (włączone + wyłączone). */
 function installedList(): InstalledPlugin[] {
-  return [...discovered.values()].map(({ manifest }) => ({
-    id: manifest.id,
-    name: manifest.name,
-    version: manifest.version,
-    permissions: manifest.permissions,
-    commands: manifest.contributes.commands,
-    enabled: !isDisabled(manifest.id)
-  }));
+  return [...discovered.values()].map(({ manifest }) => {
+    const wpis: InstalledPlugin = {
+      id: manifest.id,
+      name: manifest.name,
+      version: manifest.version,
+      permissions: manifest.permissions,
+      commands: manifest.contributes.commands,
+      // Wtyczka z własnym procesem jest „włączona" dopiero po świadomej zgodzie —
+      // brak zgody znaczy, że jej proces nigdy nie wstał.
+      enabled: manifest.runtime === 'node' ? isTrusted(manifest.id) : !isDisabled(manifest.id),
+      runtime: manifest.runtime,
+      apiVersion: manifest.apiVersion
+    };
+    if (manifest.description) wpis.description = manifest.description;
+    const info = manifest.runtime === 'node' ? infoWtyczki(manifest.id) : undefined;
+    if (info) {
+      wpis.proces = {
+        stan: info.stan,
+        awarie: info.awarie,
+        ...(info.pid === undefined ? {} : { pid: info.pid }),
+        ...(info.blad === undefined ? {} : { blad: info.blad }),
+        ...(info.logPath === undefined ? {} : { logPath: info.logPath })
+      };
+    }
+    return wpis;
+  });
 }
 
 function notifyPluginsChanged(): void {
@@ -255,10 +292,21 @@ function notifyPluginsChanged(): void {
  * Wyłączenie usuwa ją z aktywnych (komendy znikają z palety, invoke jest blokowany) i
  * zapamiętuje stan. Włączenie ładuje jej kod do hosta na nowo. Stan przeżywa restart.
  */
-function setPluginEnabled(id: string, enabled: boolean): InstalledPlugin[] {
+async function setPluginEnabled(id: string, enabled: boolean): Promise<InstalledPlugin[]> {
   const entry = discovered.get(id);
   if (!entry) return installedList();
   setDisabled(id, !enabled);
+
+  // Wtyczka z własnym procesem: włączenie jest ŚWIADOMĄ zgodą na pełny dostęp do komputera
+  // (patrz manifest.ts). Zapisujemy ją osobno, żeby po restarcie proces wstał tylko wtedy,
+  // gdy użytkownik naprawdę o to poprosił. Czekamy na skutek, żeby lista wróciła prawdziwa.
+  if (entry.manifest.runtime === 'node') {
+    setTrusted(id, enabled);
+    if (enabled) await uruchom(id);
+    else await zatrzymaj(id);
+    notifyPluginsChanged();
+    return installedList();
+  }
 
   if (enabled) {
     if (!plugins.has(id)) {
@@ -292,6 +340,8 @@ async function rescanPlugins(): Promise<InstalledPlugin[]> {
   // Wtyczki skasowane z dysku: przestają istnieć dla palety, narzędzi i invoke.
   for (const id of [...discovered.keys()]) {
     if (!seen.has(id)) {
+      const stara = discovered.get(id);
+      if (stara?.manifest.runtime === 'node') wyrejestruj(id);
       discovered.delete(id);
       plugins.delete(id);
     }
@@ -300,6 +350,15 @@ async function rescanPlugins(): Promise<InstalledPlugin[]> {
   for (const entry of found) {
     const id = entry.manifest.id;
     discovered.set(id, entry);
+
+    if (entry.manifest.runtime === 'node') {
+      // Proces wtyczki: przeładowanie ma sens tylko wtedy, gdy już jej ufamy — inaczej
+      // rejestrujemy ją i czekamy na decyzję użytkownika.
+      zarejestruj(entry.manifest, entry.entry);
+      if (!isDisabled(id) && isTrusted(id)) void przeladuj(id);
+      continue;
+    }
+
     if (isDisabled(id)) {
       plugins.delete(id);
       continue;
@@ -352,11 +411,43 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
 
   ipcMain.handle(IpcChannel.PluginRescan, () => rescanPlugins());
 
+  // Sterowanie procesem wtyczki (tylko runtime: 'node').
+  ipcMain.handle(IpcChannel.PluginStop, async (_event, id: unknown) => {
+    if (typeof id === 'string') await zatrzymaj(id);
+    return installedList();
+  });
+  ipcMain.handle(IpcChannel.PluginReload, async (_event, id: unknown) => {
+    if (typeof id !== 'string') return installedList();
+    const entry = discovered.get(id);
+    // Przeładowanie nie może być tylnymi drzwiami do uruchomienia wtyczki bez zgody.
+    if (entry?.manifest.runtime === 'node' && !isTrusted(id)) return installedList();
+    await przeladuj(id);
+    return installedList();
+  });
+  ipcMain.handle(IpcChannel.PluginOpenLog, (_event, id: unknown) => {
+    if (typeof id !== 'string') return;
+    const log = infoWtyczki(id)?.logPath;
+    if (log) return shell.openPath(log);
+    return undefined;
+  });
+
+  // Każda zmiana stanu procesu (start, awaria, kwarantanna) odświeża menedżera.
+  ustawObserwatora(() => notifyPluginsChanged());
+
   await ready;
 
   for (const loaded of await scanPlugins()) {
     const id = loaded.manifest.id;
     discovered.set(id, loaded);
+
+    if (loaded.manifest.runtime === 'node') {
+      // Wtyczka z pełnym dostępem NIE startuje sama. Jest zarejestrowana i widoczna
+      // w menedżerze, ale jej proces wstaje dopiero po świadomym włączeniu.
+      zarejestruj(loaded.manifest, loaded.entry);
+      if (!isDisabled(id) && isTrusted(id)) void uruchom(id);
+      continue;
+    }
+
     // Wyłączone wtyczki są znane menedżerowi, ale nie trafiają do hosta.
     if (isDisabled(id)) continue;
     plugins.set(id, { manifest: loaded.manifest, commands: [], tools: [] });

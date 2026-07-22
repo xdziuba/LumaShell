@@ -114,6 +114,10 @@ potrzebny, wracamy do `titleBarOverlay` (przyciski przestają być kółkami).
 
 ## D2 — Izolacja wtyczek: RPC bez Node
 
+> **Status: zawężona przez D7.** Treść zostaje bez zmian — rejestr decyzji ma pokazywać, co
+> wiedzieliśmy w danym momencie, a nie przepisywać historię. Model D2 obowiązuje dla wtyczek
+> `apiVersion: "1"`; wtyczki v2 z `runtime: "node"` działają wg D7.
+
 **Data:** 2026-07-16 · **Status:** przyjęta
 
 ### Kontekst
@@ -359,3 +363,68 @@ w drzewie zakładek (zamknięty panel, zamknięta zakładka, odtworzenie układu
 | zamknięcie zakładki z dwoma panelami zwalnia obie sesje | 4 → 2, zero wycieków |
 | ten sam element DOM i płótno po podziale | `document.body.contains(host)` przez CDP |
 | terminal maluje się po przepięciu | zrzut ekranu + `echo` wykonane w tej samej powłoce |
+
+## D7 — Wtyczki dostają własny proces z Node (zawęża D2)
+
+### Kontekst
+
+D2 („izolacja wtyczek: RPC bez Node") dała realną izolację, ale kosztem użyteczności:
+wtyczka nie mogła narysować przycisku, dotknąć pliku ani otworzyć gniazda. `context` miał
+trzy gałęzie (komendy, powiadomienia, narzędzia AI), uprawnienia `terminal.read`/`terminal.write`
+były martwe, `deactivate()` nie było nigdy wołane, a `apiVersion` z manifestu nie było
+z niczym porównywane. Wtyczki nie dodawały funkcjonalności — dokładały wpisy do palety.
+
+Wymaganie brzmiało: „ma działać jak wtyczki do Neovima" plus test akceptacyjny —
+Discord Rich Presence, który wymaga nazwanego potoku `\.\pipe\discord-ipc-0`.
+
+### Pomiary (Electron 43.1.1, ta maszyna, nie dokumentacja)
+
+| Sprawdzone | Wynik |
+| --- | --- |
+| Node w `utilityProcess` | 24.18.0; `fs`, `net`, `child_process` dostępne |
+| `require('electron')` w procesie wtyczki | **wyłącznie** `{ net, systemPreferences }` |
+| Model uprawnień Node jako granica | **martwy**: `--permission` w `execArgv` przyjęte, `process.permission === undefined` |
+| Potok Discorda z procesu wtyczki | `ENOENT` przy wyłączonym Discordzie — ścieżka poprawna |
+| Koszt procesu wtyczki | ~30 MB prywatnej pamięci (nie ~100 MB working setu) |
+| CSP dokumentu a sieć w Web Workerze | **nie obejmuje** — worker na `file://` wychodził do sieci mimo `default-src 'none'` |
+
+### Decyzja
+
+Wtyczka `runtime: "node"` działa we WŁASNYM procesie (`utilityProcess.fork`), jeden proces
+na wtyczkę. Piaskownica v1 zostaje jako warstwa zgodności dla `apiVersion: "1"`.
+
+Proces na wtyczkę, a nie jeden wspólny host — bo naprawia cztery rzeczy naraz: `kill()` to
+JEDYNE wyładowanie, które naprawdę działa; awaria jednej wtyczki nie zabiera pozostałych;
+przeładowanie pojedynczej wtyczki nie wymaga restartu reszty; a tożsamość wtyczki wynika
+z uchwytu procesu, nie z pola `pluginId` w wiadomości — bez tego przełącznik „udostępniaj
+narzędzia tej wtyczki agentowi AI" byłby fikcją.
+
+### Model zaufania — bez ściemy
+
+EGZEKWOWANE TECHNICZNIE: brak Electrona w procesie wtyczki (zmierzone); brak DOM-u głównego
+okna; zasoby aplikacji (terminal, zakładki, sekrety, narzędzia AI) wyłącznie przez RPC
+z bramką w procesie głównym; tożsamość wtyczki z uchwytu procesu; kwarantanna po serii
+awarii; proces nie wstaje bez świadomego włączenia przez użytkownika.
+
+WYŁĄCZNIE DEKLARACJA: pliki, sieć i uruchamianie procesów. Wtyczka ma Node, więc ich NIE DA
+SIĘ ograniczyć — i dlatego w katalogu uprawnień świadomie NIE MA `filesystem.read`,
+`filesystem.write` ani `network.access`. Atrapa w liście uprawnień to dokładnie to, przed
+czym ostrzegała D2. „Wyłącz wtyczkę" znaczy „zakończ jej proces", a nie „cofnij skutki".
+
+### Konsekwencje
+
+* wtyczka `runtime: "node"` jest domyślnie WYŁĄCZONA — włączenie jest zgodą na uruchomienie
+  programu z pełnym dostępem do komputera i tak jest opisane w menedżerze,
+* izolacja per wtyczka w przyszłych etapach może użyć Web Workerów, więc blokada sieci hosta
+  v1 musiała przejść z CSP na `session.webRequest` (patrz pomiar wyżej),
+* log wtyczki idzie do `userData/logs/plugins/<id>.log` — dotąd błędy wtyczek ginęły
+  w konsoli procesu głównego, której na Windows i tak nie widać.
+
+### Odrzucone warianty
+
+* **Proxy gniazd + `fs` po RPC (zostanie przy piaskownicy)** — wymaga kanonizacji ścieżek na
+  Windows (junction, symlink, `\?\`, UNC, strumienie alternatywne, CON/NUL/COM1, nazwy 8.3)
+  i limitów na strumieniach; jedno przeoczenie unieważnia całą warstwę, a to najdroższa
+  część systemu dla jednej osoby.
+* **`node:vm` jako granica** — nie jest granicą bezpieczeństwa i nigdy nią nie była.
+* **Flaga `--permission` Node w utilityProcess** — zmierzone: ignorowana.

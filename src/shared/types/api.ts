@@ -136,6 +136,12 @@ export interface LumaApi {
     onToolsChanged(callback: (tools: PluginToolInfo[]) => void): Unsubscribe;
     /** Ponowny skan katalogów wtyczek — bez restartu aplikacji. */
     rescan(): Promise<InstalledPlugin[]>;
+    /** Kończy proces wtyczki (tylko runtime: 'node'). */
+    stop(id: string): Promise<InstalledPlugin[]>;
+    /** Zatrzymuje i uruchamia wtyczkę z bieżącym kodem z dysku. */
+    reload(id: string): Promise<InstalledPlugin[]>;
+    /** Otwiera plik logu wtyczki. */
+    openLog(id: string): void;
   };
 
   paths: {

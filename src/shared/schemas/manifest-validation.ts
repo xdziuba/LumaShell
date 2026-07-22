@@ -6,7 +6,22 @@
  * nie umiała poprawnie poprosić (docs/plugin-api/02-uprawnienia-i-izolacja.md).
  */
 
-import type { Permission, PluginManifest, ToolContribution } from '@core/plugins/manifest';
+import type {
+  Permission,
+  PluginManifest,
+  PluginRuntime,
+  ToolContribution
+} from '@core/plugins/manifest';
+
+/**
+ * Obsługiwane wersje Plugin API.
+ *
+ * Świadomie zdublowane względem SUPPORTED_API_VERSIONS w core — z tego samego powodu, co
+ * lista uprawnień niżej: granica trzyma własną listę. Dodatkowa korzyść praktyczna: import
+ * z `@core` jest tu WYŁĄCZNIE typem, więc znika przy usuwaniu typów przez Node i testy
+ * jednostkowe działają bez bundlera i bez mapowania aliasów.
+ */
+const OBSLUGIWANE_API = ['1', '2'] as const;
 
 /**
  * Allowlista uprawnień egzekwowana przez walidator.
@@ -87,13 +102,38 @@ export function parseManifest(payload: unknown): PluginManifest {
     return tool;
   });
 
-  return {
+  // Wersja API jest teraz SPRAWDZANA. Wcześniej pole było czytane i z niczym nieporównywane,
+  // więc wtyczka pisana pod nowsze API ładowała się w połowie i psuła w losowym miejscu.
+  const apiVersion = safeString(src, 'apiVersion', 8);
+  if (!(OBSLUGIWANE_API as readonly string[]).includes(apiVersion)) {
+    throw new ManifestValidationError(
+      `apiVersion "${apiVersion}" nie jest obsługiwana przez tę wersję LumaShella (obsługiwane: ${OBSLUGIWANE_API.join(', ')})`
+    );
+  }
+
+  // Brak pola = stare zachowanie (piaskownica). „node" oznacza własny proces z pełnym Node
+  // i wymaga zgody użytkownika — patrz manifest.ts.
+  const rawRuntime = src['runtime'];
+  if (rawRuntime !== undefined && rawRuntime !== 'sandbox' && rawRuntime !== 'node') {
+    throw new ManifestValidationError(`nieznane środowisko wykonania: ${String(rawRuntime)}`);
+  }
+  const runtime: PluginRuntime = rawRuntime === 'node' ? 'node' : 'sandbox';
+  if (runtime === 'node' && apiVersion === '1') {
+    throw new ManifestValidationError('runtime "node" wymaga apiVersion "2"');
+  }
+
+  const manifest: PluginManifest = {
     id: safeString(src, 'id', 80),
     name: safeString(src, 'name', 120),
     version: safeString(src, 'version', 32),
-    apiVersion: safeString(src, 'apiVersion', 8),
+    apiVersion,
+    runtime,
     main: safeMain(src),
     permissions,
     contributes: tools.length > 0 ? { commands, tools } : { commands }
   };
+  if (typeof src['description'] === 'string' && src['description'].length > 0) {
+    manifest.description = src['description'].slice(0, 500);
+  }
+  return manifest;
 }

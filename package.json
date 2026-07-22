@@ -25,7 +25,8 @@
     "test:ai": "node --experimental-transform-types --no-warnings tests/integration/ai-provider.test.ts",
     "test:security": "node --experimental-transform-types --no-warnings tests/security/security.test.ts",
     "test:soak": "node --experimental-transform-types --no-warnings tests/performance/net-soak.test.ts",
-    "test:perf": "node tests/performance/pty-throughput.mjs"
+    "test:perf": "node tests/performance/pty-throughput.mjs",
+    "test:manifest": "node --experimental-transform-types --no-warnings tests/unit/manifest.test.ts"
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
