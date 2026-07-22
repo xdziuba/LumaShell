@@ -13,6 +13,43 @@ body,
   overflow: hidden;
 }
 
+// Wspólny scrollbar dla CAŁEJ aplikacji: panele, listy, dialogi, paleta komend.
+// Bez tego przewijalne obszary dostawały systemowy, szary pasek, który odstawał od motywu
+// (terminal ma własną nakładkę `.term-scrollbar`, xterm swój chowamy niżej).
+//
+// Świadomie NIE używamy standardowych `scrollbar-width`/`scrollbar-color`: gdy są ustawione,
+// Chromium ignoruje reguły `::-webkit-scrollbar`, a te dają pełną kontrolę nad wyglądem.
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  // Przezroczysta ramka + background-clip: kciuk wygląda na wąski, ale trafia się w niego
+  // całą szerokością paska.
+  background: rgb(90 255 170 / 0.28);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+
+  &:hover {
+    background: rgb(90 255 170 / 0.5);
+    background-clip: padding-box;
+    border-width: 2px;
+  }
+
+  &:active {
+    background: rgb(90 255 170 / 0.62);
+    background-clip: padding-box;
+    border-width: 2px;
+  }
+}
+
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
   color: var(--text);

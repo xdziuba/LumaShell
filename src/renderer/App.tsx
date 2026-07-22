@@ -113,6 +113,12 @@ export function App(): React.JSX.Element {
   const activeLeaf =
     activeTab?.kind === 'session' ? findLeaf(activeTab.root, activeTab.activePaneId) : undefined;
 
+  // Pasek tytułu opisuje AKTYWNĄ ZAKŁADKĘ — także tę bez sesji. Zakładka-panel pokazuje
+  // swoją nazwę (Ustawienia/Motywy/…), nie mylące „brak sesji", które należy się dopiero
+  // pustemu workspace'owi.
+  const titleSubtitle =
+    activeTab?.kind === 'panel' ? PANEL_TITLES[activeTab.panel] : activeLeaf?.label ?? 'brak sesji';
+
   const tabViews: TabView[] = tabs.map((tab) => {
     if (tab.kind === 'panel') {
       return { id: tab.id, label: PANEL_TITLES[tab.panel], status: 'running', kind: 'pty', panel: tab.panel, paneCount: 1 };
@@ -514,7 +520,7 @@ export function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      <TitleBar subtitle={activeLeaf?.label ?? 'brak sesji'} />
+      <TitleBar subtitle={titleSubtitle} />
 
       <TabBar
         tabs={tabViews}

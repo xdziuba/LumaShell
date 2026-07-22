@@ -12,6 +12,19 @@ appId: io.adbuzz.lumashell
 productName: LumaShell
 copyright: Copyright © 2026 xdziuba
 
+# Menedżer zadań Windows pokazuje w kolumnie „Nazwa" zasób wersji FileDescription pliku EXE,
+# a electron-builder ustawia go z `description` w package.json (winPackager: rcedit
+# --set-version-string FileDescription <appInfo.description || appInfo.productName>). Bez tego
+# wszystkie procesy nazywały się „Szybki, konfigurowalny terminal…". `extraMetadata` jest
+# scalane z metadanymi ZANIM powstanie AppInfo, więc podmienia opis w zasobach EXE i NSIS,
+# zostawiając w repozytorium sensowny opis projektu.
+#
+# UWAGA: nie wolno tu wpisywać `name` ani `productName` — app.getName() czyta je z package.json
+# paczki, a zmiana przeniosłaby katalog userData (%APPDATA%\lumashell) i użytkownicy straciliby
+# ustawienia, profile, motywy i known_hosts.
+extraMetadata:
+  description: LumaShell
+
 # node-pty / serialport / ssh2 dostarczają prebuildy N-API działające pod Electronem — NIE
 # przebudowujemy ich (electron-rebuild przez node-gyp i tak padał na spacji w ścieżce/winpty).
 npmRebuild: false
