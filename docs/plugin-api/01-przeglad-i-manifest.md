@@ -12,6 +12,16 @@
 > właśnie ten, starszy tryb. Model zaufania i pomiary, na których oparto tę decyzję, są
 > w [D7](../architecture/10-decyzje.md#d7--wtyczki-dostaja-wlasny-proces-z-node).
 
+## Od czego zacząć
+
+W repozytorium są dwie rzeczy, które pozwalają napisać wtyczkę bez czytania kodu aplikacji:
+
+* `packages/plugin-api` — typy `LumaContext` (podpowiadanie w edytorze, opisy uprawnień przy
+  metodach, kody błędów),
+* `packages/create-luma-plugin/szablon` — gotowy szkielet: komenda, element paska statusu,
+  widok-drzewo i trwały magazyn. **Bez kroku budowania** — kopiujesz katalog do
+  `%APPDATA%\lumashell\plugins`, zmieniasz `id` i klikasz „Odśwież".
+
 ## Manifest v2 — przykład
 
 ```json

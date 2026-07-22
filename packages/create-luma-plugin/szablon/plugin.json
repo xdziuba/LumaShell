@@ -1,0 +1,14 @@
+{
+  "id": "com.przyklad.szablon",
+  "name": "Szablon wtyczki",
+  "version": "1.0.0",
+  "apiVersion": "2",
+  "runtime": "node",
+  "main": "dist/index.js",
+  "description": "Szkielet wtyczki: komenda w palecie, element paska statusu, widok-drzewo i trwały magazyn.",
+  "permissions": ["commands.register", "notifications.show", "ui.statusBar", "ui.views"],
+  "contributes": {
+    "views": [{ "id": "przyklad", "title": "Przykładowy widok" }],
+    "commands": [{ "id": "szablon.przywitaj", "title": "Szablon: pokaż aktywną zakładkę" }]
+  }
+}
