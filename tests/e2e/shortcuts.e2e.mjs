@@ -15,7 +15,7 @@ const base = 'http://127.0.0.1:9222';
 async function pageTarget() {
   const res = await fetch(`${base}/json`);
   const targets = await res.json();
-  const page = targets.find((t) => t.type === 'page' && t.url.includes('index.html'));
+  const page = targets.find((t) => t.type === 'page' && t.url.includes('index.html') && !t.url.includes('plugin-host'));
   if (!page) throw new Error('nie znaleziono renderera LumaShell');
   return page.webSocketDebuggerUrl;
 }
