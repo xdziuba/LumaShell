@@ -46,6 +46,10 @@ files:
 # - wbudowane wtyczki sa ladowane przez `require` w procesie wtyczki, z tego samego powodu.
 asarUnpack:
   - 'out/main/ext-host.js'
+  # ...razem ze wspolnymi fragmentami: proces glowny i host wtyczek dziela moduly (protokol
+  # RPC), wiec Rollup wydziela je do out/main/chunks. Gdyby zostaly w archiwum, rozpakowany
+  # ext-host.js nie mialby czego wymagac (MODULE_NOT_FOUND juz po spakowaniu).
+  - 'out/main/chunks/**'
   - 'resources/plugins/**'
   - '**/node_modules/node-pty/**'
   - '**/node_modules/serialport/**'

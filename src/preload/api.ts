@@ -94,6 +94,8 @@ export const api: LumaApi = {
   },
 
   workspace: {
+    setActiveTab: (tab: { title: string; kind: string } | null): void =>
+      void ipcRenderer.invoke(IpcChannel.WorkspaceActiveTab, tab),
     get: (): Promise<WorkspaceSnapshot> => ipcRenderer.invoke(IpcChannel.WorkspaceGet),
     save: (snapshot: WorkspaceSnapshot): Promise<void> =>
       ipcRenderer.invoke(IpcChannel.WorkspaceSave, snapshot)

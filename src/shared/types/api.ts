@@ -88,6 +88,11 @@ export interface LumaApi {
   };
 
   workspace: {
+    /**
+     * Zgłasza aktywną zakładkę procesowi głównemu. Main nie ma wglądu w interfejs, a
+     * wtyczki pytają go o kontekst („co użytkownik ma teraz otwarte").
+     */
+    setActiveTab(tab: { title: string; kind: string } | null): void;
     /** Zapamiętany układ zakładek; puste `tabs`, gdy nic nie zapisano. */
     get(): Promise<WorkspaceSnapshot>;
     save(snapshot: WorkspaceSnapshot): Promise<void>;

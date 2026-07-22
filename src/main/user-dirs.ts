@@ -24,6 +24,7 @@ export function userDirs(): UserDirs {
     cache = {
       userData,
       plugins: join(userData, 'plugins'),
+      pluginsData: join(userData, 'plugins-data'),
       themes: join(userData, 'themes'),
       logs: join(userData, 'logs')
     };
@@ -40,7 +41,7 @@ export function userDirs(): UserDirs {
  */
 export function ensureUserDirs(): void {
   const dirs = userDirs();
-  for (const dir of [dirs.plugins, dirs.themes, dirs.logs]) {
+  for (const dir of [dirs.plugins, dirs.pluginsData, dirs.themes, dirs.logs]) {
     try {
       mkdirSync(dir, { recursive: true });
     } catch (error) {

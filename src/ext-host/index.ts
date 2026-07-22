@@ -15,7 +15,14 @@
  */
 
 import { createRequire } from 'node:module';
-import { DEACTIVATE_TIMEOUT_MS, type HostControl, type ParentMessage } from '@core/plugins/protocol';
+import {
+  DEACTIVATE_TIMEOUT_MS,
+  isRpcMessage,
+  type HostControl,
+  type ParentMessage
+} from '@core/plugins/protocol';
+import { obsluzWiadomosc } from './rpc';
+import { zbudujKontekst } from './context';
 
 /** Kształt modułu wtyczki. `deactivate` jest opcjonalne, ale jeśli jest — będzie wołane. */
 interface PluginModule {
@@ -30,25 +37,6 @@ let pluginId = '';
 
 function zglos(status: 'ready' | 'loaded' | 'unloaded' | 'error', message?: string): void {
   port.postMessage(message === undefined ? { kind: 'sts', status } : { kind: 'sts', status, message });
-}
-
-/**
- * Kontekst przekazywany do `activate()`.
- *
- * Etap 1 daje minimum, na którym da się zobaczyć, że proces żyje: tożsamość, logowanie
- * i uprawnienia do wglądu. Prawdziwe zdolności (komendy, terminal, zakładki, UI) dochodzą
- * w kolejnych etapach jako gałęzie proxy na RPC — dlatego kontekst od razu powstaje
- * w jednym miejscu.
- */
-function zbudujKontekst(control: HostControl): unknown {
-  return {
-    pluginId: control.pluginId,
-    permissions: [...(control.permissions ?? [])],
-    /** Log wtyczki trafia na stdout procesu, a stamtąd do pliku w katalogu logów. */
-    log: (...args: unknown[]): void => {
-      console.log(...args);
-    }
-  };
 }
 
 async function zaladuj(control: HostControl): Promise<void> {
@@ -68,7 +56,7 @@ async function zaladuj(control: HostControl): Promise<void> {
       zglos('error', 'moduł nie eksportuje activate()');
       return;
     }
-    await modul.activate(zbudujKontekst(control));
+    await modul.activate(zbudujKontekst(pluginId, control.permissions ?? []));
     zglos('loaded');
   } catch (error) {
     zglos('error', error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error));
@@ -94,6 +82,12 @@ async function wyladuj(): Promise<void> {
 port.on('message', (event) => {
   const message = event.data as ParentMessage;
   if (typeof message !== 'object' || message === null) return;
+
+  // Ruch RPC (odpowiedzi aplikacji, jej żądania i zdarzenia) obsługuje klient RPC.
+  if (isRpcMessage(message)) {
+    obsluzWiadomosc(message);
+    return;
+  }
 
   if ((message as HostControl).kind === 'ctl') {
     const control = message as HostControl;

@@ -17,14 +17,25 @@ import { createPluginHost, sendToHost } from './plugin-host';
 import { isDisabled, isTrusted, setDisabled, setTrusted } from './plugin-state-store';
 import { userDirs } from '../user-dirs';
 import {
+  dzialajaceWtyczki,
   infoWtyczki,
   przeladuj,
   ustawObserwatora,
+  ustawOdbiorRpc,
   uruchom,
   wyrejestruj,
+  wyslij,
   zarejestruj,
   zatrzymaj
 } from './ext-host-supervisor';
+import {
+  obsluzOdpowiedz,
+  obsluzZadanie,
+  ustawAktywnaZakladke,
+  ustawWysylke,
+  zadaj,
+  type KontekstWtyczki
+} from './plugin-rpc';
 
 interface LoadedPlugin {
   manifest: PluginManifest;
@@ -184,6 +195,59 @@ function handleHostMessage(raw: unknown): void {
   }
 }
 
+/**
+ * Włączenie wtyczki z własnym procesem.
+ *
+ * Wpis w `plugins` znaczy „aktywna": stąd biorą się jej komendy w palecie i stąd bramka RPC
+ * wie, że wolno ją obsłużyć. Komendy są puste — zgłoszą się same przez RPC w `activate()`.
+ */
+async function uruchomNode(manifest: PluginManifest, entry: string): Promise<void> {
+  zarejestruj(manifest, entry);
+  plugins.set(manifest.id, { manifest, commands: [], tools: [] });
+  await uruchom(manifest.id);
+}
+
+/** Wyłączenie: proces ginie, a wtyczka przestaje istnieć dla palety i bramki RPC. */
+async function zatrzymajNode(pluginId: string): Promise<void> {
+  await zatrzymaj(pluginId);
+  plugins.delete(pluginId);
+  notifyRenderer();
+  notifyToolsChanged();
+}
+
+/**
+ * Kontekst wtyczki dla bramki RPC.
+ *
+ * Bramka nie zna map menedżera — dostaje wąski obiekt: manifest do sprawdzenia uprawnień
+ * i dwie operacje, które wolno jej wykonać. `undefined` znaczy „wtyczka nieaktywna" i jest
+ * jedyną odpowiedzią dla wtyczki, która zdążyła zostać wyłączona.
+ */
+function kontekstWtyczki(pluginId: string): KontekstWtyczki | undefined {
+  const plugin = plugins.get(pluginId);
+  if (!plugin) return undefined;
+  return {
+    manifest: plugin.manifest,
+    zarejestrujKomende: (commandId) => {
+      const declared = plugin.manifest.contributes.commands.find((c) => c.id === commandId);
+      if (!declared) return false;
+      if (!plugin.commands.some((c) => c.id === commandId)) {
+        plugin.commands.push({ id: declared.id, title: declared.title });
+        notifyRenderer();
+      }
+      return true;
+    },
+    pokazPowiadomienie: (message, level) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IpcEvent.PluginNotification, {
+          pluginName: plugin.manifest.name,
+          level,
+          message
+        });
+      }
+    }
+  };
+}
+
 /** Lista komend wszystkich wtyczek do palety w rendererze. */
 function allCommands(): Array<{ pluginId: string; id: string; title: string }> {
   const out: Array<{ pluginId: string; id: string; title: string }> = [];
@@ -302,8 +366,8 @@ async function setPluginEnabled(id: string, enabled: boolean): Promise<Installed
   // gdy użytkownik naprawdę o to poprosił. Czekamy na skutek, żeby lista wróciła prawdziwa.
   if (entry.manifest.runtime === 'node') {
     setTrusted(id, enabled);
-    if (enabled) await uruchom(id);
-    else await zatrzymaj(id);
+    if (enabled) await uruchomNode(entry.manifest, entry.entry);
+    else await zatrzymajNode(id);
     notifyPluginsChanged();
     return installedList();
   }
@@ -355,7 +419,10 @@ async function rescanPlugins(): Promise<InstalledPlugin[]> {
       // Proces wtyczki: przeładowanie ma sens tylko wtedy, gdy już jej ufamy — inaczej
       // rejestrujemy ją i czekamy na decyzję użytkownika.
       zarejestruj(entry.manifest, entry.entry);
-      if (!isDisabled(id) && isTrusted(id)) void przeladuj(id);
+      if (!isDisabled(id) && isTrusted(id)) {
+        plugins.set(id, { manifest: entry.manifest, commands: [], tools: [] });
+        void przeladuj(id);
+      }
       continue;
     }
 
@@ -388,10 +455,28 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
   });
 
   ipcMain.handle(IpcChannel.PluginCommands, () => allCommands());
-  ipcMain.handle(IpcChannel.PluginRunCommand, (_event, pluginId: unknown, commandId: unknown) => {
+  ipcMain.handle(IpcChannel.PluginRunCommand, async (_event, pluginId: unknown, commandId: unknown) => {
     if (typeof pluginId !== 'string' || typeof commandId !== 'string') return;
-    if (!plugins.has(pluginId)) return;
+    const plugin = plugins.get(pluginId);
+    if (!plugin) return;
+    if (plugin.manifest.runtime === 'node') {
+      // Komenda wtyczki z własnym procesem to żądanie RPC — a nie strzał w ciemno jak w v1.
+      await zadaj(pluginId, 'command.invoke', { commandId }).catch((error: unknown) => {
+        console.warn(`[plugins] ${pluginId}: komenda ${commandId} nie wykonana:`, (error as Error).message);
+      });
+      return;
+    }
     sendToHost({ type: 'invoke', pluginId, commandId });
+  });
+
+  // Renderer zgłasza, która zakładka jest aktywna — main do tej pory w ogóle tego nie wiedział.
+  ipcMain.handle(IpcChannel.WorkspaceActiveTab, (_event, payload: unknown) => {
+    const src = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : null;
+    const tab =
+      src && typeof src['title'] === 'string' && typeof src['kind'] === 'string'
+        ? { title: src['title'].slice(0, 200), kind: src['kind'].slice(0, 40) }
+        : null;
+    ustawAktywnaZakladke(tab, dzialajaceWtyczki);
   });
   ipcMain.handle(IpcChannel.PluginInstalled, () => installedList());
   ipcMain.handle(IpcChannel.PluginSetEnabled, (_event, id: unknown, enabled: unknown) => {
@@ -413,7 +498,7 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
 
   // Sterowanie procesem wtyczki (tylko runtime: 'node').
   ipcMain.handle(IpcChannel.PluginStop, async (_event, id: unknown) => {
-    if (typeof id === 'string') await zatrzymaj(id);
+    if (typeof id === 'string') await zatrzymajNode(id);
     return installedList();
   });
   ipcMain.handle(IpcChannel.PluginReload, async (_event, id: unknown) => {
@@ -421,6 +506,9 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
     const entry = discovered.get(id);
     // Przeładowanie nie może być tylnymi drzwiami do uruchomienia wtyczki bez zgody.
     if (entry?.manifest.runtime === 'node' && !isTrusted(id)) return installedList();
+    // Przeładowanie zaczyna od czystej listy komend — poprzedni proces mógł zgłosić inne.
+    if (entry) plugins.set(id, { manifest: entry.manifest, commands: [], tools: [] });
+    notifyRenderer();
     await przeladuj(id);
     return installedList();
   });
@@ -434,6 +522,18 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
   // Każda zmiana stanu procesu (start, awaria, kwarantanna) odświeża menedżera.
   ustawObserwatora(() => notifyPluginsChanged());
 
+  // Spięcie bramki RPC z procesami wtyczek. Wysyłka i odbiór są wstrzykiwane, żeby bramka
+  // nie musiała nic wiedzieć o nadzorcy (i żeby nie powstał cykl importów).
+  ustawWysylke(wyslij);
+  ustawOdbiorRpc((pluginId, message) => {
+    if (message.kind === 'req') {
+      obsluzZadanie(pluginId, message, kontekstWtyczki(pluginId));
+      return;
+    }
+    // Odpowiedzi na żądania aplikacji (np. wywołanie komendy).
+    obsluzOdpowiedz(message);
+  });
+
   await ready;
 
   for (const loaded of await scanPlugins()) {
@@ -444,7 +544,7 @@ export async function initPlugins(window: BrowserWindow): Promise<void> {
       // Wtyczka z pełnym dostępem NIE startuje sama. Jest zarejestrowana i widoczna
       // w menedżerze, ale jej proces wstaje dopiero po świadomym włączeniu.
       zarejestruj(loaded.manifest, loaded.entry);
-      if (!isDisabled(id) && isTrusted(id)) void uruchom(id);
+      if (!isDisabled(id) && isTrusted(id)) void uruchomNode(loaded.manifest, loaded.entry);
       continue;
     }
 

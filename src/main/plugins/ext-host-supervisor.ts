@@ -15,7 +15,7 @@ import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { utilityProcess, type UtilityProcess } from 'electron';
 import type { PluginManifest } from '@core/plugins/manifest';
-import type { ChildMessage, HostControl, HostStatus } from '@core/plugins/protocol';
+import { isRpcMessage, type ChildMessage, type HostControl, type HostStatus, type RpcMessage } from '@core/plugins/protocol';
 import { userDirs } from '../user-dirs';
 import { pozaAsarem } from '../asar';
 
@@ -55,6 +55,26 @@ let onZmiana: () => void = () => {};
 
 export function ustawObserwatora(callback: () => void): void {
   onZmiana = callback;
+}
+
+/** Odbiór ruchu RPC od wtyczek — podpina go menedżer (bramka uprawnień). */
+let onRpc: (pluginId: string, message: RpcMessage) => void = () => {};
+
+export function ustawOdbiorRpc(callback: (pluginId: string, message: RpcMessage) => void): void {
+  onRpc = callback;
+}
+
+/** Wysyła wiadomość do procesu wtyczki. `false`, gdy proces nie działa. */
+export function wyslij(pluginId: string, message: unknown): boolean {
+  const proces = wpisy.get(pluginId)?.proces;
+  if (!proces) return false;
+  proces.postMessage(message);
+  return true;
+}
+
+/** Identyfikatory wtyczek z żywym procesem — do rozsyłania zdarzeń. */
+export function dzialajaceWtyczki(): string[] {
+  return [...wpisy.entries()].filter(([, w]) => w.proces !== undefined).map(([id]) => id);
 }
 
 /**
@@ -164,6 +184,11 @@ export async function uruchom(pluginId: string): Promise<ExtHostInfo | undefined
 
   proces.on('message', (raw: ChildMessage) => {
     if (typeof raw !== 'object' || raw === null) return;
+    // Ruch RPC idzie do bramki uprawnień; tu zostaje wyłącznie cykl życia.
+    if (isRpcMessage(raw)) {
+      onRpc(pluginId, raw);
+      return;
+    }
     if ((raw as HostStatus).kind === 'sts') {
       const status = raw as HostStatus;
       if (status.status === 'ready') {

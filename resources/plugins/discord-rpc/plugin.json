@@ -1,0 +1,17 @@
+{
+  "id": "com.lumashell.discord-rpc",
+  "name": "Discord Rich Presence",
+  "version": "1.0.0",
+  "apiVersion": "2",
+  "runtime": "node",
+  "main": "dist/index.js",
+  "description": "Pokazuje w Discordzie, że pracujesz w LumaShellu: nazwę aplikacji, logo, nazwę otwartej zakładki i czas trwania sesji. Łączy się wyłącznie z lokalnym Discordem przez nazwany potok — nic nie wychodzi do internetu.",
+  "permissions": ["commands.register", "notifications.show"],
+  "contributes": {
+    "commands": [
+      { "id": "discord.status", "title": "Discord: pokaż stan połączenia" },
+      { "id": "discord.toggleTabNames", "title": "Discord: przełącz pokazywanie nazw zakładek" },
+      { "id": "discord.reconnect", "title": "Discord: połącz ponownie" }
+    ]
+  }
+}

@@ -57,6 +57,7 @@ export const IpcChannel = {
   PluginStop: 'plugin:stop',
   PluginReload: 'plugin:reload',
   PluginOpenLog: 'plugin:openLog',
+  WorkspaceActiveTab: 'workspace:activeTab',
   AppWhatsNew: 'app:whatsNew',
   AppPaths: 'app:paths',
   AppOpenDir: 'app:openDir',
@@ -233,6 +234,8 @@ export interface InstalledPlugin {
 export interface UserDirs {
   userData: string;
   plugins: string;
+  /** Dane wtyczek: jeden plik JSON na wtyczkę (magazyn `context.storage`). */
+  pluginsData: string;
   themes: string;
   logs: string;
 }

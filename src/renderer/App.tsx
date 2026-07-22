@@ -223,6 +223,13 @@ export function App(): React.JSX.Element {
     disposeTerminalsExcept(alive);
   }, [tabs]);
 
+  // Aktywna zakładka jest kontekstem dla wtyczek (main sam nie widzi interfejsu). Wysyłamy
+  // zwięzły opis: tytuł i rodzaj — nic, czego wtyczka nie zobaczyłaby na ekranie.
+  useEffect(() => {
+    const kind = activeTab?.kind === 'panel' ? 'panel' : (activeLeaf?.spec.kind ?? 'pty');
+    window.luma.workspace.setActiveTab(activeTab ? { title: titleSubtitle, kind } : null);
+  }, [activeTab, titleSubtitle, activeLeaf?.spec.kind]);
+
   // Nasłuch próśb o weryfikację klucza hosta — niezależny od cyklu startowego.
   useEffect(() => window.luma.ssh.onHostVerify(setHostVerify), []);
 
